@@ -157,7 +157,7 @@ where
             .enumerate()
             .min_by(|(_, x), (_, y)| {
                 x.partial_cmp(y)
-                    .unwrap_or_else(|| panic!("Cannot compare {:?} with {:?}", x, y))
+                    .unwrap_or_else(|| panic!("Cannot compare {x:?} with {y:?}"))
             })
             .map(|(i, _)| i)
             .expect("should have samples"),
