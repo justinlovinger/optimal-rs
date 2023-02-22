@@ -72,11 +72,10 @@ where
     A: Debug + PartialOrd,
     R: Rng,
 {
-    fn step_from_evaluated<S: Data<Elem = A>>(
-        &self,
-        point_values: ArrayBase<S, Ix1>,
-        state: State<R>,
-    ) -> State<R> {
+    fn step_from_evaluated<S>(&self, point_values: ArrayBase<S, Ix1>, state: State<R>) -> State<R>
+    where
+        S: Data<Elem = A>,
+    {
         self.inner.step_from_evaluated(point_values, state)
     }
 }
@@ -169,11 +168,10 @@ where
     A: Debug + PartialOrd,
     R: Rng,
 {
-    fn step_from_evaluated<S: Data<Elem = A>>(
-        &self,
-        point_values: ArrayBase<S, Ix1>,
-        state: State<R>,
-    ) -> State<R> {
+    fn step_from_evaluated<S>(&self, point_values: ArrayBase<S, Ix1>, state: State<R>) -> State<R>
+    where
+        S: Data<Elem = A>,
+    {
         match state {
             State::Init(s) => State::PreEval(s.to_pre_eval(self.num_samples)),
             State::PreEval(s) => {

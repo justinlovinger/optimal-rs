@@ -53,11 +53,10 @@ impl<A, S1, S2, T> StepFromEvaluated<A, S1, S2> for Box<T>
 where
     T: ?Sized + StepFromEvaluated<A, S1, S2>,
 {
-    fn step_from_evaluated<S: Data<Elem = A>>(
-        &self,
-        point_values: ArrayBase<S, Ix1>,
-        state: S1,
-    ) -> S2 {
+    fn step_from_evaluated<S>(&self, point_values: ArrayBase<S, Ix1>, state: S1) -> S2
+    where
+        S: Data<Elem = A>,
+    {
         self.as_ref().step_from_evaluated(point_values, state)
     }
 }
@@ -68,11 +67,9 @@ where
 pub trait StepFromEvaluated<A, S1, S2> {
     /// Return the next state,
     /// given point values.
-    fn step_from_evaluated<S: Data<Elem = A>>(
-        &self,
-        point_values: ArrayBase<S, Ix1>,
-        state: S1,
-    ) -> S2;
+    fn step_from_evaluated<S>(&self, point_values: ArrayBase<S, Ix1>, state: S1) -> S2
+    where
+        S: Data<Elem = A>;
 }
 
 impl<A, S, T> Points<A, S> for Box<T>

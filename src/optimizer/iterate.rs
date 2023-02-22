@@ -133,11 +133,14 @@ mod tests {
     }
 
     impl StepFromEvaluated<f64, MockState, MockState> for MockConfig {
-        fn step_from_evaluated<S: Data<Elem = f64>>(
+        fn step_from_evaluated<S>(
             &self,
             _point_values: ArrayBase<S, Ix1>,
             state: MockState,
-        ) -> MockState {
+        ) -> MockState
+        where
+            S: Data<Elem = f64>,
+        {
             MockState {
                 steps: state.steps + 1,
             }

@@ -98,11 +98,14 @@ where
     B: Clone + PartialOrd,
     D: Distribution<A>,
 {
-    fn step_from_evaluated<S: Data<Elem = B>>(
+    fn step_from_evaluated<S>(
         &self,
         point_values: ArrayBase<S, Ix1>,
         state: State<A, B>,
-    ) -> State<A, B> {
+    ) -> State<A, B>
+    where
+        S: Data<Elem = B>,
+    {
         match state {
             State::Init(s) => State::Done(s.to_done(point_values)),
             State::Done(s) => State::Done(s),
