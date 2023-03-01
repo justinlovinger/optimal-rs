@@ -213,7 +213,7 @@ impl From<ConvergedThreshold> for Probability {
 }
 
 impl TryFrom<Probability> for ConvergedThreshold {
-    type Error = crate::BoundedError;
+    type Error = ConvergedThresholdTryFromError;
 
     fn try_from(value: Probability) -> Result<Self, Self::Error> {
         if value < Self::min_value().into() {
@@ -227,6 +227,15 @@ impl TryFrom<Probability> for ConvergedThreshold {
             })
         }
     }
+}
+
+/// Error returned when 'ConvergedThreshold' is given an invalid value.
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq)]
+pub enum ConvergedThresholdTryFromError {
+    /// Value is below the lower bound.
+    TooLow,
+    /// Value is above the upper bound.
+    TooHigh,
 }
 
 impl ConvergedThreshold {
