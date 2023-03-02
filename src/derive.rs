@@ -20,9 +20,9 @@ macro_rules! derive_try_from_bounded_float {
                 fn try_from(value: $from) -> Result<Self, Self::Error> {
                     if value.is_nan() {
                         Err(Self::Error::IsNan)
-                    } else if value < <Self as LowerBounded>::min_value().into() {
+                    } else if Self(value) < Self::min_value() {
                         Err(Self::Error::TooLow)
-                    } else if value > <Self as UpperBounded>::max_value().into() {
+                    } else if Self(value) > Self::max_value() {
                         Err(Self::Error::TooHigh)
                     } else {
                         Ok(Self(value))
@@ -44,7 +44,7 @@ macro_rules! derive_try_from_lower_bounded {
                 type Error = [<$into TryFromError>];
 
                 fn try_from(value: $from) -> Result<Self, Self::Error> {
-                    if value < <Self as LowerBounded>::min_value().into() {
+                    if Self(value) < Self::min_value() {
                         Err([<$into TryFromError>])
                     } else {
                         Ok(Self(value))
