@@ -8,7 +8,8 @@ use std::f64::EPSILON;
 use serde::{Deserialize, Serialize};
 
 use crate::derive::{
-    derive_from_str_from_try_into, derive_try_from_bounded_float, derive_try_from_lower_bounded,
+    derive_from_str_from_try_into, derive_into_inner, derive_new_from_bounded_float,
+    derive_new_from_lower_bounded, derive_try_from_from_new,
 };
 
 /// Number of bits in generated points
@@ -36,8 +37,9 @@ impl LowerBounded for NumSamples {
     }
 }
 
-derive_try_from_lower_bounded!(usize, NumSamples);
-
+derive_new_from_lower_bounded!(usize, NumSamples);
+derive_into_inner!(NumSamples, usize);
+derive_try_from_from_new!(usize, NumSamples);
 derive_from_str_from_try_into!(usize, NumSamples);
 
 /// Degree to adjust probabilities towards best point
@@ -65,8 +67,9 @@ impl UpperBounded for AdjustRate {
     }
 }
 
-derive_try_from_bounded_float!(f64, AdjustRate);
-
+derive_new_from_bounded_float!(f64, AdjustRate);
+derive_into_inner!(AdjustRate, f64);
+derive_try_from_from_new!(f64, AdjustRate);
 derive_from_str_from_try_into!(f64, AdjustRate);
 
 /// Probability for each probability to mutate,
@@ -106,8 +109,9 @@ impl From<MutationChance> for Bernoulli {
     }
 }
 
-derive_try_from_bounded_float!(f64, MutationChance);
-
+derive_new_from_bounded_float!(f64, MutationChance);
+derive_into_inner!(MutationChance, f64);
+derive_try_from_from_new!(f64, MutationChance);
 derive_from_str_from_try_into!(f64, MutationChance);
 
 /// Degree to adjust probability towards random value
@@ -135,8 +139,9 @@ impl UpperBounded for MutationAdjustRate {
     }
 }
 
-derive_try_from_bounded_float!(f64, MutationAdjustRate);
-
+derive_new_from_bounded_float!(f64, MutationAdjustRate);
+derive_into_inner!(MutationAdjustRate, f64);
+derive_try_from_from_new!(f64, MutationAdjustRate);
 derive_from_str_from_try_into!(f64, MutationAdjustRate);
 
 /// Probability for a sampled bit to be true.
@@ -174,8 +179,9 @@ impl UpperBounded for Probability {
     }
 }
 
-derive_try_from_bounded_float!(f64, Probability);
-
+derive_new_from_bounded_float!(f64, Probability);
+derive_into_inner!(Probability, f64);
+derive_try_from_from_new!(f64, Probability);
 derive_from_str_from_try_into!(f64, Probability);
 
 /// PBIL can be considered done
@@ -186,6 +192,46 @@ derive_from_str_from_try_into!(f64, Probability);
 pub struct ConvergedThreshold {
     ub: Probability,
     lb: Probability,
+}
+
+/// Error returned when 'ConvergedThreshold' is given an invalid value.
+#[derive(Clone, Copy, Debug, Display, PartialEq, Eq)]
+pub enum InvalidConvergedThresholdError {
+    /// Value is below the lower bound.
+    TooLow,
+    /// Value is above the upper bound.
+    TooHigh,
+}
+
+impl ConvergedThreshold {
+    /// Return a new 'ConvergedThreshold' if given a valid value.
+    pub fn new(value: Probability) -> Result<Self, InvalidConvergedThresholdError> {
+        if value < Self::min_value().into() {
+            Err(InvalidConvergedThresholdError::TooLow)
+        } else if value > Self::max_value().into() {
+            Err(InvalidConvergedThresholdError::TooHigh)
+        } else {
+            Ok(Self {
+                ub: value,
+                lb: Probability(1. - f64::from(value)),
+            })
+        }
+    }
+
+    /// Unwrap 'ConvergedThreshold' into inner value.
+    pub fn into_inner(self) -> Probability {
+        self.ub
+    }
+
+    /// Return the threshold upper bound.
+    pub fn upper_bound(&self) -> Probability {
+        self.ub
+    }
+
+    /// Return the threshold lower bound.
+    pub fn lower_bound(&self) -> Probability {
+        self.lb
+    }
 }
 
 impl LowerBounded for ConvergedThreshold {
@@ -206,6 +252,15 @@ impl UpperBounded for ConvergedThreshold {
     }
 }
 
+impl Default for ConvergedThreshold {
+    fn default() -> Self {
+        Self {
+            ub: Probability(0.75),
+            lb: Probability(0.25),
+        }
+    }
+}
+
 impl From<ConvergedThreshold> for Probability {
     fn from(x: ConvergedThreshold) -> Self {
         x.ub
@@ -213,49 +268,9 @@ impl From<ConvergedThreshold> for Probability {
 }
 
 impl TryFrom<Probability> for ConvergedThreshold {
-    type Error = ConvergedThresholdTryFromError;
-
+    type Error = InvalidConvergedThresholdError;
     fn try_from(value: Probability) -> Result<Self, Self::Error> {
-        if value < Self::min_value().into() {
-            Err(Self::Error::TooLow)
-        } else if value > Self::max_value().into() {
-            Err(Self::Error::TooHigh)
-        } else {
-            Ok(Self {
-                ub: value,
-                lb: Probability(1. - f64::from(value)),
-            })
-        }
-    }
-}
-
-/// Error returned when 'ConvergedThreshold' is given an invalid value.
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq)]
-pub enum ConvergedThresholdTryFromError {
-    /// Value is below the lower bound.
-    TooLow,
-    /// Value is above the upper bound.
-    TooHigh,
-}
-
-impl ConvergedThreshold {
-    /// Return the threshold upper bound.
-    pub fn upper_bound(&self) -> Probability {
-        self.ub
-    }
-
-    /// Return the threshold lower bound.
-    pub fn lower_bound(&self) -> Probability {
-        self.lb
-    }
-}
-
-impl Default for ConvergedThreshold {
-    fn default() -> Self {
-        Self {
-            ub: Probability(0.75),
-            lb: Probability(0.25),
-        }
+        Self::new(value)
     }
 }
 
