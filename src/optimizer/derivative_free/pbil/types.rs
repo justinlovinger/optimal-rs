@@ -37,10 +37,10 @@ impl LowerBounded for NumSamples {
     }
 }
 
-derive_new_from_lower_bounded!(usize, NumSamples);
-derive_into_inner!(NumSamples, usize);
-derive_try_from_from_new!(usize, NumSamples);
-derive_from_str_from_try_into!(usize, NumSamples);
+derive_new_from_lower_bounded!(NumSamples(usize));
+derive_into_inner!(NumSamples(usize));
+derive_try_from_from_new!(NumSamples(usize));
+derive_from_str_from_try_into!(NumSamples(usize));
 
 /// Degree to adjust probabilities towards best point
 /// during steps.
@@ -67,10 +67,10 @@ impl UpperBounded for AdjustRate {
     }
 }
 
-derive_new_from_bounded_float!(f64, AdjustRate);
-derive_into_inner!(AdjustRate, f64);
-derive_try_from_from_new!(f64, AdjustRate);
-derive_from_str_from_try_into!(f64, AdjustRate);
+derive_new_from_bounded_float!(AdjustRate(f64));
+derive_into_inner!(AdjustRate(f64));
+derive_try_from_from_new!(AdjustRate(f64));
+derive_from_str_from_try_into!(AdjustRate(f64));
 
 /// Probability for each probability to mutate,
 /// independently.
@@ -109,10 +109,10 @@ impl From<MutationChance> for Bernoulli {
     }
 }
 
-derive_new_from_bounded_float!(f64, MutationChance);
-derive_into_inner!(MutationChance, f64);
-derive_try_from_from_new!(f64, MutationChance);
-derive_from_str_from_try_into!(f64, MutationChance);
+derive_new_from_bounded_float!(MutationChance(f64));
+derive_into_inner!(MutationChance(f64));
+derive_try_from_from_new!(MutationChance(f64));
+derive_from_str_from_try_into!(MutationChance(f64));
 
 /// Degree to adjust probability towards random value
 /// when mutating.
@@ -139,10 +139,10 @@ impl UpperBounded for MutationAdjustRate {
     }
 }
 
-derive_new_from_bounded_float!(f64, MutationAdjustRate);
-derive_into_inner!(MutationAdjustRate, f64);
-derive_try_from_from_new!(f64, MutationAdjustRate);
-derive_from_str_from_try_into!(f64, MutationAdjustRate);
+derive_new_from_bounded_float!(MutationAdjustRate(f64));
+derive_into_inner!(MutationAdjustRate(f64));
+derive_try_from_from_new!(MutationAdjustRate(f64));
+derive_from_str_from_try_into!(MutationAdjustRate(f64));
 
 /// Probability for a sampled bit to be true.
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Into)]
@@ -179,10 +179,10 @@ impl UpperBounded for Probability {
     }
 }
 
-derive_new_from_bounded_float!(f64, Probability);
-derive_into_inner!(Probability, f64);
-derive_try_from_from_new!(f64, Probability);
-derive_from_str_from_try_into!(f64, Probability);
+derive_new_from_bounded_float!(Probability(f64));
+derive_into_inner!(Probability(f64));
+derive_try_from_from_new!(Probability(f64));
+derive_from_str_from_try_into!(Probability(f64));
 
 /// PBIL can be considered done
 /// when all probabilities are above this threshold
