@@ -15,14 +15,14 @@ macro_rules! derive_new_from_bounded_float {
             impl $into {
                 #[doc = "Return a new '" $into "' if given a valid value."]
                 pub fn new(value: $from) -> Result<Self, [<Invalid $into Error>]> {
-                    if value.is_nan() {
-                        Err([<Invalid $into Error>]::IsNan)
-                    } else if Self(value) < Self::min_value() {
-                        Err([<Invalid $into Error>]::TooLow)
-                    } else if Self(value) > Self::max_value() {
-                        Err([<Invalid $into Error>]::TooHigh)
-                    } else {
-                        Ok(Self(value))
+                    match (
+                        Self(value).partial_cmp(&Self::min_value()),
+                        Self(value).partial_cmp(&Self::max_value()),
+                    ) {
+                        (None, _) | (_, None) => Err([<Invalid $into Error>]::IsNan),
+                        (Some(std::cmp::Ordering::Less), _) => Err([<Invalid $into Error>]::TooLow),
+                        (_, Some(std::cmp::Ordering::Greater)) => Err([<Invalid $into Error>]::TooHigh),
+                        _ => Ok(Self(value)),
                     }
                 }
             }
