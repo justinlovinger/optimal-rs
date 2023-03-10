@@ -1,90 +1,80 @@
-use ndarray::prelude::*;
-use replace_with::replace_with_or_abort;
-use std::marker::PhantomData;
 use streaming_iterator::StreamingIterator;
 
 use crate::prelude::*;
 
-impl<A, B, S, C> Iterate<A, B, S> for C
+impl<O> Iterate for O
 where
-    C: Step<A, B, S, S>,
+    O: Step,
 {
-    fn iterate<F>(&self, f: F, state: S) -> StepIterator<A, B, C, F, S>
-    where
-        F: Fn(CowArray<A, Ix2>) -> Array1<B>,
-    {
-        StepIterator::new(self, f, state)
+    fn iterate(self) -> StepIterator<O> {
+        StepIterator::new(self)
     }
 }
 
 /// An automatically implemented extension to [`Step`]
 /// providing an iterator-based API.
-pub trait Iterate<A, B, S> {
+pub trait Iterate {
     /// Return an iterator over optimizer states.
-    fn iterate<F>(&self, f: F, state: S) -> StepIterator<A, B, Self, F, S>
+    fn iterate(self) -> StepIterator<Self>
     where
-        Self: Sized,
-        F: Fn(CowArray<A, Ix2>) -> Array1<B>;
+        Self: Sized;
 }
 
 /// An iterator returned by [`Iterate`].
-pub struct StepIterator<'a, A, B, C, F, S> {
-    point_elem: PhantomData<A>,
-    point_value: PhantomData<B>,
-    config: &'a C,
-    f: F,
-    state: S,
+pub struct StepIterator<O> {
+    optimizer: O,
     skipped_first_step: bool,
 }
 
-impl<'a, A, B, C, F, S> StepIterator<'a, A, B, C, F, S> {
-    fn new(config: &'a C, f: F, state: S) -> Self {
+impl<O> StepIterator<O> {
+    fn new(optimizer: O) -> Self {
         Self {
-            point_elem: PhantomData,
-            point_value: PhantomData,
-            config,
-            f,
-            state,
+            optimizer,
             skipped_first_step: false,
         }
     }
 }
 
-impl<'a, A, B, C, F, S> StreamingIterator for StepIterator<'a, A, B, C, F, S>
+impl<O> StreamingIterator for StepIterator<O>
 where
-    C: Step<A, B, S, S>,
-    F: Fn(CowArray<A, Ix2>) -> Array1<B>,
+    O: Step,
 {
-    type Item = S;
+    type Item = O;
 
     fn advance(&mut self) {
         // `advance` is called before the first `get`,
         // but we want to emit the initial state.
         if self.skipped_first_step {
-            replace_with_or_abort(&mut self.state, |state| self.config.step(&self.f, state));
+            self.optimizer.step()
         } else {
             self.skipped_first_step = true;
         }
     }
 
     fn get(&self) -> Option<&Self::Item> {
-        Some(&self.state)
+        Some(&self.optimizer)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use ndarray::{prelude::*, Data};
+
     use super::*;
-    use ndarray::Data;
 
     #[test]
     fn iterate_emits_initial_state() {
         assert_eq!(
-            MockConfig::default()
-                .iterate(f, MockState::new())
-                .next()
-                .unwrap()
-                .steps,
+            (MockOptimizer {
+                config: MockConfig::default(),
+                state: MockState::new(),
+                f,
+            })
+            .iterate()
+            .next()
+            .unwrap()
+            .state
+            .steps,
             0
         )
     }
@@ -93,17 +83,37 @@ mod tests {
     fn iterate_emits_done_state() {
         let config = MockConfig::default();
         assert_eq!(
-            config
-                .iterate(f, MockState::new())
-                .find(|s| config.is_done(s))
-                .unwrap()
-                .steps,
+            (MockOptimizer {
+                config: MockConfig::default(),
+                state: MockState::new(),
+                f,
+            })
+            .iterate()
+            .find(|o| o.is_done())
+            .unwrap()
+            .state
+            .steps,
             config.max_steps
         )
     }
 
     fn f(xs: CowArray<f64, Ix2>) -> Array1<f64> {
         xs.sum_axis(Axis(xs.ndim() - 1))
+    }
+
+    struct MockOptimizer<F> {
+        pub config: MockConfig,
+        pub state: MockState,
+        pub f: F,
+    }
+
+    impl<F> Step for MockOptimizer<F>
+    where
+        F: Fn(CowArray<f64, Ix2>) -> Array1<f64>,
+    {
+        fn step(&mut self) {
+            self.step_from_evaluated((self.f)(self.points()))
+        }
     }
 
     struct MockConfig {
@@ -126,30 +136,24 @@ mod tests {
         }
     }
 
-    impl Points<f64, MockState> for MockConfig {
-        fn points<'a>(&'a self, _state: &'a MockState) -> CowArray<f64, Ix2> {
+    impl<F> Points<f64> for MockOptimizer<F> {
+        fn points(&self) -> CowArray<f64, Ix2> {
             Array2::zeros((0, 0)).into()
         }
     }
 
-    impl StepFromEvaluated<f64, MockState, MockState> for MockConfig {
-        fn step_from_evaluated<S>(
-            &self,
-            _point_values: ArrayBase<S, Ix1>,
-            state: MockState,
-        ) -> MockState
+    impl<F> StepFromEvaluated<f64> for MockOptimizer<F> {
+        fn step_from_evaluated<S>(&mut self, _point_values: ArrayBase<S, Ix1>)
         where
             S: Data<Elem = f64>,
         {
-            MockState {
-                steps: state.steps + 1,
-            }
+            self.state.steps += 1;
         }
     }
 
-    impl IsDone<MockState> for MockConfig {
-        fn is_done(&self, state: &MockState) -> bool {
-            state.steps >= self.max_steps
+    impl<F> IsDone for MockOptimizer<F> {
+        fn is_done(&self) -> bool {
+            self.state.steps >= self.config.max_steps
         }
     }
 }

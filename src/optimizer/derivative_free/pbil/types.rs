@@ -16,7 +16,7 @@ use crate::derive::{
 /// and probabilities in PBIL.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, From, FromStr, Into)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct NumBits(usize);
+pub struct NumBits(pub usize);
 
 /// Number of samples generated
 /// during steps.

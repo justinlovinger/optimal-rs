@@ -27,112 +27,109 @@ pub trait InitialState<S> {
     fn initial_state(&self) -> S;
 }
 
-impl<A, B, S1, S2, C> Step<A, B, S1, S2> for C
-where
-    C: Points<A, S1> + StepFromEvaluated<B, S1, S2>,
-{
-    fn step<F>(&self, f: F, state: S1) -> S2
-    where
-        F: Fn(CowArray<A, Ix2>) -> Array1<B>,
-    {
-        self.step_from_evaluated(f(self.points(&state)), state)
-    }
-}
+// impl<A, B, S1, S2, C> Step<A, B, S1, S2> for C
+// where
+//     C: Points<A, S1> + StepFromEvaluated<B, S1, S2>,
+// {
+//     fn step<F>(&self, f: F, state: S1) -> S2
+//     where
+//         F: Fn(CowArray<A, Ix2>) -> Array1<B>,
+//     {
+//         self.step_from_evaluated(f(self.points(&state)), state)
+//     }
+// }
 
-/// An automatically implemented extension to [`StepFromEvaluated`]
-/// and [`Points`]
-/// providing a higher-order function API.
-pub trait Step<A, B, S1, S2> {
+/// The core of an optimizer,
+/// step from one state to another,
+/// improving objective value.
+pub trait Step {
     /// Return the next state.
-    fn step<F>(&self, f: F, state: S1) -> S2
-    where
-        F: Fn(CowArray<A, Ix2>) -> Array1<B>;
+    fn step(&mut self);
 }
 
-impl<A, S1, S2, T> StepFromEvaluated<A, S1, S2> for Box<T>
+impl<A, T> StepFromEvaluated<A> for Box<T>
 where
-    T: ?Sized + StepFromEvaluated<A, S1, S2>,
+    T: ?Sized + StepFromEvaluated<A>,
 {
-    fn step_from_evaluated<S>(&self, point_values: ArrayBase<S, Ix1>, state: S1) -> S2
+    fn step_from_evaluated<S>(&mut self, point_values: ArrayBase<S, Ix1>)
     where
         S: Data<Elem = A>,
     {
-        self.as_ref().step_from_evaluated(point_values, state)
+        self.as_mut().step_from_evaluated(point_values)
     }
 }
 
 /// The core of an optimizer,
 /// step from one state to another
 /// given point values.
-pub trait StepFromEvaluated<A, S1, S2> {
+pub trait StepFromEvaluated<A> {
     /// Return the next state,
     /// given point values.
-    fn step_from_evaluated<S>(&self, point_values: ArrayBase<S, Ix1>, state: S1) -> S2
+    fn step_from_evaluated<S>(&mut self, point_values: ArrayBase<S, Ix1>)
     where
         S: Data<Elem = A>;
 }
 
-impl<A, S, T> Points<A, S> for Box<T>
+impl<A, T> Points<A> for Box<T>
 where
-    T: ?Sized + Points<A, S>,
+    T: ?Sized + Points<A>,
 {
-    fn points<'a>(&'a self, state: &'a S) -> CowArray<A, Ix2> {
-        self.as_ref().points(state)
+    fn points(&self) -> CowArray<A, Ix2> {
+        self.as_ref().points()
     }
 }
 
 /// The secondary core of an optimizer,
 /// providing points needing evaluation
 /// to guide the optimizer.
-pub trait Points<A, S> {
+pub trait Points<A> {
     /// Return points to be evaluated.
-    fn points<'a>(&'a self, state: &'a S) -> CowArray<A, Ix2>;
+    fn points(&self) -> CowArray<A, Ix2>;
 }
 
-impl<S, T> IsDone<S> for Box<T>
+impl<T> IsDone for Box<T>
 where
-    T: ?Sized + IsDone<S>,
+    T: ?Sized + IsDone,
 {
-    fn is_done(&self, state: &S) -> bool {
-        self.as_ref().is_done(state)
+    fn is_done(&self) -> bool {
+        self.as_ref().is_done()
     }
 }
 
 /// Indicate whether or not an optimizer is done.
-pub trait IsDone<S> {
+pub trait IsDone {
     /// Return if optimizer is done.
-    #[allow(unused_variables)]
-    fn is_done(&self, state: &S) -> bool {
+    fn is_done(&self) -> bool {
         false
     }
 }
 
-impl<A, S, T> BestPoint<A, S> for Box<T>
+impl<A, T> BestPoint<A> for Box<T>
 where
-    T: ?Sized + BestPoint<A, S>,
+    T: ?Sized + BestPoint<A>,
 {
-    fn best_point<'a>(&'a self, state: &'a S) -> CowArray<A, Ix1> {
-        self.as_ref().best_point(state)
+    fn best_point(&self) -> CowArray<A, Ix1> {
+        self.as_ref().best_point()
     }
 }
 
 /// An optimizer able to return the best point discovered.
-pub trait BestPoint<A, S> {
+pub trait BestPoint<A> {
     /// Return the best point discovered.
-    fn best_point<'a>(&'a self, state: &'a S) -> CowArray<A, Ix1>;
+    fn best_point(&self) -> CowArray<A, Ix1>;
 }
 
-impl<A, S, T> BestPointValue<A, S> for Box<T>
+impl<A, T> BestPointValue<A> for Box<T>
 where
-    T: ?Sized + BestPointValue<A, S>,
+    T: ?Sized + BestPointValue<A>,
 {
-    fn best_point_value(&self, state: &S) -> Option<A> {
-        self.as_ref().best_point_value(state)
+    fn best_point_value(&self) -> Option<A> {
+        self.as_ref().best_point_value()
     }
 }
 
 /// An optimizer able to return the value of the best point discovered.
-pub trait BestPointValue<A, S> {
+pub trait BestPointValue<A> {
     /// Return the value of the best point discovered.
-    fn best_point_value(&self, state: &S) -> Option<A>;
+    fn best_point_value(&self) -> Option<A>;
 }

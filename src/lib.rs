@@ -14,16 +14,19 @@
 //!
 //! ```
 //! use ndarray::{Data, RemoveAxis, prelude::*};
-//! use optimal::{optimizer::derivative_free::pbil::DoneWhenConvergedConfig, prelude::*};
+//! use optimal::{
+//!     optimizer::derivative_free::pbil::{PbilDoneWhenConverged, NumBits},
+//!     prelude::*,
+//! };
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let config = DoneWhenConvergedConfig::default(16.into());
-//!     let mut iter = config.iterate(|xs| f(xs), config.initial_state());
-//!     // `unwrap` is safe
-//!     // because the optimizer is guaranteed to converge.
-//!     let bs = config.best_point(iter.find(|s| config.is_done(s)).unwrap());
-//!     println!("f({}) = {}", bs, f(bs.view()));
+//!     let mut iter = PbilDoneWhenConverged::default(NumBits(16), |xs| f(xs)).iterate();
+//!     let xs = iter
+//!         .find(|o| o.is_done())
+//!         .expect("should converge")
+//!         .best_point();
+//!     println!("f({}) = {}", xs, f(xs.view()));
 //! }
 //!
 //! fn f<S, D>(bs: ArrayBase<S, D>) -> Array<u64, D::Smaller>
