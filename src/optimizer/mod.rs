@@ -5,6 +5,7 @@
 //! Traits are defined on the configuration
 //! and may take a state.
 
+pub mod derivative;
 pub mod derivative_free;
 mod iterate;
 
