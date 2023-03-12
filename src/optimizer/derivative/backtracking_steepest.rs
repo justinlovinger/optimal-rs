@@ -76,6 +76,41 @@ pub struct BacktrackingSteepestDescent<A, F, FD> {
     pub objective_derivatives_function: FD,
 }
 
+/// Backtracking steepest descent configuration parameters.
+pub struct Config<A> {
+    /// The sufficient decrease parameter,
+    /// `c_1`.
+    pub c_1: SufficientDecreaseParameter<A>,
+    /// Rate to decrease step size while line searching.
+    pub backtracking_rate: BacktrackingRate<A>,
+    /// Rate to increase step size before starting each line search.
+    pub initial_step_size_incr_rate: IncrRate<A>,
+}
+
+/// Backtracking steepest descent state.
+pub enum State<A> {
+    /// Ready to begin line search.
+    Ready(Ready<A>),
+    /// Line searching.
+    Searching(Searching<A>),
+}
+
+/// Ready to begin line search.
+pub struct Ready<A> {
+    point: Point<A>,
+    last_step_size: A,
+}
+
+/// Line searching.
+pub struct Searching<A> {
+    point: Point<A>,
+    point_value: A,
+    step_direction: Array1<A>,
+    c_1_times_point_derivatives_dot_step_direction: A,
+    step_size: A,
+    point_at_step: Point<A>,
+}
+
 impl<A, F, FD> Step for BacktrackingSteepestDescent<A, F, FD>
 where
     A: 'static
@@ -111,41 +146,6 @@ impl<A, F, FD> BestPoint<A> for BacktrackingSteepestDescent<A, F, FD> {
     fn best_point(&self) -> CowArray<A, Ix1> {
         self.state.point().into()
     }
-}
-
-/// Backtracking steepest descent configuration parameters.
-pub struct Config<A> {
-    /// The sufficient decrease parameter,
-    /// `c_1`.
-    pub c_1: SufficientDecreaseParameter<A>,
-    /// Rate to decrease step size while line searching.
-    pub backtracking_rate: BacktrackingRate<A>,
-    /// Rate to increase step size before starting each line search.
-    pub initial_step_size_incr_rate: IncrRate<A>,
-}
-
-/// Backtracking steepest descent state.
-pub enum State<A> {
-    /// Ready to begin line search.
-    Ready(Ready<A>),
-    /// Line searching.
-    Searching(Searching<A>),
-}
-
-/// Ready to begin line search.
-pub struct Ready<A> {
-    point: Point<A>,
-    last_step_size: A,
-}
-
-/// Line searching.
-pub struct Searching<A> {
-    point: Point<A>,
-    point_value: A,
-    step_direction: Array1<A>,
-    c_1_times_point_derivatives_dot_step_direction: A,
-    step_size: A,
-    point_at_step: Point<A>,
 }
 
 impl<A> State<A> {

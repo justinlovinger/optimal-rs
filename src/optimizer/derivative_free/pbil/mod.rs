@@ -56,6 +56,17 @@ pub struct PbilDoneWhenConverged<R, B, F> {
     pub objective_function: F,
 }
 
+/// PBIL configuration parameters
+/// with check for converged probabilities.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DoneWhenConvergedConfig {
+    /// Probability convergence parameter.
+    pub converged_threshold: ConvergedThreshold,
+    /// Regular PBIL configuration.
+    pub inner: Config,
+}
+
 impl<R, B, F> PbilDoneWhenConverged<R, B, F>
 where
     F: Fn(CowArray<bool, Ix2>) -> Array1<B>,
@@ -101,38 +112,9 @@ where
     }
 }
 
-/// PBIL configuration parameters
-/// with check for converged probabilities.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DoneWhenConvergedConfig {
-    /// Probability convergence parameter.
-    pub converged_threshold: ConvergedThreshold,
-    /// Regular PBIL configuration.
-    pub inner: Config,
-}
-
-impl DoneWhenConvergedConfig {
-    /// Convenience function
-    /// to populate every field
-    /// with their default.
-    pub fn default(num_bits: NumBits) -> Self {
-        Self {
-            converged_threshold: ConvergedThreshold::default(),
-            inner: Config::default(num_bits),
-        }
-    }
-}
-
 impl<R, B, F> IsDone for PbilDoneWhenConverged<R, B, F> {
     fn is_done(&self) -> bool {
         converged(&self.config.converged_threshold, self.state.probabilities())
-    }
-}
-
-impl InitialState<State<SmallRng>> for DoneWhenConvergedConfig {
-    fn initial_state(&self) -> State<SmallRng> {
-        self.inner.initial_state()
     }
 }
 
@@ -148,6 +130,24 @@ impl<R, B, F> BestPoint<bool> for PbilDoneWhenConverged<R, B, F> {
     }
 }
 
+impl DoneWhenConvergedConfig {
+    /// Convenience function
+    /// to populate every field
+    /// with their default.
+    pub fn default(num_bits: NumBits) -> Self {
+        Self {
+            converged_threshold: ConvergedThreshold::default(),
+            inner: Config::default(num_bits),
+        }
+    }
+}
+
+impl InitialState<State<SmallRng>> for DoneWhenConvergedConfig {
+    fn initial_state(&self) -> State<SmallRng> {
+        self.inner.initial_state()
+    }
+}
+
 /// PBIL optimizer.
 #[derive(Clone, Debug)]
 pub struct Pbil<R, B, F> {
@@ -158,6 +158,37 @@ pub struct Pbil<R, B, F> {
     pub state: State<R>,
     /// Derivative-free objective function.
     pub objective_function: F,
+}
+
+/// PBIL configuration parameters.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Config {
+    /// Number of bits in generated points
+    /// and probabilities in PBIL.
+    pub num_bits: NumBits,
+    /// Number of samples generated
+    /// during steps.
+    pub num_samples: NumSamples,
+    /// Degree to adjust probabilities towards best point
+    /// during steps.
+    pub adjust_rate: AdjustRate,
+    /// Probability for each probability to mutate,
+    /// independently.
+    pub mutation_chance: MutationChance,
+    /// Degree to adjust probability towards random value
+    /// when mutating.
+    pub mutation_adjust_rate: MutationAdjustRate,
+}
+
+/// PBIL state.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum State<R> {
+    /// Initial and post-evaluation state.
+    Init(Init<R>),
+    /// State with samples ready for evaluation.
+    PreEval(PreEval<R>),
 }
 
 impl<R, B, F> Pbil<R, B, F> {
@@ -202,25 +233,18 @@ where
     }
 }
 
-/// PBIL configuration parameters.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config {
-    /// Number of bits in generated points
-    /// and probabilities in PBIL.
-    pub num_bits: NumBits,
-    /// Number of samples generated
-    /// during steps.
-    pub num_samples: NumSamples,
-    /// Degree to adjust probabilities towards best point
-    /// during steps.
-    pub adjust_rate: AdjustRate,
-    /// Probability for each probability to mutate,
-    /// independently.
-    pub mutation_chance: MutationChance,
-    /// Degree to adjust probability towards random value
-    /// when mutating.
-    pub mutation_adjust_rate: MutationAdjustRate,
+impl<R, B, F> Points<bool> for Pbil<R, B, F> {
+    fn points(&self) -> CowArray<bool, Ix2> {
+        self.state.points()
+    }
+}
+
+impl IsDone for Config {}
+
+impl<R, B, F> BestPoint<bool> for Pbil<R, B, F> {
+    fn best_point(&self) -> CowArray<bool, Ix1> {
+        self.state.best_point()
+    }
 }
 
 impl Config {
@@ -236,38 +260,7 @@ impl Config {
             mutation_adjust_rate: Default::default(),
         }
     }
-}
 
-/// PBIL state.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum State<R> {
-    /// Initial and post-evaluation state.
-    Init(Init<R>),
-    /// State with samples ready for evaluation.
-    PreEval(PreEval<R>),
-}
-
-impl<R> State<R> {
-    /// Return PBIL probabilities.
-    pub fn probabilities(&self) -> &Array1<Probability> {
-        match &self {
-            State::Init(s) => s.probabilities(),
-            State::PreEval(s) => s.probabilities(),
-        }
-    }
-}
-
-impl InitialState<State<SmallRng>> for Config {
-    fn initial_state(&self) -> State<SmallRng> {
-        State::Init(Init::new(
-            Array::from_elem(usize::from(self.num_bits), Probability::default()),
-            SmallRng::from_entropy(),
-        ))
-    }
-}
-
-impl Config {
     /// Return the next state,
     /// given point values.
     fn step_from_evaluated<B, S, R>(
@@ -291,17 +284,22 @@ impl Config {
     }
 }
 
-impl<R, B, F> Points<bool> for Pbil<R, B, F> {
-    fn points(&self) -> CowArray<bool, Ix2> {
-        self.state.points()
+impl InitialState<State<SmallRng>> for Config {
+    fn initial_state(&self) -> State<SmallRng> {
+        State::Init(Init::new(
+            Array::from_elem(usize::from(self.num_bits), Probability::default()),
+            SmallRng::from_entropy(),
+        ))
     }
 }
 
-impl IsDone for Config {}
-
-impl<R, B, F> BestPoint<bool> for Pbil<R, B, F> {
-    fn best_point(&self) -> CowArray<bool, Ix1> {
-        self.state.best_point()
+impl<R> State<R> {
+    /// Return PBIL probabilities.
+    pub fn probabilities(&self) -> &Array1<Probability> {
+        match &self {
+            State::Init(s) => s.probabilities(),
+            State::PreEval(s) => s.probabilities(),
+        }
     }
 }
 

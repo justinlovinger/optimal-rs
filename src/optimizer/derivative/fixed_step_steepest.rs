@@ -55,6 +55,14 @@ pub struct FixedStepSteepestDescent<A, F> {
     pub objective_derivatives_function: F,
 }
 
+/// Fixed step size steepest descent configuration parameters.
+pub struct Config<A> {
+    /// Length of each step.
+    pub step_size: StepSize<A>,
+}
+
+type Point<A> = Array1<A>;
+
 impl<A, F> Step for FixedStepSteepestDescent<A, F>
 where
     A: Clone + SubAssign + Mul<Output = A>,
@@ -72,12 +80,6 @@ impl<A, F> BestPoint<A> for FixedStepSteepestDescent<A, F> {
     fn best_point(&self) -> CowArray<A, Ix1> {
         (&self.state).into()
     }
-}
-
-/// Fixed step size steepest descent configuration parameters.
-pub struct Config<A> {
-    /// Length of each step.
-    pub step_size: StepSize<A>,
 }
 
 impl<A> Config<A>
@@ -100,5 +102,3 @@ where
         state
     }
 }
-
-type Point<A> = Array1<A>;
