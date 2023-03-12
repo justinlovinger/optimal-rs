@@ -8,6 +8,7 @@ serde = ["dep:serde", "ndarray/serde"]
 
 [dependencies]
 derive_more = "0.99"
+lazy_static = "1.4.0"
 ndarray = "0.15"
 ndarray-rand = "0.14"
 num-traits = "0.2"

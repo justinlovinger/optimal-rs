@@ -181,6 +181,7 @@ name = "optimal"
 version = "0.1.0"
 dependencies = [
  "derive_more",
+ "lazy_static",
  "ndarray",
  "ndarray-rand",
  "num-traits",

@@ -68,8 +68,6 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ndarray::prelude::*;
-
     use super::*;
 
     #[test]
@@ -121,12 +119,6 @@ mod tests {
     impl Step for MockOptimizer {
         fn step(&mut self) {
             self.state.steps += 1;
-        }
-    }
-
-    impl Points<f64> for MockOptimizer {
-        fn points(&self) -> CowArray<f64, Ix2> {
-            Array2::zeros((0, 0)).into()
         }
     }
 

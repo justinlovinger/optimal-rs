@@ -31,6 +31,7 @@
 mod states;
 mod types;
 
+use lazy_static::lazy_static;
 use ndarray::{prelude::*, Data};
 use rand::prelude::*;
 use replace_with::replace_with_or_abort;
@@ -69,7 +70,7 @@ pub struct DoneWhenConvergedConfig {
 
 impl<R, B, F> PbilDoneWhenConverged<R, B, F>
 where
-    F: Fn(CowArray<bool, Ix2>) -> Array1<B>,
+    F: Fn(ArrayView2<bool>) -> Array1<B>,
 {
     /// Convenience function to return a 'PbilDoneWhenConverged'
     /// without setting 'PhantomData'.
@@ -85,7 +86,7 @@ where
 
 impl<B, F> PbilDoneWhenConverged<SmallRng, B, F>
 where
-    F: Fn(CowArray<bool, Ix2>) -> Array1<B>,
+    F: Fn(ArrayView2<bool>) -> Array1<B>,
 {
     /// Convenience function
     /// to populate every field
@@ -101,13 +102,13 @@ impl<R, B, F> Step for PbilDoneWhenConverged<R, B, F>
 where
     R: Rng,
     B: Debug + PartialOrd,
-    F: Fn(CowArray<bool, Ix2>) -> Array1<B>,
+    F: Fn(ArrayView2<bool>) -> Array1<B>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
             self.config
                 .inner
-                .step_from_evaluated((self.objective_function)(state.points()), state)
+                .step_from_evaluated((self.objective_function)(state.points().view()), state)
         })
     }
 }
@@ -119,7 +120,7 @@ impl<R, B, F> IsDone for PbilDoneWhenConverged<R, B, F> {
 }
 
 impl<R, B, F> Points<bool> for PbilDoneWhenConverged<R, B, F> {
-    fn points(&self) -> CowArray<bool, Ix2> {
+    fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
@@ -191,7 +192,10 @@ pub enum State<R> {
     PreEval(PreEval<R>),
 }
 
-impl<R, B, F> Pbil<R, B, F> {
+impl<R, B, F> Pbil<R, B, F>
+where
+    F: Fn(ArrayView2<bool>) -> Array1<B>,
+{
     /// Convenience function to return a 'Pbil'
     /// without setting 'PhantomData'.
     pub fn new(config: Config, state: State<R>, objective_function: F) -> Self {
@@ -204,7 +208,10 @@ impl<R, B, F> Pbil<R, B, F> {
     }
 }
 
-impl<B, F> Pbil<SmallRng, B, F> {
+impl<B, F> Pbil<SmallRng, B, F>
+where
+    F: Fn(ArrayView2<bool>) -> Array1<B>,
+{
     /// Convenience function
     /// to populate every field
     /// with their default.
@@ -223,7 +230,7 @@ impl<R, B, F> Step for Pbil<R, B, F>
 where
     R: Rng,
     B: Debug + PartialOrd,
-    F: Fn(CowArray<bool, Ix2>) -> Array1<B>,
+    F: Fn(ArrayView2<bool>) -> Array1<B>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
@@ -234,7 +241,7 @@ where
 }
 
 impl<R, B, F> Points<bool> for Pbil<R, B, F> {
-    fn points(&self) -> CowArray<bool, Ix2> {
+    fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
@@ -302,10 +309,13 @@ impl<R> State<R> {
 }
 
 impl<R> Points<bool> for State<R> {
-    fn points(&self) -> CowArray<bool, Ix2> {
+    fn points(&self) -> ArrayView2<bool> {
+        lazy_static! {
+            static ref EMPTY: Array2<bool> = Array::from_elem((0, 0), false);
+        }
         match self {
-            State::Init(_) => Array::from_elem((0, 0), false).into(),
-            State::PreEval(s) => s.samples().view().into(),
+            State::Init(_) => EMPTY.view(),
+            State::PreEval(s) => s.samples().view(),
         }
     }
 }

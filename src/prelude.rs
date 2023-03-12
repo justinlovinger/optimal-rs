@@ -2,5 +2,5 @@
 
 pub use crate::optimizer::{
     derivative::StepSize, BestPoint, BestPointValue, InitialState, IntoStreamingIterator, IsDone,
-    Points, Step,
+    Point, Points, Step,
 };

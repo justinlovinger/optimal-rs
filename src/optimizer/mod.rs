@@ -40,17 +40,34 @@ impl<A, T> Points<A> for Box<T>
 where
     T: ?Sized + Points<A>,
 {
-    fn points(&self) -> CowArray<A, Ix2> {
+    fn points(&self) -> ArrayView2<A> {
         self.as_ref().points()
     }
 }
 
-/// The secondary core of an optimizer,
-/// providing points needing evaluation
-/// to guide the optimizer.
+/// An optimizer able to efficiently provide a view
+/// of points to be evaluated.
+/// For optimizers evaluating more than one point per step.
 pub trait Points<A> {
     /// Return points to be evaluated.
-    fn points(&self) -> CowArray<A, Ix2>;
+    fn points(&self) -> ArrayView2<A>;
+}
+
+impl<A, T> Point<A> for Box<T>
+where
+    T: ?Sized + Point<A>,
+{
+    fn point(&self) -> Option<ArrayView1<A>> {
+        self.as_ref().point()
+    }
+}
+
+/// An optimizer able to efficiently provide a view
+/// of a point to be evaluated.
+/// For optimizers evaluating at most one point per step.
+pub trait Point<A> {
+    /// Return point to be evaluated.
+    fn point(&self) -> Option<ArrayView1<A>>;
 }
 
 impl<T> IsDone for Box<T>
