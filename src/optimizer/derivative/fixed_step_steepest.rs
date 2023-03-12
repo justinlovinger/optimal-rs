@@ -16,7 +16,7 @@
 //!         state: Array::random(2, Uniform::new(-1.0, 1.0)),
 //!         objective_derivatives_function: |xs: ArrayView1<f64>| f_prime(xs),
 //!     })
-//!     .iterate();
+//!     .into_streaming_iter();
 //!     println!("{}", iter.nth(100).unwrap().state);
 //! }
 //!

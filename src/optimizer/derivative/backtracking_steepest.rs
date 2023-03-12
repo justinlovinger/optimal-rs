@@ -23,7 +23,7 @@
 //!         objective_function: |xs: ArrayView1<f64>| f(xs),
 //!         objective_derivatives_function: |xs: ArrayView1<f64>| (f(xs), f_prime(xs)),
 //!     })
-//!     .iterate();
+//!     .into_streaming_iter();
 //!     println!("{}", iter.nth(100).unwrap().state.point());
 //! }
 //!

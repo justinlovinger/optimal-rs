@@ -7,11 +7,11 @@
 
 pub mod derivative;
 pub mod derivative_free;
-mod iterate;
+mod iterator;
 
 use ndarray::prelude::*;
 
-pub use self::iterate::*;
+pub use self::iterator::*;
 
 impl<S, T> InitialState<S> for Box<T>
 where

@@ -2,36 +2,46 @@ use streaming_iterator::StreamingIterator;
 
 use crate::prelude::*;
 
-impl<O> Iterate for O
+impl<O> IntoStreamingIterator for O
 where
     O: Step,
 {
-    fn iterate(self) -> StepIterator<O> {
+    fn into_streaming_iter(self) -> StepIterator<O> {
         StepIterator::new(self)
     }
 }
 
 /// An automatically implemented extension to [`Step`]
 /// providing an iterator-based API.
-pub trait Iterate {
+///
+/// Initial optimizer state is emitted before stepping,
+/// meaning the first call to `advance` or `next` will not change state.
+/// For example,
+/// `nth(100)` will step `99` times.
+pub trait IntoStreamingIterator {
     /// Return an iterator over optimizer states.
-    fn iterate(self) -> StepIterator<Self>
+    fn into_streaming_iter(self) -> StepIterator<Self>
     where
         Self: Sized;
 }
 
-/// An iterator returned by [`Iterate`].
+/// An iterator returned by [`into_streaming_iter`].
 pub struct StepIterator<O> {
-    optimizer: O,
+    inner: O,
     skipped_first_step: bool,
 }
 
 impl<O> StepIterator<O> {
     fn new(optimizer: O) -> Self {
         Self {
-            optimizer,
+            inner: optimizer,
             skipped_first_step: false,
         }
+    }
+
+    /// Return inner optimizer.
+    pub fn into_inner(self) -> O {
+        self.inner
     }
 }
 
@@ -45,14 +55,14 @@ where
         // `advance` is called before the first `get`,
         // but we want to emit the initial state.
         if self.skipped_first_step {
-            self.optimizer.step()
+            self.inner.step()
         } else {
             self.skipped_first_step = true;
         }
     }
 
     fn get(&self) -> Option<&Self::Item> {
-        Some(&self.optimizer)
+        Some(&self.inner)
     }
 }
 
@@ -69,7 +79,7 @@ mod tests {
                 config: MockConfig::default(),
                 state: MockState::new(),
             })
-            .iterate()
+            .into_streaming_iter()
             .next()
             .unwrap()
             .state
@@ -86,7 +96,7 @@ mod tests {
                 config: MockConfig::default(),
                 state: MockState::new(),
             })
-            .iterate()
+            .into_streaming_iter()
             .find(|o| o.is_done())
             .unwrap()
             .state

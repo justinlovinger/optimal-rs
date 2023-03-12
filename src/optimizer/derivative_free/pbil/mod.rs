@@ -11,7 +11,7 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut iter = PbilDoneWhenConverged::default(NumBits(16), |xs| f(xs)).iterate();
+//!     let mut iter = PbilDoneWhenConverged::default(NumBits(16), |xs| f(xs)).into_streaming_iter();
 //!     let xs = iter
 //!         .find(|o| o.is_done())
 //!         .expect("should converge")
