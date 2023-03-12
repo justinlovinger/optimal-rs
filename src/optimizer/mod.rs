@@ -44,7 +44,7 @@ pub trait InitialState<S> {
 /// step from one state to another,
 /// improving objective value.
 pub trait Step {
-    /// Return the next state.
+    /// Perform an optimization step.
     fn step(&mut self);
 }
 
@@ -64,7 +64,7 @@ where
 /// step from one state to another
 /// given point values.
 pub trait StepFromEvaluated<A> {
-    /// Return the next state,
+    /// Perform an optimization step,
     /// given point values.
     fn step_from_evaluated<S>(&mut self, point_values: ArrayBase<S, Ix1>)
     where
