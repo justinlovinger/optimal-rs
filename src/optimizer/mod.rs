@@ -9,7 +9,7 @@ pub mod derivative;
 pub mod derivative_free;
 mod iterate;
 
-use ndarray::{prelude::*, Data};
+use ndarray::prelude::*;
 
 pub use self::iterate::*;
 
@@ -46,29 +46,6 @@ pub trait InitialState<S> {
 pub trait Step {
     /// Perform an optimization step.
     fn step(&mut self);
-}
-
-impl<A, T> StepFromEvaluated<A> for Box<T>
-where
-    T: ?Sized + StepFromEvaluated<A>,
-{
-    fn step_from_evaluated<S>(&mut self, point_values: ArrayBase<S, Ix1>)
-    where
-        S: Data<Elem = A>,
-    {
-        self.as_mut().step_from_evaluated(point_values)
-    }
-}
-
-/// The core of an optimizer,
-/// step from one state to another
-/// given point values.
-pub trait StepFromEvaluated<A> {
-    /// Perform an optimization step,
-    /// given point values.
-    fn step_from_evaluated<S>(&mut self, point_values: ArrayBase<S, Ix1>)
-    where
-        S: Data<Elem = A>;
 }
 
 impl<A, T> Points<A> for Box<T>

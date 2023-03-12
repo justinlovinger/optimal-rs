@@ -93,7 +93,11 @@ where
     F: Fn(CowArray<bool, Ix2>) -> Array1<B>,
 {
     fn step(&mut self) {
-        self.step_from_evaluated((self.objective_function)(self.points()))
+        replace_with_or_abort(&mut self.state, |state| {
+            self.config
+                .inner
+                .step_from_evaluated((self.objective_function)(state.points()), state)
+        })
     }
 }
 
@@ -129,36 +133,6 @@ impl<R, B, F> IsDone for PbilDoneWhenConverged<R, B, F> {
 impl InitialState<State<SmallRng>> for DoneWhenConvergedConfig {
     fn initial_state(&self) -> State<SmallRng> {
         self.inner.initial_state()
-    }
-}
-
-impl<R, B, F> StepFromEvaluated<B> for PbilDoneWhenConverged<R, B, F>
-where
-    B: Debug + PartialOrd,
-    R: Rng,
-{
-    fn step_from_evaluated<S>(&mut self, point_values: ArrayBase<S, Ix1>)
-    where
-        S: Data<Elem = B>,
-    {
-        replace_with_or_abort(self, |o| {
-            let mut pbil = Pbil {
-                point_value: o.point_value,
-                config: o.config.inner,
-                state: o.state,
-                objective_function: o.objective_function,
-            };
-            pbil.step_from_evaluated(point_values);
-            PbilDoneWhenConverged {
-                point_value: pbil.point_value,
-                config: DoneWhenConvergedConfig {
-                    converged_threshold: o.config.converged_threshold,
-                    inner: pbil.config,
-                },
-                state: pbil.state,
-                objective_function: pbil.objective_function,
-            }
-        });
     }
 }
 
@@ -221,7 +195,10 @@ where
     F: Fn(CowArray<bool, Ix2>) -> Array1<B>,
 {
     fn step(&mut self) {
-        self.step_from_evaluated((self.objective_function)(self.points()))
+        replace_with_or_abort(&mut self.state, |state| {
+            self.config
+                .step_from_evaluated((self.objective_function)(state.points()), state)
+        })
     }
 }
 
@@ -290,26 +267,27 @@ impl InitialState<State<SmallRng>> for Config {
     }
 }
 
-impl<R, B, F> StepFromEvaluated<B> for Pbil<R, B, F>
-where
-    R: Rng,
-    B: Debug + PartialOrd,
-{
-    fn step_from_evaluated<S>(&mut self, point_values: ArrayBase<S, Ix1>)
+impl Config {
+    /// Return the next state,
+    /// given point values.
+    fn step_from_evaluated<B, S, R>(
+        &self,
+        point_values: ArrayBase<S, Ix1>,
+        state: State<R>,
+    ) -> State<R>
     where
+        B: Debug + PartialOrd,
         S: Data<Elem = B>,
+        R: Rng,
     {
-        replace_with_or_abort(&mut self.state, |state| match state {
-            State::Init(s) => State::PreEval(s.to_pre_eval(self.config.num_samples)),
+        match state {
+            State::Init(s) => State::PreEval(s.to_pre_eval(self.num_samples)),
             State::PreEval(s) => {
-                let mut s = s.to_init(self.config.adjust_rate, point_values);
-                s.mutate(
-                    self.config.mutation_chance,
-                    self.config.mutation_adjust_rate,
-                );
+                let mut s = s.to_init(self.adjust_rate, point_values);
+                s.mutate(self.mutation_chance, self.mutation_adjust_rate);
                 State::Init(s)
             }
-        });
+        }
     }
 }
 

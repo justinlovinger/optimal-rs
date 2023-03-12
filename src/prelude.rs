@@ -2,5 +2,4 @@
 
 pub use crate::optimizer::{
     derivative::StepSize, BestPoint, BestPointValue, InitialState, IsDone, Iterate, Points, Step,
-    StepFromEvaluated,
 };

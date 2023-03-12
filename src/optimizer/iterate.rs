@@ -58,7 +58,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use ndarray::{prelude::*, Data};
+    use ndarray::prelude::*;
 
     use super::*;
 
@@ -68,7 +68,6 @@ mod tests {
             (MockOptimizer {
                 config: MockConfig::default(),
                 state: MockState::new(),
-                f,
             })
             .iterate()
             .next()
@@ -86,7 +85,6 @@ mod tests {
             (MockOptimizer {
                 config: MockConfig::default(),
                 state: MockState::new(),
-                f,
             })
             .iterate()
             .find(|o| o.is_done())
@@ -97,27 +95,35 @@ mod tests {
         )
     }
 
-    fn f(xs: CowArray<f64, Ix2>) -> Array1<f64> {
-        xs.sum_axis(Axis(xs.ndim() - 1))
-    }
-
-    struct MockOptimizer<F> {
+    struct MockOptimizer {
         pub config: MockConfig,
         pub state: MockState,
-        pub f: F,
-    }
-
-    impl<F> Step for MockOptimizer<F>
-    where
-        F: Fn(CowArray<f64, Ix2>) -> Array1<f64>,
-    {
-        fn step(&mut self) {
-            self.step_from_evaluated((self.f)(self.points()))
-        }
     }
 
     struct MockConfig {
         max_steps: usize,
+    }
+
+    struct MockState {
+        steps: usize,
+    }
+
+    impl Step for MockOptimizer {
+        fn step(&mut self) {
+            self.state.steps += 1;
+        }
+    }
+
+    impl Points<f64> for MockOptimizer {
+        fn points(&self) -> CowArray<f64, Ix2> {
+            Array2::zeros((0, 0)).into()
+        }
+    }
+
+    impl IsDone for MockOptimizer {
+        fn is_done(&self) -> bool {
+            self.state.steps >= self.config.max_steps
+        }
     }
 
     impl Default for MockConfig {
@@ -126,34 +132,9 @@ mod tests {
         }
     }
 
-    struct MockState {
-        steps: usize,
-    }
-
     impl MockState {
         fn new() -> Self {
             Self { steps: 0 }
-        }
-    }
-
-    impl<F> Points<f64> for MockOptimizer<F> {
-        fn points(&self) -> CowArray<f64, Ix2> {
-            Array2::zeros((0, 0)).into()
-        }
-    }
-
-    impl<F> StepFromEvaluated<f64> for MockOptimizer<F> {
-        fn step_from_evaluated<S>(&mut self, _point_values: ArrayBase<S, Ix1>)
-        where
-            S: Data<Elem = f64>,
-        {
-            self.state.steps += 1;
-        }
-    }
-
-    impl<F> IsDone for MockOptimizer<F> {
-        fn is_done(&self) -> bool {
-            self.state.steps >= self.config.max_steps
         }
     }
 }
