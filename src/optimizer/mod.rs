@@ -77,9 +77,7 @@ where
 /// Indicate whether or not an optimizer is done.
 pub trait IsDone {
     /// Return if optimizer is done.
-    fn is_done(&self) -> bool {
-        false
-    }
+    fn is_done(&self) -> bool;
 }
 
 impl<A, T> BestPoint<A> for Box<T>

@@ -239,8 +239,6 @@ impl<R, B, F> Points<bool> for Pbil<R, B, F> {
     }
 }
 
-impl IsDone for Config {}
-
 impl<R, B, F> BestPoint<bool> for Pbil<R, B, F> {
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
