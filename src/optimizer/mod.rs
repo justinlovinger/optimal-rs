@@ -28,18 +28,6 @@ pub trait InitialState<S> {
     fn initial_state(&self) -> S;
 }
 
-// impl<A, B, S1, S2, C> Step<A, B, S1, S2> for C
-// where
-//     C: Points<A, S1> + StepFromEvaluated<B, S1, S2>,
-// {
-//     fn step<F>(&self, f: F, state: S1) -> S2
-//     where
-//         F: Fn(CowArray<A, Ix2>) -> Array1<B>,
-//     {
-//         self.step_from_evaluated(f(self.points(&state)), state)
-//     }
-// }
-
 /// The core of an optimizer,
 /// step from one state to another,
 /// improving objective value.
