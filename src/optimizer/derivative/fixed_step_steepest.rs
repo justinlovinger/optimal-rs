@@ -17,7 +17,7 @@
 //!         objective_derivatives_function: |xs: ArrayView1<f64>| f_prime(xs),
 //!     })
 //!     .into_streaming_iter();
-//!     println!("{}", iter.nth(100).unwrap().state);
+//!     println!("{}", iter.nth(100).unwrap().best_point());
 //! }
 //!
 //! fn f<S>(point: ArrayBase<S, Ix1>) -> f64
@@ -73,6 +73,12 @@ where
             self.config
                 .step_from_evaluated((self.objective_derivatives_function)(point.view()), point)
         });
+    }
+}
+
+impl<A, F> crate::prelude::Point<A> for FixedStepSteepestDescent<A, F> {
+    fn point(&self) -> Option<ArrayView1<A>> {
+        Some(self.state.view())
     }
 }
 

@@ -24,7 +24,7 @@
 //!         objective_derivatives_function: |xs: ArrayView1<f64>| (f(xs), f_prime(xs)),
 //!     })
 //!     .into_streaming_iter();
-//!     println!("{}", iter.nth(100).unwrap().state.point());
+//!     println!("{}", iter.nth(100).unwrap().best_point());
 //! }
 //!
 //! fn f<S>(point: ArrayBase<S, Ix1>) -> f64
@@ -142,9 +142,15 @@ where
     }
 }
 
+impl<A, F, FD> crate::prelude::Point<A> for BacktrackingSteepestDescent<A, F, FD> {
+    fn point(&self) -> Option<ArrayView1<A>> {
+        self.state.point()
+    }
+}
+
 impl<A, F, FD> BestPoint<A> for BacktrackingSteepestDescent<A, F, FD> {
     fn best_point(&self) -> CowArray<A, Ix1> {
-        self.state.point().into()
+        self.state.best_point()
     }
 }
 
@@ -156,21 +162,27 @@ impl<A> State<A> {
             last_step_size: initial_step_size.0,
         })
     }
+}
 
-    /// Return best point discovered by optimizer so far.
-    pub fn point(&self) -> &Point<A> {
-        match self {
+impl<A> crate::prelude::Point<A> for State<A> {
+    fn point(&self) -> Option<ArrayView1<A>> {
+        Some(
+            (match self {
+                State::Ready(x) => x.point_to_evaluate(),
+                State::Searching(x) => x.point_to_evaluate(),
+            })
+            .into(),
+        )
+    }
+}
+
+impl<A> BestPoint<A> for State<A> {
+    fn best_point(&self) -> CowArray<A, Ix1> {
+        (match self {
             State::Ready(x) => x.point(),
             State::Searching(x) => x.point(),
-        }
-    }
-
-    /// Return point being evaluated by line search.
-    pub fn point_to_evaluate(&self) -> &Point<A> {
-        match self {
-            State::Ready(x) => x.point_to_evaluate(),
-            State::Searching(x) => x.point_to_evaluate(),
-        }
+        })
+        .into()
     }
 }
 
