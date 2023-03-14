@@ -2,6 +2,9 @@ use streaming_iterator::StreamingIterator;
 
 use crate::prelude::*;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 impl<O> IntoStreamingIterator for O
 where
     O: Step,
@@ -26,6 +29,8 @@ pub trait IntoStreamingIterator {
 }
 
 /// An iterator returned by [`into_streaming_iter`].
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StepIterator<O> {
     inner: O,
     skipped_first_step: bool,
