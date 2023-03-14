@@ -1,3 +1,5 @@
+#![allow(clippy::needless_doctest_main)]
+
 //! Backtracking line search steepest descent.
 //!
 //! Initial line search step size is chosen by incrementing the previous step size.
@@ -20,25 +22,30 @@
 //!             initial_step_size_incr_rate: IncrRate::from_backtracking_rate(backtracking_rate),
 //!         },
 //!         state: State::new(Array::random(2, Uniform::new(-1.0, 1.0)), StepSize::new(1.0).unwrap()),
-//!         objective_function: |xs: ArrayView1<f64>| f(xs),
-//!         objective_derivatives_function: |xs: ArrayView1<f64>| (f(xs), f_prime(xs)),
+//!         objective: Sphere,
 //!     })
 //!     .into_streaming_iter();
 //!     println!("{}", iter.nth(100).unwrap().best_point());
 //! }
 //!
-//! fn f<S>(point: ArrayBase<S, Ix1>) -> f64
-//! where
-//!     S: Data<Elem = f64>,
-//! {
-//!     point.map(|x| x.powi(2)).sum()
+//! struct Sphere;
+//!
+//! impl Objective<f64, f64> for Sphere {
+//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> f64
+//!     where
+//!         S: ndarray::RawData<Elem = f64> + Data,
+//!     {
+//!         point.map(|x| x.powi(2)).sum()
+//!     }
 //! }
 //!
-//! fn f_prime<S>(point: ArrayBase<S, Ix1>) -> Array1<f64>
-//! where
-//!     S: Data<Elem = f64>,
-//! {
-//!     point.map(|x| 2.0 * x)
+//! impl Differentiable<f64, f64> for Sphere {
+//!     fn differentiate<S>(&self, point: ArrayBase<S, Ix1>) -> Array1<f64>
+//!     where
+//!         S: ndarray::RawData<Elem = f64> + Data,
+//!     {
+//!         point.map(|x| 2.0 * x)
+//!     }
 //! }
 //! ```
 
@@ -65,15 +72,13 @@ use super::StepSize;
 
 /// Backtracking line search steepest descent optimizer
 /// with initial line search step size chosen by incrementing previous step size.
-pub struct BacktrackingSteepestDescent<A, F, FD> {
+pub struct BacktrackingSteepestDescent<A, F> {
     /// Backtracking steepest descent configuration parameters.
     pub config: Config<A>,
     /// Backtracking steepest descent state.
     pub state: State<A>,
-    /// Objective function.
-    pub objective_function: F,
-    /// Function returning an (objective value, partial derivatives) tuple.
-    pub objective_derivatives_function: FD,
+    /// A differentiable objective function.
+    pub objective: F,
 }
 
 /// Backtracking steepest descent configuration parameters.
@@ -111,7 +116,7 @@ pub struct Searching<A> {
     point_at_step: Point<A>,
 }
 
-impl<A, F, FD> Step for BacktrackingSteepestDescent<A, F, FD>
+impl<A, F> Step for BacktrackingSteepestDescent<A, F>
 where
     A: 'static
         + Clone
@@ -123,32 +128,32 @@ where
         + Div<Output = A>
         + Zero
         + One,
-    F: Fn(ArrayView1<A>) -> A,
-    FD: Fn(ArrayView1<A>) -> (A, Array1<A>),
+    F: Differentiable<A, A>,
     f64: AsPrimitive<A>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| match state {
             State::Ready(x) => {
-                let (point_value, point_derivatives) =
-                    (self.objective_derivatives_function)(x.point_to_evaluate().view());
+                let (point_value, point_derivatives) = self
+                    .objective
+                    .evaluate_differentiate(x.point_to_evaluate().view());
                 x.step_from_evaluated(&self.config, point_value, point_derivatives)
             }
             State::Searching(x) => {
-                let point_value = (self.objective_function)(x.point_to_evaluate().view());
+                let point_value = self.objective.evaluate(x.point_to_evaluate().view());
                 x.step_from_evaluated(&self.config, point_value)
             }
         })
     }
 }
 
-impl<A, F, FD> crate::prelude::Point<A> for BacktrackingSteepestDescent<A, F, FD> {
+impl<A, F> crate::prelude::Point<A> for BacktrackingSteepestDescent<A, F> {
     fn point(&self) -> Option<ArrayView1<A>> {
         self.state.point()
     }
 }
 
-impl<A, F, FD> BestPoint<A> for BacktrackingSteepestDescent<A, F, FD> {
+impl<A, F> BestPoint<A> for BacktrackingSteepestDescent<A, F> {
     fn best_point(&self) -> CowArray<A, Ix1> {
         self.state.best_point()
     }

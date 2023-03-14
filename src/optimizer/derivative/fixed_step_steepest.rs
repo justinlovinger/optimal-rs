@@ -1,3 +1,5 @@
+#![allow(clippy::needless_doctest_main)]
+
 //! Fixed step size steepest descent,
 //! a very simple derivative optimizer.
 //!
@@ -14,24 +16,30 @@
 //!     let mut iter = (FixedStepSteepestDescent {
 //!         config: Config { step_size: StepSize::new(0.5).unwrap() },
 //!         state: Array::random(2, Uniform::new(-1.0, 1.0)),
-//!         objective_derivatives_function: |xs: ArrayView1<f64>| f_prime(xs),
+//!         objective: Sphere,
 //!     })
 //!     .into_streaming_iter();
 //!     println!("{}", iter.nth(100).unwrap().best_point());
 //! }
 //!
-//! fn f<S>(point: ArrayBase<S, Ix1>) -> f64
-//! where
-//!     S: Data<Elem = f64>,
-//! {
-//!     point.map(|x| x.powi(2)).sum()
+//! struct Sphere;
+//!
+//! impl Objective<f64, f64> for Sphere {
+//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> f64
+//!     where
+//!         S: ndarray::RawData<Elem = f64> + Data,
+//!     {
+//!         point.map(|x| x.powi(2)).sum()
+//!     }
 //! }
 //!
-//! fn f_prime<S>(point: ArrayBase<S, Ix1>) -> Array1<f64>
-//! where
-//!     S: Data<Elem = f64>,
-//! {
-//!     point.map(|x| 2.0 * x)
+//! impl Differentiable<f64, f64> for Sphere {
+//!     fn differentiate<S>(&self, point: ArrayBase<S, Ix1>) -> Array1<f64>
+//!     where
+//!         S: ndarray::RawData<Elem = f64> + Data,
+//!     {
+//!         point.map(|x| 2.0 * x)
+//!     }
 //! }
 //! ```
 
@@ -51,8 +59,8 @@ pub struct FixedStepSteepestDescent<A, F> {
     /// Fixed step size steepest descent state,
     /// a point.
     pub state: Point<A>,
-    /// Function returning partial derivatives of objective function.
-    pub objective_derivatives_function: F,
+    /// A differentiable objective function.
+    pub objective: F,
 }
 
 /// Fixed step size steepest descent configuration parameters.
@@ -66,12 +74,12 @@ type Point<A> = Array1<A>;
 impl<A, F> Step for FixedStepSteepestDescent<A, F>
 where
     A: Clone + SubAssign + Mul<Output = A>,
-    F: Fn(ArrayView1<A>) -> Array1<A>,
+    F: Differentiable<A, A>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |point| {
             self.config
-                .step_from_evaluated((self.objective_derivatives_function)(point.view()), point)
+                .step_from_evaluated(self.objective.differentiate(point.view()), point)
         });
     }
 }

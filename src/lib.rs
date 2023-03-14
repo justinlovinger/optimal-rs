@@ -21,7 +21,7 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut iter = PbilDoneWhenConverged::default(NumBits(16), |xs| f(xs)).into_streaming_iter();
+//!     let mut iter = PbilDoneWhenConverged::default(NumBits(16), f).into_streaming_iter();
 //!     let xs = iter
 //!         .find(|o| o.is_done())
 //!         .expect("should converge")
@@ -29,17 +29,14 @@
 //!     println!("f({}) = {}", xs, f(xs.view()));
 //! }
 //!
-//! fn f<S, D>(bs: ArrayBase<S, D>) -> Array<u64, D::Smaller>
-//! where
-//!     S: Data<Elem = bool>,
-//!     D: Dimension + RemoveAxis,
-//! {
-//!     bs.fold_axis(Axis(bs.ndim() - 1), 0, |acc, b| acc + *b as u64)
+//! fn f(bs: ArrayView1<bool>) -> u64 {
+//!     bs.fold(0, |acc, b| acc + *b as u64)
 //! }
 //! ```
 
 #![deny(missing_docs)]
 
 mod derive;
+mod objective;
 pub mod optimizer;
 pub mod prelude;
