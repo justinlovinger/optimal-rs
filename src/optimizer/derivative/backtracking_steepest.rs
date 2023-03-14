@@ -70,8 +70,13 @@ use crate::{
 
 use super::StepSize;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Backtracking line search steepest descent optimizer
 /// with initial line search step size chosen by incrementing previous step size.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BacktrackingSteepestDescent<A, F> {
     /// Backtracking steepest descent configuration parameters.
     pub config: Config<A>,
@@ -82,6 +87,8 @@ pub struct BacktrackingSteepestDescent<A, F> {
 }
 
 /// Backtracking steepest descent configuration parameters.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config<A> {
     /// The sufficient decrease parameter,
     /// `c_1`.
@@ -93,6 +100,8 @@ pub struct Config<A> {
 }
 
 /// Backtracking steepest descent state.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum State<A> {
     /// Ready to begin line search.
     Ready(Ready<A>),
@@ -101,12 +110,16 @@ pub enum State<A> {
 }
 
 /// Ready to begin line search.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Ready<A> {
     point: Point<A>,
     last_step_size: A,
 }
 
 /// Line searching.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Searching<A> {
     point: Point<A>,
     point_value: A,
@@ -292,6 +305,7 @@ where
 /// The sufficient decrease parameter,
 /// `c_1`.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SufficientDecreaseParameter<A>(A);
 
 derive_new_from_bounded_partial_ord!(SufficientDecreaseParameter<A: Real>);
@@ -327,6 +341,7 @@ where
 
 /// Rate to decrease step size while line searching.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct BacktrackingRate<A>(A);
 
 derive_new_from_bounded_partial_ord!(BacktrackingRate<A: Real>);
@@ -362,6 +377,7 @@ where
 
 /// Rate to increase step size before starting each line search.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct IncrRate<A>(A);
 
 derive_new_from_lower_bounded_partial_ord!(IncrRate<A: Real>);

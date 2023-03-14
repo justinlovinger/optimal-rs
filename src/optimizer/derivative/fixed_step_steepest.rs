@@ -52,7 +52,12 @@ use crate::prelude::*;
 
 use super::StepSize;
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Fixed step size steepest descent optimizer.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct FixedStepSteepestDescent<A, F> {
     /// Fixed step size steepest descent configuration parameters.
     pub config: Config<A>,
@@ -64,6 +69,8 @@ pub struct FixedStepSteepestDescent<A, F> {
 }
 
 /// Fixed step size steepest descent configuration parameters.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config<A> {
     /// Length of each step.
     pub step_size: StepSize<A>,

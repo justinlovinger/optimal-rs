@@ -11,9 +11,13 @@ use num_traits::{bounds::LowerBounded, real::Real};
 
 use crate::derive::{derive_into_inner, derive_new_from_lower_bounded_partial_ord};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Multiplier for each component of a step direction
 /// in derivative optimization.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct StepSize<A>(A);
 
 derive_new_from_lower_bounded_partial_ord!(StepSize<A: Real>);
