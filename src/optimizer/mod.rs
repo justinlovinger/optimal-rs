@@ -10,8 +10,20 @@ pub mod derivative_free;
 mod iterator;
 
 use ndarray::prelude::*;
+use rand::Rng;
 
 pub use self::iterator::*;
+
+/// An optimizer configuration
+/// qualified to initialize an optimizer
+/// using a 'Rng'.
+pub trait InitializeUsing<'a, F, O> {
+    /// Return an optimizer
+    /// initialized using `rng`.
+    fn initialize_using<R>(&'a self, objective: &'a F, rng: &mut R) -> O
+    where
+        R: Rng;
+}
 
 impl<'a, F, O, T> Initialize<'a, F, O> for Box<T>
 where

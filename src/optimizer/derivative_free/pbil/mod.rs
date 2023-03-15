@@ -126,6 +126,27 @@ impl DoneWhenConvergedConfig {
     }
 }
 
+impl<'a, B, F> InitializeUsing<'a, F, PbilDoneWhenConverged<'a, SmallRng, B, F>>
+    for DoneWhenConvergedConfig
+where
+    F: Objective<bool, B>,
+{
+    fn initialize_using<R>(
+        &'a self,
+        objective: &'a F,
+        rng: &mut R,
+    ) -> PbilDoneWhenConverged<'a, SmallRng, B, F>
+    where
+        R: Rng,
+    {
+        PbilDoneWhenConverged::new(
+            self,
+            objective,
+            State::initial_using(self.inner.num_bits, rng),
+        )
+    }
+}
+
 impl<'a, B, F> Initialize<'a, F, PbilDoneWhenConverged<'a, SmallRng, B, F>>
     for DoneWhenConvergedConfig
 where
@@ -258,6 +279,18 @@ impl Config {
     }
 }
 
+impl<'a, B, F> InitializeUsing<'a, F, Pbil<'a, SmallRng, B, F>> for Config
+where
+    F: Objective<bool, B>,
+{
+    fn initialize_using<R>(&'a self, objective: &'a F, rng: &mut R) -> Pbil<'a, SmallRng, B, F>
+    where
+        R: Rng,
+    {
+        Pbil::new(self, objective, State::initial_using(self.num_bits, rng))
+    }
+}
+
 impl<'a, B, F> Initialize<'a, F, Pbil<'a, SmallRng, B, F>> for Config
 where
     F: Objective<bool, B>,
@@ -272,6 +305,16 @@ impl State<SmallRng> {
         Self::Init(Init::new(
             Array::from_elem(usize::from(num_bits), Probability::default()),
             SmallRng::from_entropy(),
+        ))
+    }
+
+    fn initial_using<R>(num_bits: NumBits, rng: &mut R) -> Self
+    where
+        R: Rng,
+    {
+        Self::Init(Init::new(
+            Array::from_elem(usize::from(num_bits), Probability::default()),
+            SmallRng::from_rng(rng).expect("RNG should initialize"),
         ))
     }
 }
