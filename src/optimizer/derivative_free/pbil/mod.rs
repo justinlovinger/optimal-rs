@@ -302,20 +302,14 @@ where
 
 impl State<SmallRng> {
     fn initial(num_bits: NumBits) -> Self {
-        Self::Init(Init::new(
-            Array::from_elem(usize::from(num_bits), Probability::default()),
-            SmallRng::from_entropy(),
-        ))
+        Self::Init(Init::initial(usize::from(num_bits)))
     }
 
     fn initial_using<R>(num_bits: NumBits, rng: &mut R) -> Self
     where
         R: Rng,
     {
-        Self::Init(Init::new(
-            Array::from_elem(usize::from(num_bits), Probability::default()),
-            SmallRng::from_rng(rng).expect("RNG should initialize"),
-        ))
+        Self::Init(Init::initial_using(usize::from(num_bits), rng))
     }
 }
 

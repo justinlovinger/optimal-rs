@@ -28,10 +28,26 @@ impl Init<SmallRng> {
     /// # Arguments
     ///
     /// - `num_bits`: number of bits in each sample
-    pub fn default(num_bits: usize) -> Self {
+    pub fn initial(num_bits: usize) -> Self {
         Self {
             probabilities: Array::from_elem(num_bits, Probability::default()),
             rng: SmallRng::from_entropy(),
+        }
+    }
+
+    /// Return recommended initial state.
+    ///
+    /// # Arguments
+    ///
+    /// - `num_bits`: number of bits in each sample
+    /// - `rng`: source of randomness
+    pub fn initial_using<R>(num_bits: usize, rng: R) -> Self
+    where
+        R: Rng,
+    {
+        Self {
+            probabilities: Array::from_elem(num_bits, Probability::default()),
+            rng: SmallRng::from_rng(rng).expect("RNG should initialize"),
         }
     }
 }
