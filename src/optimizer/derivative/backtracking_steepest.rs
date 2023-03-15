@@ -15,14 +15,18 @@
 //!
 //! fn main() {
 //!     let backtracking_rate = BacktrackingRate::default();
+//!     let config = Config {
+//!         c_1: SufficientDecreaseParameter::default(),
+//!         backtracking_rate,
+//!         initial_step_size_incr_rate: IncrRate::from_backtracking_rate(backtracking_rate),
+//!     };
 //!     let mut iter = (BacktrackingSteepestDescent {
-//!         config: Config {
-//!             c_1: SufficientDecreaseParameter::default(),
-//!             backtracking_rate,
-//!             initial_step_size_incr_rate: IncrRate::from_backtracking_rate(backtracking_rate),
-//!         },
-//!         state: State::new(Array::random(2, Uniform::new(-1.0, 1.0)), StepSize::new(1.0).unwrap()),
-//!         objective: Sphere,
+//!         config: &config,
+//!         objective: &Sphere,
+//!         state: State::new(
+//!             Array::random(2, Uniform::new(-1.0, 1.0)),
+//!             StepSize::new(1.0).unwrap(),
+//!         ),
 //!     })
 //!     .into_streaming_iter();
 //!     println!("{}", iter.nth(100).unwrap().best_point());
@@ -76,14 +80,13 @@ use serde::{Deserialize, Serialize};
 /// Backtracking line search steepest descent optimizer
 /// with initial line search step size chosen by incrementing previous step size.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BacktrackingSteepestDescent<A, F> {
+pub struct BacktrackingSteepestDescent<'a, A, F> {
     /// Backtracking steepest descent configuration parameters.
-    pub config: Config<A>,
+    pub config: &'a Config<A>,
+    /// A differentiable objective function.
+    pub objective: &'a F,
     /// Backtracking steepest descent state.
     pub state: State<A>,
-    /// A differentiable objective function.
-    pub objective: F,
 }
 
 /// Backtracking steepest descent configuration parameters.
@@ -129,7 +132,7 @@ pub struct Searching<A> {
     point_at_step: Point<A>,
 }
 
-impl<A, F> Step for BacktrackingSteepestDescent<A, F>
+impl<A, F> Step for BacktrackingSteepestDescent<'_, A, F>
 where
     A: 'static
         + Clone
@@ -150,23 +153,23 @@ where
                 let (point_value, point_derivatives) = self
                     .objective
                     .evaluate_differentiate(x.point_to_evaluate().view());
-                x.step_from_evaluated(&self.config, point_value, point_derivatives)
+                x.step_from_evaluated(self.config, point_value, point_derivatives)
             }
             State::Searching(x) => {
                 let point_value = self.objective.evaluate(x.point_to_evaluate().view());
-                x.step_from_evaluated(&self.config, point_value)
+                x.step_from_evaluated(self.config, point_value)
             }
         })
     }
 }
 
-impl<A, F> crate::prelude::Point<A> for BacktrackingSteepestDescent<A, F> {
+impl<A, F> crate::prelude::Point<A> for BacktrackingSteepestDescent<'_, A, F> {
     fn point(&self) -> Option<ArrayView1<A>> {
         self.state.point()
     }
 }
 
-impl<A, F> BestPoint<A> for BacktrackingSteepestDescent<A, F> {
+impl<A, F> BestPoint<A> for BacktrackingSteepestDescent<'_, A, F> {
     fn best_point(&self) -> CowArray<A, Ix1> {
         self.state.best_point()
     }

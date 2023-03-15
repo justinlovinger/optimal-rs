@@ -13,10 +13,11 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
+//!     let config = Config { step_size: StepSize::new(0.5).unwrap() };
 //!     let mut iter = (FixedStepSteepestDescent {
-//!         config: Config { step_size: StepSize::new(0.5).unwrap() },
+//!         config: &config,
+//!         objective: &Sphere,
 //!         state: Array::random(2, Uniform::new(-1.0, 1.0)),
-//!         objective: Sphere,
 //!     })
 //!     .into_streaming_iter();
 //!     println!("{}", iter.nth(100).unwrap().best_point());
@@ -57,15 +58,14 @@ use serde::{Deserialize, Serialize};
 
 /// Fixed step size steepest descent optimizer.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct FixedStepSteepestDescent<A, F> {
+pub struct FixedStepSteepestDescent<'a, A, F> {
     /// Fixed step size steepest descent configuration parameters.
-    pub config: Config<A>,
+    pub config: &'a Config<A>,
+    /// A differentiable objective function.
+    pub objective: &'a F,
     /// Fixed step size steepest descent state,
     /// a point.
     pub state: Point<A>,
-    /// A differentiable objective function.
-    pub objective: F,
 }
 
 /// Fixed step size steepest descent configuration parameters.
@@ -78,7 +78,7 @@ pub struct Config<A> {
 
 type Point<A> = Array1<A>;
 
-impl<A, F> Step for FixedStepSteepestDescent<A, F>
+impl<A, F> Step for FixedStepSteepestDescent<'_, A, F>
 where
     A: Clone + SubAssign + Mul<Output = A>,
     F: Differentiable<A, A>,
@@ -91,13 +91,13 @@ where
     }
 }
 
-impl<A, F> crate::prelude::Point<A> for FixedStepSteepestDescent<A, F> {
+impl<A, F> crate::prelude::Point<A> for FixedStepSteepestDescent<'_, A, F> {
     fn point(&self) -> Option<ArrayView1<A>> {
         Some(self.state.view())
     }
 }
 
-impl<A, F> BestPoint<A> for FixedStepSteepestDescent<A, F> {
+impl<A, F> BestPoint<A> for FixedStepSteepestDescent<'_, A, F> {
     fn best_point(&self) -> CowArray<A, Ix1> {
         (&self.state).into()
     }
