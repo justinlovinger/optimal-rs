@@ -5,15 +5,14 @@
 //! ```
 //! use ndarray::{Data, RemoveAxis, prelude::*};
 //! use optimal::{
-//!     optimizer::derivative_free::pbil::{DoneWhenConvergedConfig, PbilDoneWhenConverged, NumBits},
+//!     optimizer::derivative_free::pbil::{DoneWhenConvergedConfig, NumBits},
 //!     prelude::*,
 //! };
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
 //!     let config = DoneWhenConvergedConfig::default(NumBits(16));
-//!     let mut iter =
-//!         PbilDoneWhenConverged::new(&config, &f, config.initial_state()).into_streaming_iter();
+//!     let mut iter = config.initialize(&f).into_streaming_iter();
 //!     let xs = iter
 //!         .find(|o| o.is_done())
 //!         .expect("should converge")
@@ -127,9 +126,13 @@ impl DoneWhenConvergedConfig {
     }
 }
 
-impl InitialState<State<SmallRng>> for DoneWhenConvergedConfig {
-    fn initial_state(&self) -> State<SmallRng> {
-        self.inner.initial_state()
+impl<'a, B, F> Initialize<'a, F, PbilDoneWhenConverged<'a, SmallRng, B, F>>
+    for DoneWhenConvergedConfig
+where
+    F: Objective<bool, B>,
+{
+    fn initialize(&'a self, objective: &'a F) -> PbilDoneWhenConverged<'a, SmallRng, B, F> {
+        PbilDoneWhenConverged::new(self, objective, State::initial(self.inner.num_bits))
     }
 }
 
@@ -255,10 +258,19 @@ impl Config {
     }
 }
 
-impl InitialState<State<SmallRng>> for Config {
-    fn initial_state(&self) -> State<SmallRng> {
-        State::Init(Init::new(
-            Array::from_elem(usize::from(self.num_bits), Probability::default()),
+impl<'a, B, F> Initialize<'a, F, Pbil<'a, SmallRng, B, F>> for Config
+where
+    F: Objective<bool, B>,
+{
+    fn initialize(&'a self, objective: &'a F) -> Pbil<'a, SmallRng, B, F> {
+        Pbil::new(self, objective, State::initial(self.num_bits))
+    }
+}
+
+impl State<SmallRng> {
+    fn initial(num_bits: NumBits) -> Self {
+        Self::Init(Init::new(
+            Array::from_elem(usize::from(num_bits), Probability::default()),
             SmallRng::from_entropy(),
         ))
     }

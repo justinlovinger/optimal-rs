@@ -15,15 +15,14 @@
 //! ```
 //! use ndarray::{Data, RemoveAxis, prelude::*};
 //! use optimal::{
-//!     optimizer::derivative_free::pbil::{DoneWhenConvergedConfig, PbilDoneWhenConverged, NumBits},
+//!     optimizer::derivative_free::pbil::{DoneWhenConvergedConfig, NumBits},
 //!     prelude::*,
 //! };
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
 //!     let config = DoneWhenConvergedConfig::default(NumBits(16));
-//!     let mut iter =
-//!         PbilDoneWhenConverged::new(&config, &f, config.initial_state()).into_streaming_iter();
+//!     let mut iter = config.initialize(&f).into_streaming_iter();
 //!     let xs = iter
 //!         .find(|o| o.is_done())
 //!         .expect("should converge")

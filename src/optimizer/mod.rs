@@ -13,19 +13,20 @@ use ndarray::prelude::*;
 
 pub use self::iterator::*;
 
-impl<S, T> InitialState<S> for Box<T>
+impl<'a, F, O, T> Initialize<'a, F, O> for Box<T>
 where
-    T: ?Sized + InitialState<S>,
+    T: ?Sized + Initialize<'a, F, O>,
 {
-    fn initial_state(&self) -> S {
-        self.as_ref().initial_state()
+    fn initialize(&'a self, objective: &'a F) -> O {
+        self.as_ref().initialize(objective)
     }
 }
 
-/// An optimizer with a recommended initial state.
-pub trait InitialState<S> {
-    /// Return the recommended initial state.
-    fn initial_state(&self) -> S;
+/// An optimizer configuration
+/// qualified to initialize an optimizer.
+pub trait Initialize<'a, F, O> {
+    /// Return an initialized optimizer.
+    fn initialize(&'a self, objective: &'a F) -> O;
 }
 
 /// The core of an optimizer,

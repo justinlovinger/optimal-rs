@@ -3,7 +3,7 @@
 pub use crate::{
     objective::*,
     optimizer::{
-        derivative::StepSize, BestPoint, BestPointValue, InitialState, IntoStreamingIterator,
-        IsDone, Point, Points, Step,
+        derivative::StepSize, BestPoint, BestPointValue, Initialize, IntoStreamingIterator, IsDone,
+        Point, Points, Step,
     },
 };
