@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-serde = ["dep:serde", "ndarray/serde"]
+serde = ["dep:serde", "ndarray/serde", "rand_xoshiro/serde1"]
 
 [dependencies]
 derive_more = "0.99"
@@ -14,6 +14,7 @@ ndarray-rand = "0.14"
 num-traits = "0.2"
 paste = "1.0.11"
 rand = "0.8"
+rand_xoshiro = "0.6.0"
 replace_with = "0.1"
 serde = { version = "1", features = ["derive"], optional = true }
 streaming-iterator = "0.1"

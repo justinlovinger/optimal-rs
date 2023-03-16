@@ -3,9 +3,10 @@ use ndarray::{prelude::*, Data};
 use ndarray_rand::RandomExt;
 use rand::{
     distributions::{Bernoulli, Standard},
-    prelude::{SeedableRng, SmallRng},
+    prelude::SeedableRng,
     Rng,
 };
+use rand_xoshiro::Xoshiro256PlusPlus;
 use std::{
     fmt::Debug,
     ops::{Add, Mul, Sub},
@@ -17,12 +18,12 @@ use serde::{Deserialize, Serialize};
 /// Initial and post-evaluation state.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Init<R> {
+pub struct Init {
     probabilities: Array1<Probability>,
-    rng: R,
+    rng: Xoshiro256PlusPlus,
 }
 
-impl Init<SmallRng> {
+impl Init {
     /// Return recommended initial state.
     ///
     /// # Arguments
@@ -31,7 +32,7 @@ impl Init<SmallRng> {
     pub fn initial(num_bits: usize) -> Self {
         Self {
             probabilities: Array::from_elem(num_bits, Probability::default()),
-            rng: SmallRng::from_entropy(),
+            rng: Xoshiro256PlusPlus::from_entropy(),
         }
     }
 
@@ -47,14 +48,12 @@ impl Init<SmallRng> {
     {
         Self {
             probabilities: Array::from_elem(num_bits, Probability::default()),
-            rng: SmallRng::from_rng(rng).expect("RNG should initialize"),
+            rng: Xoshiro256PlusPlus::from_rng(rng).expect("RNG should initialize"),
         }
     }
-}
 
-impl<R: Rng> Init<R> {
     /// Return custom initial state.
-    pub fn new(probabilities: Array1<Probability>, rng: R) -> Self {
+    pub fn new(probabilities: Array1<Probability>, rng: Xoshiro256PlusPlus) -> Self {
         Self { probabilities, rng }
     }
 
@@ -86,7 +85,7 @@ impl<R: Rng> Init<R> {
     }
 
     /// Step to a 'PreEval' state.
-    pub fn to_pre_eval(mut self, num_samples: NumSamples) -> PreEval<R> {
+    pub fn to_pre_eval(mut self, num_samples: NumSamples) -> PreEval {
         PreEval {
             samples: self.samples(num_samples),
             probabilities: self.probabilities,
@@ -101,9 +100,7 @@ impl<R: Rng> Init<R> {
             .unwrap()
             .map(|distr| self.rng.sample(distr))
     }
-}
 
-impl<R> Init<R> {
     /// Return probabilities.
     pub fn probabilities(&self) -> &Array1<Probability> {
         &self.probabilities
@@ -113,13 +110,13 @@ impl<R> Init<R> {
 /// State with samples ready for evaluation.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct PreEval<R> {
+pub struct PreEval {
     probabilities: Array1<Probability>,
-    rng: R,
+    rng: Xoshiro256PlusPlus,
     samples: Array2<bool>,
 }
 
-impl<R> PreEval<R> {
+impl PreEval {
     /// Step to 'Init' state
     /// by adjusting probabilities
     /// towards the best sample.
@@ -132,7 +129,7 @@ impl<R> PreEval<R> {
         mut self,
         adjust_rate: AdjustRate,
         sample_values: ArrayBase<S, Ix1>,
-    ) -> Init<R> {
+    ) -> Init {
         adjust_probabilities(
             &mut self.probabilities,
             adjust_rate.into(),
@@ -233,7 +230,10 @@ mod tests {
         num_samples: NumSamples,
         adjust_rate: AdjustRate,
     ) {
-        let init = Init::new(initial_probabilities.into(), SmallRng::seed_from_u64(seed));
+        let init = Init::new(
+            initial_probabilities.into(),
+            Xoshiro256PlusPlus::seed_from_u64(seed),
+        );
         let pre_eval = init.to_pre_eval(num_samples);
         let point_values = f(pre_eval.samples().view());
         let init = pre_eval.to_init(adjust_rate, point_values);
@@ -247,7 +247,10 @@ mod tests {
         mutation_chance: MutationChance,
         mutation_adjust_rate: MutationAdjustRate,
     ) {
-        let mut init = Init::new(initial_probabilities.into(), SmallRng::seed_from_u64(seed));
+        let mut init = Init::new(
+            initial_probabilities.into(),
+            Xoshiro256PlusPlus::seed_from_u64(seed),
+        );
         init.mutate(mutation_chance, mutation_adjust_rate);
         prop_assert!(are_valid(init.probabilities()));
     }

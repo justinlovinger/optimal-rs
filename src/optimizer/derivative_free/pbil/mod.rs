@@ -43,7 +43,7 @@ use serde::{Deserialize, Serialize};
 
 /// PBIL optimizer with check for converged probabilities.
 #[derive(Clone, Debug)]
-pub struct PbilDoneWhenConverged<'a, R, B, F> {
+pub struct PbilDoneWhenConverged<'a, B, F> {
     point_value: PhantomData<B>,
     /// PBIL configuration parameters
     /// with check for converged probabilities.
@@ -51,7 +51,7 @@ pub struct PbilDoneWhenConverged<'a, R, B, F> {
     /// An objective function.
     pub objective: &'a F,
     /// PBIL state.
-    pub state: State<R>,
+    pub state: State,
 }
 
 /// PBIL configuration parameters
@@ -65,13 +65,13 @@ pub struct DoneWhenConvergedConfig {
     pub inner: Config,
 }
 
-impl<'a, R, B, F> PbilDoneWhenConverged<'a, R, B, F>
+impl<'a, B, F> PbilDoneWhenConverged<'a, B, F>
 where
     F: Objective<bool, B>,
 {
     /// Convenience function to return a 'PbilDoneWhenConverged'
     /// without setting 'PhantomData'.
-    pub fn new(config: &'a DoneWhenConvergedConfig, objective: &'a F, state: State<R>) -> Self {
+    pub fn new(config: &'a DoneWhenConvergedConfig, objective: &'a F, state: State) -> Self {
         Self {
             point_value: PhantomData,
             config,
@@ -81,9 +81,8 @@ where
     }
 }
 
-impl<R, B, F> Step for PbilDoneWhenConverged<'_, R, B, F>
+impl<B, F> Step for PbilDoneWhenConverged<'_, B, F>
 where
-    R: Rng,
     B: Debug + PartialOrd,
     F: Objective<bool, B>,
 {
@@ -96,19 +95,19 @@ where
     }
 }
 
-impl<R, B, F> IsDone for PbilDoneWhenConverged<'_, R, B, F> {
+impl<B, F> IsDone for PbilDoneWhenConverged<'_, B, F> {
     fn is_done(&self) -> bool {
         converged(&self.config.converged_threshold, self.state.probabilities())
     }
 }
 
-impl<R, B, F> Points<bool> for PbilDoneWhenConverged<'_, R, B, F> {
+impl<B, F> Points<bool> for PbilDoneWhenConverged<'_, B, F> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
 
-impl<R, B, F> BestPoint<bool> for PbilDoneWhenConverged<'_, R, B, F> {
+impl<B, F> BestPoint<bool> for PbilDoneWhenConverged<'_, B, F> {
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
     }
@@ -126,8 +125,7 @@ impl DoneWhenConvergedConfig {
     }
 }
 
-impl<'a, B, F> InitializeUsing<'a, F, PbilDoneWhenConverged<'a, SmallRng, B, F>>
-    for DoneWhenConvergedConfig
+impl<'a, B, F> InitializeUsing<'a, F, PbilDoneWhenConverged<'a, B, F>> for DoneWhenConvergedConfig
 where
     F: Objective<bool, B>,
 {
@@ -135,7 +133,7 @@ where
         &'a self,
         objective: &'a F,
         rng: &mut R,
-    ) -> PbilDoneWhenConverged<'a, SmallRng, B, F>
+    ) -> PbilDoneWhenConverged<'a, B, F>
     where
         R: Rng,
     {
@@ -147,26 +145,25 @@ where
     }
 }
 
-impl<'a, B, F> Initialize<'a, F, PbilDoneWhenConverged<'a, SmallRng, B, F>>
-    for DoneWhenConvergedConfig
+impl<'a, B, F> Initialize<'a, F, PbilDoneWhenConverged<'a, B, F>> for DoneWhenConvergedConfig
 where
     F: Objective<bool, B>,
 {
-    fn initialize(&'a self, objective: &'a F) -> PbilDoneWhenConverged<'a, SmallRng, B, F> {
+    fn initialize(&'a self, objective: &'a F) -> PbilDoneWhenConverged<'a, B, F> {
         PbilDoneWhenConverged::new(self, objective, State::initial(self.inner.num_bits))
     }
 }
 
 /// PBIL optimizer.
 #[derive(Clone, Debug)]
-pub struct Pbil<'a, R, B, F> {
+pub struct Pbil<'a, B, F> {
     point_value: PhantomData<B>,
     /// PBIL configuration parameters.
     pub config: &'a Config,
     /// An objective function.
     pub objective: &'a F,
     /// PBIL state.
-    pub state: State<R>,
+    pub state: State,
 }
 
 /// PBIL configuration parameters.
@@ -193,20 +190,20 @@ pub struct Config {
 /// PBIL state.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum State<R> {
+pub enum State {
     /// Initial and post-evaluation state.
-    Init(Init<R>),
+    Init(Init),
     /// State with samples ready for evaluation.
-    PreEval(PreEval<R>),
+    PreEval(PreEval),
 }
 
-impl<'a, R, B, F> Pbil<'a, R, B, F>
+impl<'a, B, F> Pbil<'a, B, F>
 where
     F: Objective<bool, B>,
 {
     /// Convenience function to return a 'Pbil'
     /// without setting 'PhantomData'.
-    pub fn new(config: &'a Config, objective: &'a F, state: State<R>) -> Self {
+    pub fn new(config: &'a Config, objective: &'a F, state: State) -> Self {
         Self {
             point_value: PhantomData,
             config,
@@ -216,9 +213,8 @@ where
     }
 }
 
-impl<R, B, F> Step for Pbil<'_, R, B, F>
+impl<B, F> Step for Pbil<'_, B, F>
 where
-    R: Rng,
     B: Debug + PartialOrd,
     F: Objective<bool, B>,
 {
@@ -230,13 +226,13 @@ where
     }
 }
 
-impl<R, B, F> Points<bool> for Pbil<'_, R, B, F> {
+impl<B, F> Points<bool> for Pbil<'_, B, F> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
 
-impl<R, B, F> BestPoint<bool> for Pbil<'_, R, B, F> {
+impl<B, F> BestPoint<bool> for Pbil<'_, B, F> {
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
     }
@@ -258,15 +254,10 @@ impl Config {
 
     /// Return the next state,
     /// given point values.
-    fn step_from_evaluated<B, S, R>(
-        &self,
-        point_values: ArrayBase<S, Ix1>,
-        state: State<R>,
-    ) -> State<R>
+    fn step_from_evaluated<B, S>(&self, point_values: ArrayBase<S, Ix1>, state: State) -> State
     where
         B: Debug + PartialOrd,
         S: Data<Elem = B>,
-        R: Rng,
     {
         match state {
             State::Init(s) => State::PreEval(s.to_pre_eval(self.num_samples)),
@@ -279,11 +270,11 @@ impl Config {
     }
 }
 
-impl<'a, B, F> InitializeUsing<'a, F, Pbil<'a, SmallRng, B, F>> for Config
+impl<'a, B, F> InitializeUsing<'a, F, Pbil<'a, B, F>> for Config
 where
     F: Objective<bool, B>,
 {
-    fn initialize_using<R>(&'a self, objective: &'a F, rng: &mut R) -> Pbil<'a, SmallRng, B, F>
+    fn initialize_using<R>(&'a self, objective: &'a F, rng: &mut R) -> Pbil<'a, B, F>
     where
         R: Rng,
     {
@@ -291,16 +282,16 @@ where
     }
 }
 
-impl<'a, B, F> Initialize<'a, F, Pbil<'a, SmallRng, B, F>> for Config
+impl<'a, B, F> Initialize<'a, F, Pbil<'a, B, F>> for Config
 where
     F: Objective<bool, B>,
 {
-    fn initialize(&'a self, objective: &'a F) -> Pbil<'a, SmallRng, B, F> {
+    fn initialize(&'a self, objective: &'a F) -> Pbil<'a, B, F> {
         Pbil::new(self, objective, State::initial(self.num_bits))
     }
 }
 
-impl State<SmallRng> {
+impl State {
     fn initial(num_bits: NumBits) -> Self {
         Self::Init(Init::initial(usize::from(num_bits)))
     }
@@ -311,9 +302,7 @@ impl State<SmallRng> {
     {
         Self::Init(Init::initial_using(usize::from(num_bits), rng))
     }
-}
 
-impl<R> State<R> {
     /// Return PBIL probabilities.
     pub fn probabilities(&self) -> &Array1<Probability> {
         match &self {
@@ -323,7 +312,7 @@ impl<R> State<R> {
     }
 }
 
-impl<R> Points<bool> for State<R> {
+impl Points<bool> for State {
     fn points(&self) -> ArrayView2<bool> {
         lazy_static! {
             static ref EMPTY: Array2<bool> = Array::from_elem((0, 0), false);
@@ -335,7 +324,7 @@ impl<R> Points<bool> for State<R> {
     }
 }
 
-impl<R> BestPoint<bool> for State<R> {
+impl BestPoint<bool> for State {
     fn best_point(&self) -> CowArray<bool, Ix1> {
         finalize(self.probabilities()).into()
     }
