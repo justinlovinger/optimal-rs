@@ -25,15 +25,6 @@ pub trait InitializeUsing<'a, F, O> {
         R: Rng;
 }
 
-impl<'a, F, O, T> Initialize<'a, F, O> for Box<T>
-where
-    T: ?Sized + Initialize<'a, F, O>,
-{
-    fn initialize(&'a self, objective: &'a F) -> O {
-        self.as_ref().initialize(objective)
-    }
-}
-
 /// An optimizer configuration
 /// qualified to initialize an optimizer.
 pub trait Initialize<'a, F, O> {
@@ -49,13 +40,12 @@ pub trait Step {
     fn step(&mut self);
 }
 
-impl<A, T> Points<A> for Box<T>
-where
-    T: ?Sized + Points<A>,
-{
-    fn points(&self) -> ArrayView2<A> {
-        self.as_ref().points()
-    }
+/// An optimizer able to efficiently provide a view
+/// of a point to be evaluated.
+/// For optimizers evaluating at most one point per step.
+pub trait Point<A> {
+    /// Return point to be evaluated.
+    fn point(&self) -> Option<ArrayView1<A>>;
 }
 
 /// An optimizer able to efficiently provide a view
@@ -66,21 +56,52 @@ pub trait Points<A> {
     fn points(&self) -> ArrayView2<A>;
 }
 
-impl<A, T> Point<A> for Box<T>
+/// Indicate whether or not an optimizer is done.
+pub trait IsDone {
+    /// Return if optimizer is done.
+    fn is_done(&self) -> bool;
+}
+
+/// An optimizer able to return the best point discovered.
+pub trait BestPoint<A> {
+    /// Return the best point discovered.
+    fn best_point(&self) -> CowArray<A, Ix1>;
+}
+
+/// An optimizer able to return the value of the best point discovered.
+pub trait BestPointValue<A> {
+    /// Return the value of the best point discovered.
+    fn best_point_value(&self) -> Option<A>;
+}
+
+impl<'a, F, O, T> InitializeUsing<'a, F, O> for Box<T>
 where
-    T: ?Sized + Point<A>,
+    T: ?Sized + InitializeUsing<'a, F, O>,
 {
-    fn point(&self) -> Option<ArrayView1<A>> {
-        self.as_ref().point()
+    fn initialize_using<R>(&'a self, objective: &'a F, rng: &mut R) -> O
+    where
+        R: Rng,
+    {
+        self.as_ref().initialize_using(objective, rng)
     }
 }
 
-/// An optimizer able to efficiently provide a view
-/// of a point to be evaluated.
-/// For optimizers evaluating at most one point per step.
-pub trait Point<A> {
-    /// Return point to be evaluated.
-    fn point(&self) -> Option<ArrayView1<A>>;
+impl<'a, F, O, T> Initialize<'a, F, O> for Box<T>
+where
+    T: ?Sized + Initialize<'a, F, O>,
+{
+    fn initialize(&'a self, objective: &'a F) -> O {
+        self.as_ref().initialize(objective)
+    }
+}
+
+impl<T> Step for Box<T>
+where
+    T: ?Sized + Step,
+{
+    fn step(&mut self) {
+        self.as_mut().step()
+    }
 }
 
 impl<T> IsDone for Box<T>
@@ -92,10 +113,22 @@ where
     }
 }
 
-/// Indicate whether or not an optimizer is done.
-pub trait IsDone {
-    /// Return if optimizer is done.
-    fn is_done(&self) -> bool;
+impl<A, T> Point<A> for Box<T>
+where
+    T: ?Sized + Point<A>,
+{
+    fn point(&self) -> Option<ArrayView1<A>> {
+        self.as_ref().point()
+    }
+}
+
+impl<A, T> Points<A> for Box<T>
+where
+    T: ?Sized + Points<A>,
+{
+    fn points(&self) -> ArrayView2<A> {
+        self.as_ref().points()
+    }
 }
 
 impl<A, T> BestPoint<A> for Box<T>
@@ -107,12 +140,6 @@ where
     }
 }
 
-/// An optimizer able to return the best point discovered.
-pub trait BestPoint<A> {
-    /// Return the best point discovered.
-    fn best_point(&self) -> CowArray<A, Ix1>;
-}
-
 impl<A, T> BestPointValue<A> for Box<T>
 where
     T: ?Sized + BestPointValue<A>,
@@ -120,10 +147,4 @@ where
     fn best_point_value(&self) -> Option<A> {
         self.as_ref().best_point_value()
     }
-}
-
-/// An optimizer able to return the value of the best point discovered.
-pub trait BestPointValue<A> {
-    /// Return the value of the best point discovered.
-    fn best_point_value(&self) -> Option<A>;
 }
