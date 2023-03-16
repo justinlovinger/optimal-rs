@@ -67,7 +67,7 @@ pub struct DoneWhenConvergedConfig {
 
 impl<'a, B, F> PbilDoneWhenConverged<'a, B, F>
 where
-    F: Objective<bool, B>,
+    F: Problem<bool, B>,
 {
     /// Convenience function to return a 'PbilDoneWhenConverged'
     /// without setting 'PhantomData'.
@@ -84,7 +84,7 @@ where
 impl<B, F> Step for PbilDoneWhenConverged<'_, B, F>
 where
     B: Debug + PartialOrd,
-    F: Objective<bool, B>,
+    F: Problem<bool, B>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
@@ -127,7 +127,7 @@ impl DoneWhenConvergedConfig {
 
 impl<'a, B, F> InitializeUsing<'a, F, PbilDoneWhenConverged<'a, B, F>> for DoneWhenConvergedConfig
 where
-    F: Objective<bool, B>,
+    F: Problem<bool, B>,
 {
     fn initialize_using<R>(
         &'a self,
@@ -147,7 +147,7 @@ where
 
 impl<'a, B, F> Initialize<'a, F, PbilDoneWhenConverged<'a, B, F>> for DoneWhenConvergedConfig
 where
-    F: Objective<bool, B>,
+    F: Problem<bool, B>,
 {
     fn initialize(&'a self, objective: &'a F) -> PbilDoneWhenConverged<'a, B, F> {
         PbilDoneWhenConverged::new(self, objective, State::initial(self.inner.num_bits))
@@ -199,7 +199,7 @@ pub enum State {
 
 impl<'a, B, F> Pbil<'a, B, F>
 where
-    F: Objective<bool, B>,
+    F: Problem<bool, B>,
 {
     /// Convenience function to return a 'Pbil'
     /// without setting 'PhantomData'.
@@ -216,7 +216,7 @@ where
 impl<B, F> Step for Pbil<'_, B, F>
 where
     B: Debug + PartialOrd,
-    F: Objective<bool, B>,
+    F: Problem<bool, B>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
@@ -272,7 +272,7 @@ impl Config {
 
 impl<'a, B, F> InitializeUsing<'a, F, Pbil<'a, B, F>> for Config
 where
-    F: Objective<bool, B>,
+    F: Problem<bool, B>,
 {
     fn initialize_using<R>(&'a self, objective: &'a F, rng: &mut R) -> Pbil<'a, B, F>
     where
@@ -284,7 +284,7 @@ where
 
 impl<'a, B, F> Initialize<'a, F, Pbil<'a, B, F>> for Config
 where
-    F: Objective<bool, B>,
+    F: Problem<bool, B>,
 {
     fn initialize(&'a self, objective: &'a F) -> Pbil<'a, B, F> {
         Pbil::new(self, objective, State::initial(self.num_bits))

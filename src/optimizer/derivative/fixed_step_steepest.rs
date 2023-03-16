@@ -25,7 +25,7 @@
 //!
 //! struct Sphere;
 //!
-//! impl Objective<f64, f64> for Sphere {
+//! impl Problem<f64, f64> for Sphere {
 //!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> f64
 //!     where
 //!         S: ndarray::RawData<Elem = f64> + Data,
