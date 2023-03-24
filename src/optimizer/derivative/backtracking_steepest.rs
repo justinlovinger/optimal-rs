@@ -15,19 +15,18 @@
 //!
 //! fn main() {
 //!     let backtracking_rate = BacktrackingRate::default();
-//!     let config = Config {
-//!         c_1: SufficientDecreaseParameter::default(),
-//!         backtracking_rate,
-//!         initial_step_size_incr_rate: IncrRate::from_backtracking_rate(backtracking_rate),
-//!     };
-//!     let mut iter = (BacktrackingSteepestDescent {
-//!         config: &config,
-//!         objective: &Sphere,
-//!         state: State::new(
+//!     let mut iter = BacktrackingSteepestDescent::new(
+//!         Config::new(
+//!             Sphere,
+//!             SufficientDecreaseParameter::default(),
+//!             backtracking_rate,
+//!             IncrRate::from_backtracking_rate(backtracking_rate),
+//!         ),
+//!         State::new(
 //!             Array::random(2, Uniform::new(-1.0, 1.0)),
 //!             StepSize::new(1.0).unwrap(),
 //!         ),
-//!     })
+//!     )
 //!     .into_streaming_iter();
 //!     println!("{}", iter.nth(100).unwrap().best_point());
 //! }
@@ -53,7 +52,11 @@
 //! }
 //! ```
 
-use std::ops::{Add, Div, Mul, Neg, Sub};
+use std::{
+    borrow::Borrow,
+    marker::PhantomData,
+    ops::{Add, Div, Mul, Neg, Sub},
+};
 
 use derive_more::Display;
 use ndarray::{linalg::Dot, prelude::*, Data, Zip};
@@ -80,11 +83,11 @@ use serde::{Deserialize, Serialize};
 /// Backtracking line search steepest descent optimizer
 /// with initial line search step size chosen by incrementing previous step size.
 #[derive(Clone, Debug)]
-pub struct BacktrackingSteepestDescent<'a, A, F> {
+pub struct BacktrackingSteepestDescent<A, BorrowedP, P, C> {
+    borrowed_problem: PhantomData<BorrowedP>,
+    problem: PhantomData<P>,
     /// Backtracking steepest descent configuration parameters.
-    pub config: &'a Config<A>,
-    /// A differentiable objective function.
-    pub objective: &'a F,
+    pub config: C,
     /// Backtracking steepest descent state.
     pub state: State<A>,
 }
@@ -92,7 +95,10 @@ pub struct BacktrackingSteepestDescent<'a, A, F> {
 /// Backtracking steepest descent configuration parameters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config<A> {
+pub struct Config<A, BorrowedP, P> {
+    borrowed_problem: PhantomData<BorrowedP>,
+    /// A differentiable objective function.
+    pub problem: P,
     /// The sufficient decrease parameter,
     /// `c_1`.
     pub c_1: SufficientDecreaseParameter<A>,
@@ -132,7 +138,37 @@ pub struct Searching<A> {
     point_at_step: Point<A>,
 }
 
-impl<A, F> Step for BacktrackingSteepestDescent<'_, A, F>
+impl<A, BorrowedP, P, C> BacktrackingSteepestDescent<A, BorrowedP, P, C> {
+    /// Return a new 'BacktrackingSteepestDescent'.
+    pub fn new(config: C, state: State<A>) -> Self {
+        Self {
+            borrowed_problem: PhantomData,
+            problem: PhantomData,
+            config,
+            state,
+        }
+    }
+}
+
+impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
+    /// Return a new 'Config'.
+    pub fn new(
+        problem: P,
+        c_1: SufficientDecreaseParameter<A>,
+        backtracking_rate: BacktrackingRate<A>,
+        initial_step_size_incr_rate: IncrRate<A>,
+    ) -> Self {
+        Self {
+            borrowed_problem: PhantomData,
+            problem,
+            c_1,
+            backtracking_rate,
+            initial_step_size_incr_rate,
+        }
+    }
+}
+
+impl<A, BorrowedP, P, C> Step for BacktrackingSteepestDescent<A, BorrowedP, P, C>
 where
     A: 'static
         + Clone
@@ -144,32 +180,44 @@ where
         + Div<Output = A>
         + Zero
         + One,
-    F: Differentiable<A, A>,
+    BorrowedP: Differentiable<A, A>,
+    P: Borrow<BorrowedP>,
+    C: Borrow<Config<A, BorrowedP, P>>,
     f64: AsPrimitive<A>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| match state {
             State::Ready(x) => {
                 let (point_value, point_derivatives) = self
-                    .objective
+                    .config
+                    .borrow()
+                    .problem
+                    .borrow()
                     .evaluate_differentiate(x.point_to_evaluate().view());
-                x.step_from_evaluated(self.config, point_value, point_derivatives)
+                x.step_from_evaluated(self.config.borrow(), point_value, point_derivatives)
             }
             State::Searching(x) => {
-                let point_value = self.objective.evaluate(x.point_to_evaluate().view());
-                x.step_from_evaluated(self.config, point_value)
+                let point_value = self
+                    .config
+                    .borrow()
+                    .problem
+                    .borrow()
+                    .evaluate(x.point_to_evaluate().view());
+                x.step_from_evaluated(self.config.borrow(), point_value)
             }
         })
     }
 }
 
-impl<A, F> crate::prelude::Point<A> for BacktrackingSteepestDescent<'_, A, F> {
+impl<A, BorrowedP, P, C> crate::prelude::Point<A>
+    for BacktrackingSteepestDescent<A, BorrowedP, P, C>
+{
     fn point(&self) -> Option<ArrayView1<A>> {
         self.state.point()
     }
 }
 
-impl<A, F> BestPoint<A> for BacktrackingSteepestDescent<'_, A, F> {
+impl<A, BorrowedP, P, C> BestPoint<A> for BacktrackingSteepestDescent<A, BorrowedP, P, C> {
     fn best_point(&self) -> CowArray<A, Ix1> {
         self.state.best_point()
     }
@@ -216,9 +264,9 @@ impl<A> Ready<A> {
         self.point()
     }
 
-    fn step_from_evaluated<S>(
+    fn step_from_evaluated<BorrowedP, P, S>(
         self,
-        config: &Config<A>,
+        config: &Config<A, BorrowedP, P>,
         point_value: A,
         point_derivatives: ArrayBase<S, Ix1>,
     ) -> State<A>
@@ -258,7 +306,11 @@ impl<A> Searching<A> {
         &self.point_at_step
     }
 
-    fn step_from_evaluated(mut self, config: &Config<A>, point_value: A) -> State<A>
+    fn step_from_evaluated<BorrowedP, P>(
+        mut self,
+        config: &Config<A, BorrowedP, P>,
+        point_value: A,
+    ) -> State<A>
     where
         A: Clone + Copy + PartialOrd + Add<Output = A> + Mul<Output = A>,
     {

@@ -1,3 +1,5 @@
+#![allow(clippy::needless_doctest_main)]
+
 //! Population-based incremental learning (PBIL).
 //!
 //! # Examples
@@ -5,23 +7,37 @@
 //! ```
 //! use ndarray::{Data, RemoveAxis, prelude::*};
 //! use optimal::{
-//!     optimizer::derivative_free::pbil::{DoneWhenConvergedConfig, NumBits},
+//!     optimizer::derivative_free::pbil::DoneWhenConvergedConfig,
 //!     prelude::*,
 //! };
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let config = DoneWhenConvergedConfig::default(NumBits(16));
-//!     let mut iter = config.initialize(&f).into_streaming_iter();
+//!     let mut iter = DoneWhenConvergedConfig::default(Count)
+//!         .initialize()
+//!         .into_streaming_iter();
 //!     let xs = iter
 //!         .find(|o| o.is_done())
 //!         .expect("should converge")
 //!         .best_point();
-//!     println!("f({}) = {}", xs, f(xs.view()));
+//!     println!("f({}) = {}", xs, Count.evaluate(xs.view()));
 //! }
 //!
-//! fn f(bs: ArrayView1<bool>) -> u64 {
-//!     bs.fold(0, |acc, b| acc + *b as u64)
+//! struct Count;
+//!
+//! impl Problem<bool, u64> for Count {
+//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> u64
+//!     where
+//!         S: ndarray::RawData<Elem = bool> + Data,
+//!     {
+//!         point.fold(0, |acc, b| acc + *b as u64)
+//!     }
+//! }
+//!
+//! impl FixedLength for Count {
+//!     fn len(&self) -> usize {
+//!         16
+//!     }
 //! }
 //! ```
 
@@ -32,7 +48,7 @@ use lazy_static::lazy_static;
 use ndarray::{prelude::*, Data};
 use rand::prelude::*;
 use replace_with::replace_with_or_abort;
-use std::{fmt::Debug, marker::PhantomData};
+use std::{borrow::Borrow, fmt::Debug, marker::PhantomData};
 
 use crate::prelude::*;
 
@@ -43,13 +59,14 @@ use serde::{Deserialize, Serialize};
 
 /// PBIL optimizer with check for converged probabilities.
 #[derive(Clone, Debug)]
-pub struct PbilDoneWhenConverged<'a, B, F> {
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct PbilDoneWhenConverged<B, BorrowedP, P, C> {
     point_value: PhantomData<B>,
+    borrowed_problem: PhantomData<BorrowedP>,
+    problem: PhantomData<P>,
     /// PBIL configuration parameters
     /// with check for converged probabilities.
-    pub config: &'a DoneWhenConvergedConfig,
-    /// An objective function.
-    pub objective: &'a F,
+    pub config: C,
     /// PBIL state.
     pub state: State,
 }
@@ -58,110 +75,125 @@ pub struct PbilDoneWhenConverged<'a, B, F> {
 /// with check for converged probabilities.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DoneWhenConvergedConfig {
+pub struct DoneWhenConvergedConfig<BorrowedP, P> {
     /// Probability convergence parameter.
     pub converged_threshold: ConvergedThreshold,
     /// Regular PBIL configuration.
-    pub inner: Config,
+    pub inner: Config<BorrowedP, P>,
 }
 
-impl<'a, B, F> PbilDoneWhenConverged<'a, B, F>
-where
-    F: Problem<bool, B>,
-{
+impl<B, BorrowedP, P, C> PbilDoneWhenConverged<B, BorrowedP, P, C> {
     /// Convenience function to return a 'PbilDoneWhenConverged'
     /// without setting 'PhantomData'.
-    pub fn new(config: &'a DoneWhenConvergedConfig, objective: &'a F, state: State) -> Self {
+    pub fn new(config: C, state: State) -> Self {
         Self {
             point_value: PhantomData,
+            borrowed_problem: PhantomData,
+            problem: PhantomData,
             config,
             state,
-            objective,
         }
     }
 }
 
-impl<B, F> Step for PbilDoneWhenConverged<'_, B, F>
+impl<B, BorrowedP, P, C> Step for PbilDoneWhenConverged<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
-    F: Problem<bool, B>,
+    BorrowedP: Problem<bool, B>,
+    P: Borrow<BorrowedP>,
+    C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
-            self.config
-                .inner
-                .step_from_evaluated(self.objective.evaluate_all(state.points().view()), state)
+            self.config.borrow().inner.step_from_evaluated(
+                self.config
+                    .borrow()
+                    .inner
+                    .problem
+                    .borrow()
+                    .evaluate_all(state.points().view()),
+                state,
+            )
         })
     }
 }
 
-impl<B, F> IsDone for PbilDoneWhenConverged<'_, B, F> {
+impl<B, BorrowedP, P, C> IsDone for PbilDoneWhenConverged<B, BorrowedP, P, C>
+where
+    C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
+{
     fn is_done(&self) -> bool {
-        converged(&self.config.converged_threshold, self.state.probabilities())
+        converged(
+            &self.config.borrow().converged_threshold,
+            self.state.probabilities(),
+        )
     }
 }
 
-impl<B, F> Points<bool> for PbilDoneWhenConverged<'_, B, F> {
+impl<B, BorrowedP, P, C> Points<bool> for PbilDoneWhenConverged<B, BorrowedP, P, C> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
 
-impl<B, F> BestPoint<bool> for PbilDoneWhenConverged<'_, B, F> {
+impl<B, BorrowedP, P, C> BestPoint<bool> for PbilDoneWhenConverged<B, BorrowedP, P, C> {
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
     }
 }
 
-impl DoneWhenConvergedConfig {
+impl<BorrowedP, P> DoneWhenConvergedConfig<BorrowedP, P> {
     /// Convenience function
     /// to populate every field
     /// with their default.
-    pub fn default(num_bits: NumBits) -> Self {
+    pub fn default(problem: P) -> Self
+    where
+        BorrowedP: FixedLength,
+        P: Borrow<BorrowedP>,
+    {
         Self {
             converged_threshold: ConvergedThreshold::default(),
-            inner: Config::default(num_bits),
+            inner: Config::default(problem),
         }
     }
 }
 
-impl<'a, B, F> InitializeUsing<'a, F, PbilDoneWhenConverged<'a, B, F>> for DoneWhenConvergedConfig
+impl<B, BorrowedP, P, C> InitializeUsing<PbilDoneWhenConverged<B, BorrowedP, P, C>> for C
 where
-    F: Problem<bool, B>,
+    BorrowedP: FixedLength,
+    P: Borrow<BorrowedP>,
+    C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
 {
-    fn initialize_using<R>(
-        &'a self,
-        objective: &'a F,
-        rng: &mut R,
-    ) -> PbilDoneWhenConverged<'a, B, F>
+    fn initialize_using<R>(self, rng: &mut R) -> PbilDoneWhenConverged<B, BorrowedP, P, C>
     where
         R: Rng,
     {
-        PbilDoneWhenConverged::new(
-            self,
-            objective,
-            State::initial_using(self.inner.num_bits, rng),
-        )
+        let state = State::initial_using(self.borrow().inner.problem.borrow().len(), rng);
+        PbilDoneWhenConverged::new(self, state)
     }
 }
 
-impl<'a, B, F> Initialize<'a, F, PbilDoneWhenConverged<'a, B, F>> for DoneWhenConvergedConfig
+impl<B, BorrowedP, P, C> Initialize<PbilDoneWhenConverged<B, BorrowedP, P, C>> for C
 where
-    F: Problem<bool, B>,
+    BorrowedP: FixedLength,
+    P: Borrow<BorrowedP>,
+    C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
 {
-    fn initialize(&'a self, objective: &'a F) -> PbilDoneWhenConverged<'a, B, F> {
-        PbilDoneWhenConverged::new(self, objective, State::initial(self.inner.num_bits))
+    fn initialize(self) -> PbilDoneWhenConverged<B, BorrowedP, P, C> {
+        let state = State::initial(self.borrow().inner.problem.borrow().len());
+        PbilDoneWhenConverged::new(self, state)
     }
 }
 
 /// PBIL optimizer.
 #[derive(Clone, Debug)]
-pub struct Pbil<'a, B, F> {
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Pbil<B, BorrowedP, P, C> {
     point_value: PhantomData<B>,
+    borrowed_problem: PhantomData<BorrowedP>,
+    problem: PhantomData<P>,
     /// PBIL configuration parameters.
-    pub config: &'a Config,
-    /// An objective function.
-    pub objective: &'a F,
+    pub config: C,
     /// PBIL state.
     pub state: State,
 }
@@ -169,10 +201,10 @@ pub struct Pbil<'a, B, F> {
 /// PBIL configuration parameters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config {
-    /// Number of bits in generated points
-    /// and probabilities in PBIL.
-    pub num_bits: NumBits,
+pub struct Config<BorrowedP, P> {
+    borrowed_problem: PhantomData<BorrowedP>,
+    /// An optimization problem.
+    pub problem: P,
     /// Number of samples generated
     /// during steps.
     pub num_samples: NumSamples,
@@ -197,61 +229,91 @@ pub enum State {
     PreEval(PreEval),
 }
 
-impl<'a, B, F> Pbil<'a, B, F>
-where
-    F: Problem<bool, B>,
-{
-    /// Convenience function to return a 'Pbil'
-    /// without setting 'PhantomData'.
-    pub fn new(config: &'a Config, objective: &'a F, state: State) -> Self {
+impl<B, BorrowedP, P, C> Pbil<B, BorrowedP, P, C> {
+    /// Return a new 'Pbil'.
+    pub fn new(config: C, state: State) -> Self {
         Self {
             point_value: PhantomData,
+            borrowed_problem: PhantomData,
+            problem: PhantomData,
             config,
             state,
-            objective,
         }
     }
 }
 
-impl<B, F> Step for Pbil<'_, B, F>
+impl<B, BorrowedP, P, C> Step for Pbil<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
-    F: Problem<bool, B>,
+    BorrowedP: Problem<bool, B>,
+    P: Borrow<BorrowedP>,
+    C: Borrow<Config<BorrowedP, P>>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
-            self.config
-                .step_from_evaluated(self.objective.evaluate_all(state.points()), state)
+            self.config.borrow().step_from_evaluated(
+                self.config
+                    .borrow()
+                    .problem
+                    .borrow()
+                    .evaluate_all(state.points()),
+                state,
+            )
         })
     }
 }
 
-impl<B, F> Points<bool> for Pbil<'_, B, F> {
+impl<B, BorrowedP, P, C> Points<bool> for Pbil<B, BorrowedP, P, C> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
 
-impl<B, F> BestPoint<bool> for Pbil<'_, B, F> {
+impl<B, BorrowedP, P, C> BestPoint<bool> for Pbil<B, BorrowedP, P, C> {
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
     }
 }
 
-impl Config {
-    /// Convenience function
-    /// to populate every field
-    /// with their default.
-    pub fn default(num_bits: NumBits) -> Self {
+impl<BorrowedP, P> Config<BorrowedP, P> {
+    /// Return a new PBIL configuration.
+    pub fn new(
+        problem: P,
+        num_samples: NumSamples,
+        adjust_rate: AdjustRate,
+        mutation_chance: MutationChance,
+        mutation_adjust_rate: MutationAdjustRate,
+    ) -> Self {
         Self {
-            num_bits,
-            num_samples: Default::default(),
-            adjust_rate: Default::default(),
-            mutation_chance: MutationChance::default(num_bits),
-            mutation_adjust_rate: Default::default(),
+            borrowed_problem: PhantomData,
+            problem,
+            num_samples,
+            adjust_rate,
+            mutation_chance,
+            mutation_adjust_rate,
         }
     }
 
+    /// Convenience function
+    /// to populate every field
+    /// with their default.
+    pub fn default(problem: P) -> Self
+    where
+        BorrowedP: FixedLength,
+        P: Borrow<BorrowedP>,
+    {
+        Self {
+            borrowed_problem: PhantomData,
+            num_samples: Default::default(),
+            adjust_rate: Default::default(),
+            mutation_chance: MutationChance::default(problem.borrow().len()),
+            mutation_adjust_rate: Default::default(),
+            problem,
+        }
+    }
+}
+
+impl<BorrowedP, P> Config<BorrowedP, P> {
     /// Return the next state,
     /// given point values.
     fn step_from_evaluated<B, S>(&self, point_values: ArrayBase<S, Ix1>, state: State) -> State
@@ -270,37 +332,43 @@ impl Config {
     }
 }
 
-impl<'a, B, F> InitializeUsing<'a, F, Pbil<'a, B, F>> for Config
+impl<B, BorrowedP, P, C> InitializeUsing<Pbil<B, BorrowedP, P, C>> for C
 where
-    F: Problem<bool, B>,
+    BorrowedP: FixedLength,
+    P: Borrow<BorrowedP>,
+    C: Borrow<Config<BorrowedP, P>>,
 {
-    fn initialize_using<R>(&'a self, objective: &'a F, rng: &mut R) -> Pbil<'a, B, F>
+    fn initialize_using<R>(self, rng: &mut R) -> Pbil<B, BorrowedP, P, C>
     where
         R: Rng,
     {
-        Pbil::new(self, objective, State::initial_using(self.num_bits, rng))
+        let state = State::initial_using(self.borrow().problem.borrow().len(), rng);
+        Pbil::new(self, state)
     }
 }
 
-impl<'a, B, F> Initialize<'a, F, Pbil<'a, B, F>> for Config
+impl<B, BorrowedP, P, C> Initialize<Pbil<B, BorrowedP, P, C>> for C
 where
-    F: Problem<bool, B>,
+    BorrowedP: FixedLength,
+    P: Borrow<BorrowedP>,
+    C: Borrow<Config<BorrowedP, P>>,
 {
-    fn initialize(&'a self, objective: &'a F) -> Pbil<'a, B, F> {
-        Pbil::new(self, objective, State::initial(self.num_bits))
+    fn initialize(self) -> Pbil<B, BorrowedP, P, C> {
+        let state = State::initial(self.borrow().problem.borrow().len());
+        Pbil::new(self, state)
     }
 }
 
 impl State {
-    fn initial(num_bits: NumBits) -> Self {
-        Self::Init(Init::initial(usize::from(num_bits)))
+    fn initial(num_bits: usize) -> Self {
+        Self::Init(Init::initial(num_bits))
     }
 
-    fn initial_using<R>(num_bits: NumBits, rng: &mut R) -> Self
+    fn initial_using<R>(num_bits: usize, rng: &mut R) -> Self
     where
         R: Rng,
     {
-        Self::Init(Init::initial_using(usize::from(num_bits), rng))
+        Self::Init(Init::initial_using(num_bits, rng))
     }
 
     /// Return PBIL probabilities.

@@ -13,12 +13,10 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let config = Config { step_size: StepSize::new(0.5).unwrap() };
-//!     let mut iter = (FixedStepSteepestDescent {
-//!         config: &config,
-//!         objective: &Sphere,
-//!         state: Array::random(2, Uniform::new(-1.0, 1.0)),
-//!     })
+//!     let mut iter = FixedStepSteepestDescent::new(
+//!         Config::new(Sphere, StepSize::new(0.5).unwrap()),
+//!         Array::random(2, Uniform::new(-1.0, 1.0)),
+//!     )
 //!     .into_streaming_iter();
 //!     println!("{}", iter.nth(100).unwrap().best_point());
 //! }
@@ -44,7 +42,11 @@
 //! }
 //! ```
 
-use std::ops::{Mul, SubAssign};
+use std::{
+    borrow::Borrow,
+    marker::PhantomData,
+    ops::{Mul, SubAssign},
+};
 
 use ndarray::{prelude::*, Data};
 use replace_with::replace_with_or_abort;
@@ -58,11 +60,11 @@ use serde::{Deserialize, Serialize};
 
 /// Fixed step size steepest descent optimizer.
 #[derive(Clone, Debug)]
-pub struct FixedStepSteepestDescent<'a, A, F> {
+pub struct FixedStepSteepestDescent<A, BorrowedP, P, C> {
+    borrowed_problem: PhantomData<BorrowedP>,
+    problem: PhantomData<P>,
     /// Fixed step size steepest descent configuration parameters.
-    pub config: &'a Config<A>,
-    /// A differentiable objective function.
-    pub objective: &'a F,
+    pub config: C,
     /// Fixed step size steepest descent state,
     /// a point.
     pub state: Point<A>,
@@ -71,45 +73,79 @@ pub struct FixedStepSteepestDescent<'a, A, F> {
 /// Fixed step size steepest descent configuration parameters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config<A> {
+pub struct Config<A, BorrowedP, P> {
+    borrowed_problem: PhantomData<BorrowedP>,
+    /// A differentiable objective function.
+    pub problem: P,
     /// Length of each step.
     pub step_size: StepSize<A>,
 }
 
 type Point<A> = Array1<A>;
 
-impl<A, F> Step for FixedStepSteepestDescent<'_, A, F>
+impl<A, BorrowedP, P, C> FixedStepSteepestDescent<A, BorrowedP, P, C> {
+    /// Return a new 'FixedStepSteepestDescent'.
+    pub fn new(config: C, state: Point<A>) -> Self {
+        Self {
+            borrowed_problem: PhantomData,
+            problem: PhantomData,
+            config,
+            state,
+        }
+    }
+}
+
+impl<A, BorrowedP, P, C> Step for FixedStepSteepestDescent<A, BorrowedP, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
-    F: Differentiable<A, A>,
+    BorrowedP: Differentiable<A, A>,
+    P: Borrow<BorrowedP>,
+    C: Borrow<Config<A, BorrowedP, P>>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |point| {
-            self.config
-                .step_from_evaluated(self.objective.differentiate(point.view()), point)
+            self.config.borrow().step_from_evaluated(
+                self.config
+                    .borrow()
+                    .problem
+                    .borrow()
+                    .differentiate(point.view()),
+                point,
+            )
         });
     }
 }
 
-impl<A, F> crate::prelude::Point<A> for FixedStepSteepestDescent<'_, A, F> {
+impl<A, BorrowedP, P, C> crate::prelude::Point<A> for FixedStepSteepestDescent<A, BorrowedP, P, C> {
     fn point(&self) -> Option<ArrayView1<A>> {
         Some(self.state.view())
     }
 }
 
-impl<A, F> BestPoint<A> for FixedStepSteepestDescent<'_, A, F> {
+impl<A, BorrowedP, P, C> BestPoint<A> for FixedStepSteepestDescent<A, BorrowedP, P, C> {
     fn best_point(&self) -> CowArray<A, Ix1> {
         (&self.state).into()
     }
 }
 
-impl<A> Config<A>
+impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
+    /// Return a new 'Config'.
+    pub fn new(problem: P, step_size: StepSize<A>) -> Self {
+        Self {
+            borrowed_problem: PhantomData,
+            problem,
+            step_size,
+        }
+    }
+}
+
+impl<A, BorrowedP, P> Config<A, BorrowedP, P>
 where
     A: Clone + SubAssign + Mul<Output = A>,
 {
     /// step from one state to another
     /// given point derivatives.
-    pub fn step_from_evaluated<S>(
+    fn step_from_evaluated<S>(
         &self,
         point_derivatives: ArrayBase<S, Ix1>,
         mut state: Point<A>,

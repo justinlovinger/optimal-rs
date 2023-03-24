@@ -17,19 +17,19 @@ pub use self::iterator::*;
 /// An optimizer configuration
 /// qualified to initialize an optimizer
 /// using a 'Rng'.
-pub trait InitializeUsing<'a, F, O> {
+pub trait InitializeUsing<O> {
     /// Return an optimizer
     /// initialized using `rng`.
-    fn initialize_using<R>(&'a self, objective: &'a F, rng: &mut R) -> O
+    fn initialize_using<R>(self, rng: &mut R) -> O
     where
         R: Rng;
 }
 
 /// An optimizer configuration
 /// qualified to initialize an optimizer.
-pub trait Initialize<'a, F, O> {
+pub trait Initialize<O> {
     /// Return an initialized optimizer.
-    fn initialize(&'a self, objective: &'a F) -> O;
+    fn initialize(self) -> O;
 }
 
 /// The core of an optimizer,

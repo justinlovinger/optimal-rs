@@ -1,5 +1,5 @@
 use core::convert::TryFrom;
-use derive_more::{Display, From, FromStr, Into};
+use derive_more::{Display, Into};
 use num_traits::bounds::{LowerBounded, UpperBounded};
 use rand::distributions::Bernoulli;
 use std::f64::EPSILON;
@@ -11,12 +11,6 @@ use crate::derive::{
     derive_from_str_from_try_into, derive_into_inner, derive_new_from_bounded_float,
     derive_new_from_lower_bounded, derive_try_from_from_new,
 };
-
-/// Number of bits in generated points
-/// and probabilities in PBIL.
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, From, FromStr, Into)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct NumBits(pub usize);
 
 /// Number of samples generated
 /// during steps.
@@ -82,11 +76,11 @@ pub struct MutationChance(f64);
 impl MutationChance {
     /// Return recommended default mutation chance,
     /// average of one mutation per step.
-    pub fn default(num_bits: NumBits) -> Self {
-        if num_bits == 0.into() {
+    pub fn default(num_bits: usize) -> Self {
+        if num_bits == 0 {
             Self(1.)
         } else {
-            Self(1. / usize::from(num_bits) as f64)
+            Self(1. / num_bits as f64)
         }
     }
 }

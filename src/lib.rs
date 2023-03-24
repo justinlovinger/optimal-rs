@@ -1,3 +1,5 @@
+#![allow(clippy::needless_doctest_main)]
+
 //! Mathematical optimization and machine learning framework
 //! and algorithms.
 //!
@@ -15,23 +17,37 @@
 //! ```
 //! use ndarray::{Data, RemoveAxis, prelude::*};
 //! use optimal::{
-//!     optimizer::derivative_free::pbil::{DoneWhenConvergedConfig, NumBits},
+//!     optimizer::derivative_free::pbil::DoneWhenConvergedConfig,
 //!     prelude::*,
 //! };
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let config = DoneWhenConvergedConfig::default(NumBits(16));
-//!     let mut iter = config.initialize(&f).into_streaming_iter();
+//!     let mut iter = DoneWhenConvergedConfig::default(Count)
+//!         .initialize()
+//!         .into_streaming_iter();
 //!     let xs = iter
 //!         .find(|o| o.is_done())
 //!         .expect("should converge")
 //!         .best_point();
-//!     println!("f({}) = {}", xs, f(xs.view()));
+//!     println!("f({}) = {}", xs, Count.evaluate(xs.view()));
 //! }
 //!
-//! fn f(bs: ArrayView1<bool>) -> u64 {
-//!     bs.fold(0, |acc, b| acc + *b as u64)
+//! struct Count;
+//!
+//! impl Problem<bool, u64> for Count {
+//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> u64
+//!     where
+//!         S: ndarray::RawData<Elem = bool> + Data,
+//!     {
+//!         point.fold(0, |acc, b| acc + *b as u64)
+//!     }
+//! }
+//!
+//! impl FixedLength for Count {
+//!     fn len(&self) -> usize {
+//!         16
+//!     }
 //! }
 //! ```
 
