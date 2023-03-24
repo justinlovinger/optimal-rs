@@ -57,10 +57,10 @@ pub use self::{states::*, types::*};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// PBIL optimizer with check for converged probabilities.
+/// Running PBIL optimizer with check for converged probabilities.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct PbilDoneWhenConverged<B, BorrowedP, P, C> {
+pub struct RunningDoneWhenConverged<B, BorrowedP, P, C> {
     point_value: PhantomData<B>,
     borrowed_problem: PhantomData<BorrowedP>,
     problem: PhantomData<P>,
@@ -82,7 +82,7 @@ pub struct DoneWhenConvergedConfig<BorrowedP, P> {
     pub inner: Config<BorrowedP, P>,
 }
 
-impl<B, BorrowedP, P, C> PbilDoneWhenConverged<B, BorrowedP, P, C> {
+impl<B, BorrowedP, P, C> RunningDoneWhenConverged<B, BorrowedP, P, C> {
     /// Convenience function to return a 'PbilDoneWhenConverged'
     /// without setting 'PhantomData'.
     pub fn new(config: C, state: State) -> Self {
@@ -96,7 +96,7 @@ impl<B, BorrowedP, P, C> PbilDoneWhenConverged<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> Step for PbilDoneWhenConverged<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> Step for RunningDoneWhenConverged<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
     BorrowedP: Problem<bool, B>,
@@ -118,7 +118,7 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> IsDone for PbilDoneWhenConverged<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> IsDone for RunningDoneWhenConverged<B, BorrowedP, P, C>
 where
     C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
 {
@@ -130,13 +130,13 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> Points<bool> for PbilDoneWhenConverged<B, BorrowedP, P, C> {
+impl<B, BorrowedP, P, C> Points<bool> for RunningDoneWhenConverged<B, BorrowedP, P, C> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
 
-impl<B, BorrowedP, P, C> BestPoint<bool> for PbilDoneWhenConverged<B, BorrowedP, P, C> {
+impl<B, BorrowedP, P, C> BestPoint<bool> for RunningDoneWhenConverged<B, BorrowedP, P, C> {
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
     }
@@ -158,37 +158,37 @@ impl<BorrowedP, P> DoneWhenConvergedConfig<BorrowedP, P> {
     }
 }
 
-impl<B, BorrowedP, P, C> InitializeUsing<PbilDoneWhenConverged<B, BorrowedP, P, C>> for C
+impl<B, BorrowedP, P, C> InitializeUsing<RunningDoneWhenConverged<B, BorrowedP, P, C>> for C
 where
     BorrowedP: FixedLength,
     P: Borrow<BorrowedP>,
     C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
 {
-    fn initialize_using<R>(self, rng: &mut R) -> PbilDoneWhenConverged<B, BorrowedP, P, C>
+    fn initialize_using<R>(self, rng: &mut R) -> RunningDoneWhenConverged<B, BorrowedP, P, C>
     where
         R: Rng,
     {
         let state = State::initial_using(self.borrow().inner.problem.borrow().len(), rng);
-        PbilDoneWhenConverged::new(self, state)
+        RunningDoneWhenConverged::new(self, state)
     }
 }
 
-impl<B, BorrowedP, P, C> Initialize<PbilDoneWhenConverged<B, BorrowedP, P, C>> for C
+impl<B, BorrowedP, P, C> Initialize<RunningDoneWhenConverged<B, BorrowedP, P, C>> for C
 where
     BorrowedP: FixedLength,
     P: Borrow<BorrowedP>,
     C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
 {
-    fn initialize(self) -> PbilDoneWhenConverged<B, BorrowedP, P, C> {
+    fn initialize(self) -> RunningDoneWhenConverged<B, BorrowedP, P, C> {
         let state = State::initial(self.borrow().inner.problem.borrow().len());
-        PbilDoneWhenConverged::new(self, state)
+        RunningDoneWhenConverged::new(self, state)
     }
 }
 
-/// PBIL optimizer.
+/// Running PBIL optimizer.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Pbil<B, BorrowedP, P, C> {
+pub struct Running<B, BorrowedP, P, C> {
     point_value: PhantomData<B>,
     borrowed_problem: PhantomData<BorrowedP>,
     problem: PhantomData<P>,
@@ -229,7 +229,7 @@ pub enum State {
     PreEval(PreEval),
 }
 
-impl<B, BorrowedP, P, C> Pbil<B, BorrowedP, P, C> {
+impl<B, BorrowedP, P, C> Running<B, BorrowedP, P, C> {
     /// Return a new 'Pbil'.
     pub fn new(config: C, state: State) -> Self {
         Self {
@@ -242,7 +242,7 @@ impl<B, BorrowedP, P, C> Pbil<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> Step for Pbil<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> Step for Running<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
     BorrowedP: Problem<bool, B>,
@@ -263,13 +263,13 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> Points<bool> for Pbil<B, BorrowedP, P, C> {
+impl<B, BorrowedP, P, C> Points<bool> for Running<B, BorrowedP, P, C> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
 
-impl<B, BorrowedP, P, C> BestPoint<bool> for Pbil<B, BorrowedP, P, C> {
+impl<B, BorrowedP, P, C> BestPoint<bool> for Running<B, BorrowedP, P, C> {
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
     }
@@ -332,30 +332,30 @@ impl<BorrowedP, P> Config<BorrowedP, P> {
     }
 }
 
-impl<B, BorrowedP, P, C> InitializeUsing<Pbil<B, BorrowedP, P, C>> for C
+impl<B, BorrowedP, P, C> InitializeUsing<Running<B, BorrowedP, P, C>> for C
 where
     BorrowedP: FixedLength,
     P: Borrow<BorrowedP>,
     C: Borrow<Config<BorrowedP, P>>,
 {
-    fn initialize_using<R>(self, rng: &mut R) -> Pbil<B, BorrowedP, P, C>
+    fn initialize_using<R>(self, rng: &mut R) -> Running<B, BorrowedP, P, C>
     where
         R: Rng,
     {
         let state = State::initial_using(self.borrow().problem.borrow().len(), rng);
-        Pbil::new(self, state)
+        Running::new(self, state)
     }
 }
 
-impl<B, BorrowedP, P, C> Initialize<Pbil<B, BorrowedP, P, C>> for C
+impl<B, BorrowedP, P, C> Initialize<Running<B, BorrowedP, P, C>> for C
 where
     BorrowedP: FixedLength,
     P: Borrow<BorrowedP>,
     C: Borrow<Config<BorrowedP, P>>,
 {
-    fn initialize(self) -> Pbil<B, BorrowedP, P, C> {
+    fn initialize(self) -> Running<B, BorrowedP, P, C> {
         let state = State::initial(self.borrow().problem.borrow().len());
-        Pbil::new(self, state)
+        Running::new(self, state)
     }
 }
 

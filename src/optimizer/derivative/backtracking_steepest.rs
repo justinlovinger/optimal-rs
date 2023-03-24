@@ -15,7 +15,7 @@
 //!
 //! fn main() {
 //!     let backtracking_rate = BacktrackingRate::default();
-//!     let mut iter = BacktrackingSteepestDescent::new(
+//!     let mut iter = Running::new(
 //!         Config::new(
 //!             Sphere,
 //!             SufficientDecreaseParameter::default(),
@@ -80,10 +80,10 @@ use super::StepSize;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Backtracking line search steepest descent optimizer
+/// Running backtracking line search steepest descent optimizer
 /// with initial line search step size chosen by incrementing previous step size.
 #[derive(Clone, Debug)]
-pub struct BacktrackingSteepestDescent<A, BorrowedP, P, C> {
+pub struct Running<A, BorrowedP, P, C> {
     borrowed_problem: PhantomData<BorrowedP>,
     problem: PhantomData<P>,
     /// Backtracking steepest descent configuration parameters.
@@ -138,7 +138,7 @@ pub struct Searching<A> {
     point_at_step: Point<A>,
 }
 
-impl<A, BorrowedP, P, C> BacktrackingSteepestDescent<A, BorrowedP, P, C> {
+impl<A, BorrowedP, P, C> Running<A, BorrowedP, P, C> {
     /// Return a new 'BacktrackingSteepestDescent'.
     pub fn new(config: C, state: State<A>) -> Self {
         Self {
@@ -168,7 +168,7 @@ impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
     }
 }
 
-impl<A, BorrowedP, P, C> Step for BacktrackingSteepestDescent<A, BorrowedP, P, C>
+impl<A, BorrowedP, P, C> Step for Running<A, BorrowedP, P, C>
 where
     A: 'static
         + Clone
@@ -209,15 +209,13 @@ where
     }
 }
 
-impl<A, BorrowedP, P, C> crate::prelude::Point<A>
-    for BacktrackingSteepestDescent<A, BorrowedP, P, C>
-{
+impl<A, BorrowedP, P, C> crate::prelude::Point<A> for Running<A, BorrowedP, P, C> {
     fn point(&self) -> Option<ArrayView1<A>> {
         self.state.point()
     }
 }
 
-impl<A, BorrowedP, P, C> BestPoint<A> for BacktrackingSteepestDescent<A, BorrowedP, P, C> {
+impl<A, BorrowedP, P, C> BestPoint<A> for Running<A, BorrowedP, P, C> {
     fn best_point(&self) -> CowArray<A, Ix1> {
         self.state.best_point()
     }

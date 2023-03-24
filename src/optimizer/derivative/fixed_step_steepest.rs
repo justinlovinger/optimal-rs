@@ -13,7 +13,7 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut iter = FixedStepSteepestDescent::new(
+//!     let mut iter = Running::new(
 //!         Config::new(Sphere, StepSize::new(0.5).unwrap()),
 //!         Array::random(2, Uniform::new(-1.0, 1.0)),
 //!     )
@@ -58,9 +58,9 @@ use super::StepSize;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Fixed step size steepest descent optimizer.
+/// Running fixed step size steepest descent optimizer.
 #[derive(Clone, Debug)]
-pub struct FixedStepSteepestDescent<A, BorrowedP, P, C> {
+pub struct Running<A, BorrowedP, P, C> {
     borrowed_problem: PhantomData<BorrowedP>,
     problem: PhantomData<P>,
     /// Fixed step size steepest descent configuration parameters.
@@ -83,7 +83,7 @@ pub struct Config<A, BorrowedP, P> {
 
 type Point<A> = Array1<A>;
 
-impl<A, BorrowedP, P, C> FixedStepSteepestDescent<A, BorrowedP, P, C> {
+impl<A, BorrowedP, P, C> Running<A, BorrowedP, P, C> {
     /// Return a new 'FixedStepSteepestDescent'.
     pub fn new(config: C, state: Point<A>) -> Self {
         Self {
@@ -95,7 +95,7 @@ impl<A, BorrowedP, P, C> FixedStepSteepestDescent<A, BorrowedP, P, C> {
     }
 }
 
-impl<A, BorrowedP, P, C> Step for FixedStepSteepestDescent<A, BorrowedP, P, C>
+impl<A, BorrowedP, P, C> Step for Running<A, BorrowedP, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
     BorrowedP: Differentiable<A, A>,
@@ -116,13 +116,13 @@ where
     }
 }
 
-impl<A, BorrowedP, P, C> crate::prelude::Point<A> for FixedStepSteepestDescent<A, BorrowedP, P, C> {
+impl<A, BorrowedP, P, C> crate::prelude::Point<A> for Running<A, BorrowedP, P, C> {
     fn point(&self) -> Option<ArrayView1<A>> {
         Some(self.state.view())
     }
 }
 
-impl<A, BorrowedP, P, C> BestPoint<A> for FixedStepSteepestDescent<A, BorrowedP, P, C> {
+impl<A, BorrowedP, P, C> BestPoint<A> for Running<A, BorrowedP, P, C> {
     fn best_point(&self) -> CowArray<A, Ix1> {
         (&self.state).into()
     }
