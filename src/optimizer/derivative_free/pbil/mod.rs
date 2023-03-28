@@ -96,7 +96,7 @@ impl<B, BorrowedP, P, C> RunningDoneWhenConverged<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer for RunningDoneWhenConverged<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> RunningOptimizer<bool> for RunningDoneWhenConverged<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
     BorrowedP: Problem<bool, B>,
@@ -116,6 +116,10 @@ where
             )
         })
     }
+
+    fn best_point(&self) -> CowArray<bool, Ix1> {
+        self.state.best_point()
+    }
 }
 
 impl<B, BorrowedP, P, C> Convergent for RunningDoneWhenConverged<B, BorrowedP, P, C>
@@ -133,12 +137,6 @@ where
 impl<B, BorrowedP, P, C> PopulationBased<bool> for RunningDoneWhenConverged<B, BorrowedP, P, C> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
-    }
-}
-
-impl<B, BorrowedP, P, C> BestPoint<bool> for RunningDoneWhenConverged<B, BorrowedP, P, C> {
-    fn best_point(&self) -> CowArray<bool, Ix1> {
-        self.state.best_point()
     }
 }
 
@@ -243,7 +241,7 @@ impl<B, BorrowedP, P, C> Running<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer for Running<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> RunningOptimizer<bool> for Running<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
     BorrowedP: Problem<bool, B>,
@@ -262,17 +260,15 @@ where
             )
         })
     }
+
+    fn best_point(&self) -> CowArray<bool, Ix1> {
+        self.state.best_point()
+    }
 }
 
 impl<B, BorrowedP, P, C> PopulationBased<bool> for Running<B, BorrowedP, P, C> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
-    }
-}
-
-impl<B, BorrowedP, P, C> BestPoint<bool> for Running<B, BorrowedP, P, C> {
-    fn best_point(&self) -> CowArray<bool, Ix1> {
-        self.state.best_point()
     }
 }
 
@@ -379,9 +375,7 @@ impl State {
             State::PreEval(s) => s.probabilities(),
         }
     }
-}
 
-impl PopulationBased<bool> for State {
     fn points(&self) -> ArrayView2<bool> {
         lazy_static! {
             static ref EMPTY: Array2<bool> = Array::from_elem((0, 0), false);
@@ -391,9 +385,7 @@ impl PopulationBased<bool> for State {
             State::PreEval(s) => s.samples().view(),
         }
     }
-}
 
-impl BestPoint<bool> for State {
     fn best_point(&self) -> CowArray<bool, Ix1> {
         finalize(self.probabilities()).into()
     }

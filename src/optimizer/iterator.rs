@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use streaming_iterator::StreamingIterator;
 
 use crate::prelude::*;
@@ -5,11 +7,11 @@ use crate::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-impl<O> IntoStreamingIterator for O
+impl<A, O> IntoStreamingIterator<A> for O
 where
-    O: RunningOptimizer,
+    O: RunningOptimizer<A>,
 {
-    fn into_streaming_iter(self) -> StepIterator<O> {
+    fn into_streaming_iter(self) -> StepIterator<A, O> {
         StepIterator::new(self)
     }
 }
@@ -21,9 +23,9 @@ where
 /// meaning the first call to `advance` or `next` will not change state.
 /// For example,
 /// `nth(100)` will step `99` times.
-pub trait IntoStreamingIterator {
+pub trait IntoStreamingIterator<A> {
     /// Return an iterator over optimizer states.
-    fn into_streaming_iter(self) -> StepIterator<Self>
+    fn into_streaming_iter(self) -> StepIterator<A, Self>
     where
         Self: Sized;
 }
@@ -31,14 +33,16 @@ pub trait IntoStreamingIterator {
 /// An iterator returned by [`into_streaming_iter`].
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StepIterator<O> {
+pub struct StepIterator<A, O> {
+    point_elem: PhantomData<A>,
     inner: O,
     skipped_first_step: bool,
 }
 
-impl<O> StepIterator<O> {
+impl<A, O> StepIterator<A, O> {
     fn new(optimizer: O) -> Self {
         Self {
+            point_elem: PhantomData,
             inner: optimizer,
             skipped_first_step: false,
         }
@@ -50,9 +54,9 @@ impl<O> StepIterator<O> {
     }
 }
 
-impl<O> StreamingIterator for StepIterator<O>
+impl<A, O> StreamingIterator for StepIterator<A, O>
 where
-    O: RunningOptimizer,
+    O: RunningOptimizer<A>,
 {
     type Item = O;
 
@@ -121,9 +125,13 @@ mod tests {
         steps: usize,
     }
 
-    impl RunningOptimizer for MockOptimizer {
+    impl RunningOptimizer<f64> for MockOptimizer {
         fn step(&mut self) {
             self.state.steps += 1;
+        }
+
+        fn best_point(&self) -> ndarray::CowArray<f64, ndarray::Ix1> {
+            unimplemented!()
         }
     }
 

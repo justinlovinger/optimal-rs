@@ -34,9 +34,12 @@ pub trait OptimizerConfig<O> {
 }
 
 /// An optimizer in the process of optimization.
-pub trait RunningOptimizer {
+pub trait RunningOptimizer<A> {
     /// Perform an optimization step.
     fn step(&mut self);
+
+    /// Return the best point discovered.
+    fn best_point(&self) -> CowArray<A, Ix1>;
 }
 
 /// A running optimizer able to efficiently provide a view
@@ -61,12 +64,6 @@ pub trait PopulationBased<A> {
 pub trait Convergent {
     /// Return if optimizer is done.
     fn is_done(&self) -> bool;
-}
-
-/// A running optimizer able to return the best point discovered.
-pub trait BestPoint<A> {
-    /// Return the best point discovered.
-    fn best_point(&self) -> CowArray<A, Ix1>;
 }
 
 /// A running optimizer

@@ -168,7 +168,7 @@ impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
     }
 }
 
-impl<A, BorrowedP, P, C> RunningOptimizer for Running<A, BorrowedP, P, C>
+impl<A, BorrowedP, P, C> RunningOptimizer<A> for Running<A, BorrowedP, P, C>
 where
     A: 'static
         + Clone
@@ -207,17 +207,15 @@ where
             }
         })
     }
+
+    fn best_point(&self) -> CowArray<A, Ix1> {
+        self.state.best_point()
+    }
 }
 
 impl<A, BorrowedP, P, C> crate::prelude::PointBased<A> for Running<A, BorrowedP, P, C> {
     fn point(&self) -> Option<ArrayView1<A>> {
         self.state.point()
-    }
-}
-
-impl<A, BorrowedP, P, C> BestPoint<A> for Running<A, BorrowedP, P, C> {
-    fn best_point(&self) -> CowArray<A, Ix1> {
-        self.state.best_point()
     }
 }
 
@@ -229,9 +227,7 @@ impl<A> State<A> {
             last_step_size: initial_step_size.0,
         })
     }
-}
 
-impl<A> crate::prelude::PointBased<A> for State<A> {
     fn point(&self) -> Option<ArrayView1<A>> {
         Some(
             (match self {
@@ -241,9 +237,7 @@ impl<A> crate::prelude::PointBased<A> for State<A> {
             .into(),
         )
     }
-}
 
-impl<A> BestPoint<A> for State<A> {
     fn best_point(&self) -> CowArray<A, Ix1> {
         (match self {
             State::Ready(x) => x.point(),
