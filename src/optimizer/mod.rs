@@ -61,6 +61,33 @@ pub trait RunningOptimizer<A, B, C> {
     fn config(&self) -> &C;
 }
 
+/// An automatically implemented extension to [`RunningOptimizer`].
+pub trait RunningOptimizerExt<'a, A, B, P, C> {
+    /// Return the value of the best point discovered,
+    /// evaluating the best point
+    /// if necessary.
+    fn best_point_value(&'a self) -> B;
+
+    /// Return problem to optimize.
+    fn problem(&'a self) -> &'a P;
+}
+
+impl<'a, A, B, P, C, T> RunningOptimizerExt<'a, A, B, P, C> for T
+where
+    P: Problem<A, B> + 'a,
+    C: OptimizerConfig<'a, T, P> + 'a,
+    T: RunningOptimizer<A, B, C>,
+{
+    fn best_point_value(&'a self) -> B {
+        self.stored_best_point_value()
+            .unwrap_or_else(|| self.problem().evaluate(self.best_point()))
+    }
+
+    fn problem(&'a self) -> &'a P {
+        self.config().problem()
+    }
+}
+
 /// A running optimizer able to efficiently provide a view
 /// of a point to be evaluated.
 /// For optimizers evaluating at most one point per step.

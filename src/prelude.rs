@@ -3,7 +3,7 @@
 pub use crate::{
     optimizer::{
         derivative::StepSize, Convergent, IntoStreamingIterator, OptimizerConfig, PointBased,
-        PopulationBased, RunningOptimizer, StochasticOptimizerConfig,
+        PopulationBased, RunningOptimizer, RunningOptimizerExt, StochasticOptimizerConfig,
     },
     problem::*,
 };
