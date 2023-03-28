@@ -82,7 +82,7 @@ mod tests {
     #[test]
     fn iterate_emits_initial_state() {
         assert_eq!(
-            (MockOptimizer {
+            (MockRunning {
                 config: MockConfig::default(),
                 state: MockState::new(),
             })
@@ -99,7 +99,7 @@ mod tests {
     fn iterate_emits_done_state() {
         let config = MockConfig::default();
         assert_eq!(
-            (MockOptimizer {
+            (MockRunning {
                 config: MockConfig::default(),
                 state: MockState::new(),
             })
@@ -112,7 +112,7 @@ mod tests {
         )
     }
 
-    struct MockOptimizer {
+    struct MockRunning {
         pub config: MockConfig,
         pub state: MockState,
     }
@@ -125,7 +125,7 @@ mod tests {
         steps: usize,
     }
 
-    impl RunningOptimizer<f64> for MockOptimizer {
+    impl RunningOptimizer<f64> for MockRunning {
         fn step(&mut self) {
             self.state.steps += 1;
         }
@@ -135,7 +135,7 @@ mod tests {
         }
     }
 
-    impl Convergent for MockOptimizer {
+    impl Convergent for MockRunning {
         fn is_done(&self) -> bool {
             self.state.steps >= self.config.max_steps
         }
