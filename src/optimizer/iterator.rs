@@ -7,11 +7,11 @@ use crate::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-impl<A, O> IntoStreamingIterator<A> for O
+impl<A, C, O> IntoStreamingIterator<A, C> for O
 where
-    O: RunningOptimizer<A>,
+    O: RunningOptimizer<A, C>,
 {
-    fn into_streaming_iter(self) -> StepIterator<A, O> {
+    fn into_streaming_iter(self) -> StepIterator<A, C, O> {
         StepIterator::new(self)
     }
 }
@@ -23,9 +23,9 @@ where
 /// meaning the first call to `advance` or `next` will not change state.
 /// For example,
 /// `nth(100)` will step `99` times.
-pub trait IntoStreamingIterator<A> {
+pub trait IntoStreamingIterator<A, C> {
     /// Return an iterator over optimizer states.
-    fn into_streaming_iter(self) -> StepIterator<A, Self>
+    fn into_streaming_iter(self) -> StepIterator<A, C, Self>
     where
         Self: Sized;
 }
@@ -33,16 +33,18 @@ pub trait IntoStreamingIterator<A> {
 /// An iterator returned by [`into_streaming_iter`].
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StepIterator<A, O> {
+pub struct StepIterator<A, C, O> {
     point_elem: PhantomData<A>,
+    config: PhantomData<C>,
     inner: O,
     skipped_first_step: bool,
 }
 
-impl<A, O> StepIterator<A, O> {
+impl<A, C, O> StepIterator<A, C, O> {
     fn new(optimizer: O) -> Self {
         Self {
             point_elem: PhantomData,
+            config: PhantomData,
             inner: optimizer,
             skipped_first_step: false,
         }
@@ -54,9 +56,9 @@ impl<A, O> StepIterator<A, O> {
     }
 }
 
-impl<A, O> StreamingIterator for StepIterator<A, O>
+impl<A, C, O> StreamingIterator for StepIterator<A, C, O>
 where
-    O: RunningOptimizer<A>,
+    O: RunningOptimizer<A, C>,
 {
     type Item = O;
 
@@ -82,15 +84,13 @@ mod tests {
     #[test]
     fn iterate_emits_initial_state() {
         assert_eq!(
-            (MockRunning {
-                config: MockConfig::default(),
-                state: MockState::new(),
-            })
-            .into_streaming_iter()
-            .next()
-            .unwrap()
-            .state
-            .steps,
+            MockConfig::default()
+                .start()
+                .into_streaming_iter()
+                .next()
+                .unwrap()
+                .state
+                .steps,
             0
         )
     }
@@ -99,15 +99,13 @@ mod tests {
     fn iterate_emits_done_state() {
         let config = MockConfig::default();
         assert_eq!(
-            (MockRunning {
-                config: MockConfig::default(),
-                state: MockState::new(),
-            })
-            .into_streaming_iter()
-            .find(|o| o.is_done())
-            .unwrap()
-            .state
-            .steps,
+            MockConfig::default()
+                .start()
+                .into_streaming_iter()
+                .find(|o| o.is_done())
+                .unwrap()
+                .state
+                .steps,
             config.max_steps
         )
     }
@@ -125,12 +123,32 @@ mod tests {
         steps: usize,
     }
 
-    impl RunningOptimizer<f64> for MockRunning {
+    impl MockRunning {
+        fn new(config: MockConfig, state: MockState) -> Self {
+            Self { config, state }
+        }
+    }
+
+    impl OptimizerConfig<'_, MockRunning, ()> for MockConfig {
+        fn start(self) -> MockRunning {
+            MockRunning::new(self, MockState::new())
+        }
+
+        fn problem(&self) -> &() {
+            unimplemented!()
+        }
+    }
+
+    impl RunningOptimizer<f64, MockConfig> for MockRunning {
         fn step(&mut self) {
             self.state.steps += 1;
         }
 
         fn best_point(&self) -> ndarray::CowArray<f64, ndarray::Ix1> {
+            unimplemented!()
+        }
+
+        fn config(&self) -> &MockConfig {
             unimplemented!()
         }
     }

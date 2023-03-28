@@ -96,7 +96,8 @@ impl<B, BorrowedP, P, C> RunningDoneWhenConverged<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer<bool> for RunningDoneWhenConverged<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> RunningOptimizer<bool, DoneWhenConvergedConfig<BorrowedP, P>>
+    for RunningDoneWhenConverged<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
     BorrowedP: Problem<bool, B>,
@@ -119,6 +120,10 @@ where
 
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
+    }
+
+    fn config(&self) -> &DoneWhenConvergedConfig<BorrowedP, P> {
+        self.config.borrow()
     }
 }
 
@@ -172,15 +177,20 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> OptimizerConfig<RunningDoneWhenConverged<B, BorrowedP, P, C>> for C
+impl<'a, B, BorrowedP, P, C>
+    OptimizerConfig<'a, RunningDoneWhenConverged<B, BorrowedP, P, C>, BorrowedP> for C
 where
     BorrowedP: FixedLength,
-    P: Borrow<BorrowedP>,
+    P: Borrow<BorrowedP> + 'a,
     C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
 {
     fn start(self) -> RunningDoneWhenConverged<B, BorrowedP, P, C> {
         let state = State::initial(self.borrow().inner.problem.borrow().len());
         RunningDoneWhenConverged::new(self, state)
+    }
+
+    fn problem(&'a self) -> &'a BorrowedP {
+        self.borrow().inner.problem.borrow()
     }
 }
 
@@ -241,7 +251,8 @@ impl<B, BorrowedP, P, C> Running<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer<bool> for Running<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> RunningOptimizer<bool, Config<BorrowedP, P>>
+    for Running<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
     BorrowedP: Problem<bool, B>,
@@ -263,6 +274,10 @@ where
 
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
+    }
+
+    fn config(&self) -> &Config<BorrowedP, P> {
+        self.config.borrow()
     }
 }
 
@@ -344,15 +359,19 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> OptimizerConfig<Running<B, BorrowedP, P, C>> for C
+impl<'a, B, BorrowedP, P, C> OptimizerConfig<'a, Running<B, BorrowedP, P, C>, BorrowedP> for C
 where
     BorrowedP: FixedLength,
-    P: Borrow<BorrowedP>,
+    P: Borrow<BorrowedP> + 'a,
     C: Borrow<Config<BorrowedP, P>>,
 {
     fn start(self) -> Running<B, BorrowedP, P, C> {
         let state = State::initial(self.borrow().problem.borrow().len());
         Running::new(self, state)
+    }
+
+    fn problem(&'a self) -> &'a BorrowedP {
+        self.borrow().problem.borrow()
     }
 }
 

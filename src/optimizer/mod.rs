@@ -26,20 +26,26 @@ pub trait StochasticOptimizerConfig<O> {
 }
 
 /// An optimizer configuration.
-pub trait OptimizerConfig<O> {
+pub trait OptimizerConfig<'a, O, P> {
     /// Return a running optimizer.
     ///
     /// This may be nondeterministic.
     fn start(self) -> O;
+
+    /// Return problem to optimize.
+    fn problem(&'a self) -> &'a P;
 }
 
 /// An optimizer in the process of optimization.
-pub trait RunningOptimizer<A> {
+pub trait RunningOptimizer<A, C> {
     /// Perform an optimization step.
     fn step(&mut self);
 
     /// Return the best point discovered.
     fn best_point(&self) -> CowArray<A, Ix1>;
+
+    /// Return optimizer configuration.
+    fn config(&self) -> &C;
 }
 
 /// A running optimizer able to efficiently provide a view
