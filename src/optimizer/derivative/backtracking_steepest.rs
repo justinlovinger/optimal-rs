@@ -194,7 +194,7 @@ where
                     .borrow()
                     .problem
                     .borrow()
-                    .evaluate_differentiate(x.point_to_evaluate().view());
+                    .evaluate_differentiate(x.point().view());
                 x.step_from_evaluated(self.config.borrow(), point_value, point_derivatives)
             }
             State::Searching(x) => {
@@ -203,7 +203,7 @@ where
                     .borrow()
                     .problem
                     .borrow()
-                    .evaluate(x.point_to_evaluate().view());
+                    .evaluate(x.point().view());
                 x.step_from_evaluated(self.config.borrow(), point_value)
             }
         })
@@ -236,8 +236,8 @@ impl<A> State<A> {
     fn point(&self) -> Option<ArrayView1<A>> {
         Some(
             (match self {
-                State::Ready(x) => x.point_to_evaluate(),
-                State::Searching(x) => x.point_to_evaluate(),
+                State::Ready(x) => x.point(),
+                State::Searching(x) => x.point(),
             })
             .into(),
         )
@@ -245,8 +245,8 @@ impl<A> State<A> {
 
     fn best_point(&self) -> CowArray<A, Ix1> {
         (match self {
-            State::Ready(x) => x.point(),
-            State::Searching(x) => x.point(),
+            State::Ready(x) => x.best_point(),
+            State::Searching(x) => x.best_point(),
         })
         .into()
     }
@@ -254,11 +254,11 @@ impl<A> State<A> {
 
 impl<A> Ready<A> {
     fn point(&self) -> &Point<A> {
-        &self.point
+        self.best_point()
     }
 
-    fn point_to_evaluate(&self) -> &Point<A> {
-        self.point()
+    fn best_point(&self) -> &Point<A> {
+        &self.point
     }
 
     fn step_from_evaluated<BorrowedP, P, S>(
@@ -295,11 +295,12 @@ impl<A> Ready<A> {
 }
 
 impl<A> Searching<A> {
-    fn point(&self) -> &Point<A> {
+    fn best_point(&self) -> &Point<A> {
         &self.point
     }
 
-    fn point_to_evaluate(&self) -> &Point<A> {
+    #[allow(clippy::misnamed_getters)]
+    fn point(&self) -> &Point<A> {
         &self.point_at_step
     }
 
