@@ -96,7 +96,7 @@ impl<B, BorrowedP, P, C> RunningDoneWhenConverged<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer<bool, DoneWhenConvergedConfig<BorrowedP, P>>
+impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, DoneWhenConvergedConfig<BorrowedP, P>>
     for RunningDoneWhenConverged<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
@@ -124,6 +124,10 @@ where
 
     fn config(&self) -> &DoneWhenConvergedConfig<BorrowedP, P> {
         self.config.borrow()
+    }
+
+    fn stored_best_point_value(&self) -> Option<B> {
+        None
     }
 }
 
@@ -251,7 +255,7 @@ impl<B, BorrowedP, P, C> Running<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer<bool, Config<BorrowedP, P>>
+impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, Config<BorrowedP, P>>
     for Running<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
@@ -278,6 +282,10 @@ where
 
     fn config(&self) -> &Config<BorrowedP, P> {
         self.config.borrow()
+    }
+
+    fn stored_best_point_value(&self) -> Option<B> {
+        None
     }
 }
 

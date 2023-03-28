@@ -95,7 +95,7 @@ impl<A, BorrowedP, P, C> Running<A, BorrowedP, P, C> {
     }
 }
 
-impl<A, BorrowedP, P, C> RunningOptimizer<A, Config<A, BorrowedP, P>>
+impl<A, BorrowedP, P, C> RunningOptimizer<A, A, Config<A, BorrowedP, P>>
     for Running<A, BorrowedP, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
@@ -122,6 +122,10 @@ where
 
     fn config(&self) -> &Config<A, BorrowedP, P> {
         self.config.borrow()
+    }
+
+    fn stored_best_point_value(&self) -> Option<A> {
+        None
     }
 }
 

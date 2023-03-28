@@ -12,6 +12,8 @@ mod iterator;
 use ndarray::prelude::*;
 use rand::Rng;
 
+use crate::prelude::Problem;
+
 pub use self::iterator::*;
 
 /// An optimizer configuration
@@ -37,12 +39,23 @@ pub trait OptimizerConfig<'a, O, P> {
 }
 
 /// An optimizer in the process of optimization.
-pub trait RunningOptimizer<A, C> {
+pub trait RunningOptimizer<A, B, C> {
     /// Perform an optimization step.
     fn step(&mut self);
 
     /// Return the best point discovered.
     fn best_point(&self) -> CowArray<A, Ix1>;
+
+    /// Return the value of the best point discovered,
+    /// if possible
+    /// without evaluating.
+    ///
+    /// Most optimizers cannot return the best point value
+    /// until at least one step has been performed.
+    ///
+    /// If an optimizer never stores the best point value,
+    /// this will always return `None`.
+    fn stored_best_point_value(&self) -> Option<B>;
 
     /// Return optimizer configuration.
     fn config(&self) -> &C;
@@ -70,17 +83,4 @@ pub trait PopulationBased<A> {
 pub trait Convergent {
     /// Return if optimizer is done.
     fn is_done(&self) -> bool;
-}
-
-/// A running optimizer
-/// able to efficiently return the value
-/// of the best point discovered.
-///
-/// Most optimizers cannot return the best point value
-/// until at least one step has been performed.
-pub trait BestPointValue<A> {
-    /// Return the value of the best point discovered,
-    /// if possible
-    /// without evaluating.
-    fn best_point_value(&self) -> Option<A>;
 }

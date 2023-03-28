@@ -168,7 +168,7 @@ impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
     }
 }
 
-impl<A, BorrowedP, P, C> RunningOptimizer<A, Config<A, BorrowedP, P>>
+impl<A, BorrowedP, P, C> RunningOptimizer<A, A, Config<A, BorrowedP, P>>
     for Running<A, BorrowedP, P, C>
 where
     A: 'static
@@ -215,6 +215,13 @@ where
 
     fn config(&self) -> &Config<A, BorrowedP, P> {
         self.config.borrow()
+    }
+
+    fn stored_best_point_value(&self) -> Option<A> {
+        match &self.state {
+            State::Ready(_) => None,
+            State::Searching(x) => Some(x.point_value),
+        }
     }
 }
 

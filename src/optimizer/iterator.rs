@@ -7,25 +7,25 @@ use crate::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-impl<A, C, O> IntoStreamingIterator<A, C> for O
+impl<A, B, C, O> IntoStreamingIterator<A, B, C> for O
 where
-    O: RunningOptimizer<A, C>,
+    O: RunningOptimizer<A, B, C>,
 {
-    fn into_streaming_iter(self) -> StepIterator<A, C, O> {
+    fn into_streaming_iter(self) -> StepIterator<A, B, C, O> {
         StepIterator::new(self)
     }
 }
 
-/// An automatically implemented extension to [`Step`]
+/// An automatically implemented extension to [`RunningOptimizer`]
 /// providing an iterator-based API.
 ///
 /// Initial optimizer state is emitted before stepping,
 /// meaning the first call to `advance` or `next` will not change state.
 /// For example,
 /// `nth(100)` will step `99` times.
-pub trait IntoStreamingIterator<A, C> {
+pub trait IntoStreamingIterator<A, B, C> {
     /// Return an iterator over optimizer states.
-    fn into_streaming_iter(self) -> StepIterator<A, C, Self>
+    fn into_streaming_iter(self) -> StepIterator<A, B, C, Self>
     where
         Self: Sized;
 }
@@ -33,17 +33,19 @@ pub trait IntoStreamingIterator<A, C> {
 /// An iterator returned by [`into_streaming_iter`].
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StepIterator<A, C, O> {
+pub struct StepIterator<A, B, C, O> {
     point_elem: PhantomData<A>,
+    point_value: PhantomData<B>,
     config: PhantomData<C>,
     inner: O,
     skipped_first_step: bool,
 }
 
-impl<A, C, O> StepIterator<A, C, O> {
+impl<A, B, C, O> StepIterator<A, B, C, O> {
     fn new(optimizer: O) -> Self {
         Self {
             point_elem: PhantomData,
+            point_value: PhantomData,
             config: PhantomData,
             inner: optimizer,
             skipped_first_step: false,
@@ -56,9 +58,9 @@ impl<A, C, O> StepIterator<A, C, O> {
     }
 }
 
-impl<A, C, O> StreamingIterator for StepIterator<A, C, O>
+impl<A, B, C, O> StreamingIterator for StepIterator<A, B, C, O>
 where
-    O: RunningOptimizer<A, C>,
+    O: RunningOptimizer<A, B, C>,
 {
     type Item = O;
 
@@ -139,7 +141,7 @@ mod tests {
         }
     }
 
-    impl RunningOptimizer<f64, MockConfig> for MockRunning {
+    impl RunningOptimizer<f64, f64, MockConfig> for MockRunning {
         fn step(&mut self) {
             self.state.steps += 1;
         }
@@ -149,6 +151,10 @@ mod tests {
         }
 
         fn config(&self) -> &MockConfig {
+            unimplemented!()
+        }
+
+        fn stored_best_point_value(&self) -> Option<f64> {
             unimplemented!()
         }
     }
