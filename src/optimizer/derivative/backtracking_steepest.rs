@@ -168,7 +168,7 @@ impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
     }
 }
 
-impl<A, BorrowedP, P, C> Step for Running<A, BorrowedP, P, C>
+impl<A, BorrowedP, P, C> RunningOptimizer for Running<A, BorrowedP, P, C>
 where
     A: 'static
         + Clone
@@ -209,7 +209,7 @@ where
     }
 }
 
-impl<A, BorrowedP, P, C> crate::prelude::Point<A> for Running<A, BorrowedP, P, C> {
+impl<A, BorrowedP, P, C> crate::prelude::PointBased<A> for Running<A, BorrowedP, P, C> {
     fn point(&self) -> Option<ArrayView1<A>> {
         self.state.point()
     }
@@ -231,7 +231,7 @@ impl<A> State<A> {
     }
 }
 
-impl<A> crate::prelude::Point<A> for State<A> {
+impl<A> crate::prelude::PointBased<A> for State<A> {
     fn point(&self) -> Option<ArrayView1<A>> {
         Some(
             (match self {

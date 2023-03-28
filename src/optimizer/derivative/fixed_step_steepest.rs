@@ -95,7 +95,7 @@ impl<A, BorrowedP, P, C> Running<A, BorrowedP, P, C> {
     }
 }
 
-impl<A, BorrowedP, P, C> Step for Running<A, BorrowedP, P, C>
+impl<A, BorrowedP, P, C> RunningOptimizer for Running<A, BorrowedP, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
     BorrowedP: Differentiable<A, A>,
@@ -116,7 +116,7 @@ where
     }
 }
 
-impl<A, BorrowedP, P, C> crate::prelude::Point<A> for Running<A, BorrowedP, P, C> {
+impl<A, BorrowedP, P, C> crate::prelude::PointBased<A> for Running<A, BorrowedP, P, C> {
     fn point(&self) -> Option<ArrayView1<A>> {
         Some(self.state.view())
     }

@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 impl<O> IntoStreamingIterator for O
 where
-    O: Step,
+    O: RunningOptimizer,
 {
     fn into_streaming_iter(self) -> StepIterator<O> {
         StepIterator::new(self)
@@ -52,7 +52,7 @@ impl<O> StepIterator<O> {
 
 impl<O> StreamingIterator for StepIterator<O>
 where
-    O: Step,
+    O: RunningOptimizer,
 {
     type Item = O;
 
@@ -121,13 +121,13 @@ mod tests {
         steps: usize,
     }
 
-    impl Step for MockOptimizer {
+    impl RunningOptimizer for MockOptimizer {
         fn step(&mut self) {
             self.state.steps += 1;
         }
     }
 
-    impl IsDone for MockOptimizer {
+    impl Convergent for MockOptimizer {
         fn is_done(&self) -> bool {
             self.state.steps >= self.config.max_steps
         }

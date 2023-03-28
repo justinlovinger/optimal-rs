@@ -14,7 +14,7 @@
 //!
 //! fn main() {
 //!     let mut iter = DoneWhenConvergedConfig::default(Count)
-//!         .initialize()
+//!         .start()
 //!         .into_streaming_iter();
 //!     let xs = iter
 //!         .find(|o| o.is_done())
@@ -96,7 +96,7 @@ impl<B, BorrowedP, P, C> RunningDoneWhenConverged<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> Step for RunningDoneWhenConverged<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> RunningOptimizer for RunningDoneWhenConverged<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
     BorrowedP: Problem<bool, B>,
@@ -118,7 +118,7 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> IsDone for RunningDoneWhenConverged<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> Convergent for RunningDoneWhenConverged<B, BorrowedP, P, C>
 where
     C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
 {
@@ -130,7 +130,7 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> Points<bool> for RunningDoneWhenConverged<B, BorrowedP, P, C> {
+impl<B, BorrowedP, P, C> PopulationBased<bool> for RunningDoneWhenConverged<B, BorrowedP, P, C> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
@@ -158,13 +158,14 @@ impl<BorrowedP, P> DoneWhenConvergedConfig<BorrowedP, P> {
     }
 }
 
-impl<B, BorrowedP, P, C> InitializeUsing<RunningDoneWhenConverged<B, BorrowedP, P, C>> for C
+impl<B, BorrowedP, P, C> StochasticOptimizerConfig<RunningDoneWhenConverged<B, BorrowedP, P, C>>
+    for C
 where
     BorrowedP: FixedLength,
     P: Borrow<BorrowedP>,
     C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
 {
-    fn initialize_using<R>(self, rng: &mut R) -> RunningDoneWhenConverged<B, BorrowedP, P, C>
+    fn start_using<R>(self, rng: &mut R) -> RunningDoneWhenConverged<B, BorrowedP, P, C>
     where
         R: Rng,
     {
@@ -173,13 +174,13 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> Initialize<RunningDoneWhenConverged<B, BorrowedP, P, C>> for C
+impl<B, BorrowedP, P, C> OptimizerConfig<RunningDoneWhenConverged<B, BorrowedP, P, C>> for C
 where
     BorrowedP: FixedLength,
     P: Borrow<BorrowedP>,
     C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
 {
-    fn initialize(self) -> RunningDoneWhenConverged<B, BorrowedP, P, C> {
+    fn start(self) -> RunningDoneWhenConverged<B, BorrowedP, P, C> {
         let state = State::initial(self.borrow().inner.problem.borrow().len());
         RunningDoneWhenConverged::new(self, state)
     }
@@ -242,7 +243,7 @@ impl<B, BorrowedP, P, C> Running<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> Step for Running<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> RunningOptimizer for Running<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
     BorrowedP: Problem<bool, B>,
@@ -263,7 +264,7 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> Points<bool> for Running<B, BorrowedP, P, C> {
+impl<B, BorrowedP, P, C> PopulationBased<bool> for Running<B, BorrowedP, P, C> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
@@ -332,13 +333,13 @@ impl<BorrowedP, P> Config<BorrowedP, P> {
     }
 }
 
-impl<B, BorrowedP, P, C> InitializeUsing<Running<B, BorrowedP, P, C>> for C
+impl<B, BorrowedP, P, C> StochasticOptimizerConfig<Running<B, BorrowedP, P, C>> for C
 where
     BorrowedP: FixedLength,
     P: Borrow<BorrowedP>,
     C: Borrow<Config<BorrowedP, P>>,
 {
-    fn initialize_using<R>(self, rng: &mut R) -> Running<B, BorrowedP, P, C>
+    fn start_using<R>(self, rng: &mut R) -> Running<B, BorrowedP, P, C>
     where
         R: Rng,
     {
@@ -347,13 +348,13 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> Initialize<Running<B, BorrowedP, P, C>> for C
+impl<B, BorrowedP, P, C> OptimizerConfig<Running<B, BorrowedP, P, C>> for C
 where
     BorrowedP: FixedLength,
     P: Borrow<BorrowedP>,
     C: Borrow<Config<BorrowedP, P>>,
 {
-    fn initialize(self) -> Running<B, BorrowedP, P, C> {
+    fn start(self) -> Running<B, BorrowedP, P, C> {
         let state = State::initial(self.borrow().problem.borrow().len());
         Running::new(self, state)
     }
@@ -380,7 +381,7 @@ impl State {
     }
 }
 
-impl Points<bool> for State {
+impl PopulationBased<bool> for State {
     fn points(&self) -> ArrayView2<bool> {
         lazy_static! {
             static ref EMPTY: Array2<bool> = Array::from_elem((0, 0), false);

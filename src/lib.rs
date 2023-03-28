@@ -24,7 +24,7 @@
 //!
 //! fn main() {
 //!     let mut iter = DoneWhenConvergedConfig::default(Count)
-//!         .initialize()
+//!         .start()
 //!         .into_streaming_iter();
 //!     let xs = iter
 //!         .find(|o| o.is_done())

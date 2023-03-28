@@ -15,60 +15,66 @@ use rand::Rng;
 pub use self::iterator::*;
 
 /// An optimizer configuration
-/// qualified to initialize an optimizer
-/// using a 'Rng'.
-pub trait InitializeUsing<O> {
-    /// Return an optimizer
+/// for an optimizer
+/// requiring a source of randomness.
+pub trait StochasticOptimizerConfig<O> {
+    /// Return a running optimizer
     /// initialized using `rng`.
-    fn initialize_using<R>(self, rng: &mut R) -> O
+    fn start_using<R>(self, rng: &mut R) -> O
     where
         R: Rng;
 }
 
-/// An optimizer configuration
-/// qualified to initialize an optimizer.
-pub trait Initialize<O> {
-    /// Return an initialized optimizer.
-    fn initialize(self) -> O;
+/// An optimizer configuration.
+pub trait OptimizerConfig<O> {
+    /// Return a running optimizer.
+    ///
+    /// This may be nondeterministic.
+    fn start(self) -> O;
 }
 
-/// The core of an optimizer,
-/// step from one state to another,
-/// improving objective value.
-pub trait Step {
+/// An optimizer in the process of optimization.
+pub trait RunningOptimizer {
     /// Perform an optimization step.
     fn step(&mut self);
 }
 
-/// An optimizer able to efficiently provide a view
+/// A running optimizer able to efficiently provide a view
 /// of a point to be evaluated.
 /// For optimizers evaluating at most one point per step.
-pub trait Point<A> {
+pub trait PointBased<A> {
     /// Return point to be evaluated.
     fn point(&self) -> Option<ArrayView1<A>>;
 }
 
-/// An optimizer able to efficiently provide a view
+/// A running optimizer able to efficiently provide a view
 /// of points to be evaluated.
 /// For optimizers evaluating more than one point per step.
-pub trait Points<A> {
+pub trait PopulationBased<A> {
     /// Return points to be evaluated.
     fn points(&self) -> ArrayView2<A>;
 }
 
-/// Indicate whether or not an optimizer is done.
-pub trait IsDone {
+/// A running optimizer that may be done.
+/// This does *not* guarantee the optimizer *will* converge,
+/// only that it *may*.
+pub trait Convergent {
     /// Return if optimizer is done.
     fn is_done(&self) -> bool;
 }
 
-/// An optimizer able to return the best point discovered.
+/// A running optimizer able to return the best point discovered.
 pub trait BestPoint<A> {
     /// Return the best point discovered.
     fn best_point(&self) -> CowArray<A, Ix1>;
 }
 
-/// An optimizer able to return the value of the best point discovered.
+/// A running optimizer
+/// able to efficiently return the value
+/// of the best point discovered.
+///
+/// Most optimizers cannot return the best point value
+/// until at least one step has been performed.
 pub trait BestPointValue<A> {
     /// Return the value of the best point discovered.
     fn best_point_value(&self) -> Option<A>;
