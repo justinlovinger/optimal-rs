@@ -73,6 +73,8 @@ pub trait Convergent {
 /// Most optimizers cannot return the best point value
 /// until at least one step has been performed.
 pub trait BestPointValue<A> {
-    /// Return the value of the best point discovered.
+    /// Return the value of the best point discovered,
+    /// if possible
+    /// without evaluating.
     fn best_point_value(&self) -> Option<A>;
 }
