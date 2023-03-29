@@ -26,11 +26,8 @@
 //!     let mut iter = DoneWhenConvergedConfig::default(Count)
 //!         .start()
 //!         .into_streaming_iter();
-//!     let xs = iter
-//!         .find(|o| o.is_done())
-//!         .expect("should converge")
-//!         .best_point();
-//!     println!("f({}) = {}", xs, Count.evaluate(xs.view()));
+//!     let o = iter.find(|o| o.is_done()).expect("should converge");
+//!     println!("f({}) = {}", o.best_point(), o.best_point_value());
 //! }
 //!
 //! struct Count;
