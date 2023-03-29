@@ -96,7 +96,7 @@ impl<B, BorrowedP, P, C> RunningDoneWhenConverged<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, DoneWhenConvergedConfig<BorrowedP, P>>
+impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, DoneWhenConvergedConfig<BorrowedP, P>, State>
     for RunningDoneWhenConverged<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
@@ -116,6 +116,10 @@ where
                 state,
             )
         })
+    }
+
+    fn state(&self) -> &State {
+        &self.state
     }
 
     fn best_point(&self) -> CowArray<bool, Ix1> {
@@ -255,7 +259,7 @@ impl<B, BorrowedP, P, C> Running<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, Config<BorrowedP, P>>
+impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, Config<BorrowedP, P>, State>
     for Running<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
@@ -274,6 +278,10 @@ where
                 state,
             )
         })
+    }
+
+    fn state(&self) -> &State {
+        &self.state
     }
 
     fn best_point(&self) -> CowArray<bool, Ix1> {

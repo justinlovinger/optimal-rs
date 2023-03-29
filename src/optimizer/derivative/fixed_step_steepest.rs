@@ -95,7 +95,7 @@ impl<A, BorrowedP, P, C> Running<A, BorrowedP, P, C> {
     }
 }
 
-impl<A, BorrowedP, P, C> RunningOptimizer<A, A, Config<A, BorrowedP, P>>
+impl<A, BorrowedP, P, C> RunningOptimizer<A, A, Config<A, BorrowedP, P>, Point<A>>
     for Running<A, BorrowedP, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
@@ -114,6 +114,10 @@ where
                 point,
             )
         });
+    }
+
+    fn state(&self) -> &Point<A> {
+        &self.state
     }
 
     fn best_point(&self) -> CowArray<A, Ix1> {

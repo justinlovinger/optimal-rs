@@ -168,7 +168,7 @@ impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
     }
 }
 
-impl<A, BorrowedP, P, C> RunningOptimizer<A, A, Config<A, BorrowedP, P>>
+impl<A, BorrowedP, P, C> RunningOptimizer<A, A, Config<A, BorrowedP, P>, State<A>>
     for Running<A, BorrowedP, P, C>
 where
     A: 'static
@@ -207,6 +207,10 @@ where
                 x.step_from_evaluated(self.config.borrow(), point_value)
             }
         })
+    }
+
+    fn state(&self) -> &State<A> {
+        &self.state
     }
 
     fn best_point(&self) -> CowArray<A, Ix1> {

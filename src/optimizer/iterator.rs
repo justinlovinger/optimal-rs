@@ -7,11 +7,11 @@ use crate::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-impl<A, B, C, O> IntoStreamingIterator<A, B, C> for O
+impl<A, B, C, S, O> IntoStreamingIterator<A, B, C, S> for O
 where
-    O: RunningOptimizer<A, B, C>,
+    O: RunningOptimizer<A, B, C, S>,
 {
-    fn into_streaming_iter(self) -> StepIterator<A, B, C, O> {
+    fn into_streaming_iter(self) -> StepIterator<A, B, C, S, O> {
         StepIterator::new(self)
     }
 }
@@ -23,9 +23,9 @@ where
 /// meaning the first call to `advance` or `next` will not change state.
 /// For example,
 /// `nth(100)` will step `99` times.
-pub trait IntoStreamingIterator<A, B, C> {
+pub trait IntoStreamingIterator<A, B, C, S> {
     /// Return an iterator over optimizer states.
-    fn into_streaming_iter(self) -> StepIterator<A, B, C, Self>
+    fn into_streaming_iter(self) -> StepIterator<A, B, C, S, Self>
     where
         Self: Sized;
 }
@@ -33,20 +33,22 @@ pub trait IntoStreamingIterator<A, B, C> {
 /// An iterator returned by [`into_streaming_iter`].
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StepIterator<A, B, C, O> {
+pub struct StepIterator<A, B, C, S, O> {
     point_elem: PhantomData<A>,
     point_value: PhantomData<B>,
     config: PhantomData<C>,
+    state: PhantomData<S>,
     inner: O,
     skipped_first_step: bool,
 }
 
-impl<A, B, C, O> StepIterator<A, B, C, O> {
+impl<A, B, C, S, O> StepIterator<A, B, C, S, O> {
     fn new(optimizer: O) -> Self {
         Self {
             point_elem: PhantomData,
             point_value: PhantomData,
             config: PhantomData,
+            state: PhantomData,
             inner: optimizer,
             skipped_first_step: false,
         }
@@ -58,9 +60,9 @@ impl<A, B, C, O> StepIterator<A, B, C, O> {
     }
 }
 
-impl<A, B, C, O> StreamingIterator for StepIterator<A, B, C, O>
+impl<A, B, C, S, O> StreamingIterator for StepIterator<A, B, C, S, O>
 where
-    O: RunningOptimizer<A, B, C>,
+    O: RunningOptimizer<A, B, C, S>,
 {
     type Item = O;
 
@@ -141,9 +143,13 @@ mod tests {
         }
     }
 
-    impl RunningOptimizer<f64, f64, MockConfig> for MockRunning {
+    impl RunningOptimizer<f64, f64, MockConfig, MockState> for MockRunning {
         fn step(&mut self) {
             self.state.steps += 1;
+        }
+
+        fn state(&self) -> &MockState {
+            &self.state
         }
 
         fn best_point(&self) -> ndarray::CowArray<f64, ndarray::Ix1> {

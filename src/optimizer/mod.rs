@@ -39,9 +39,12 @@ pub trait OptimizerConfig<'a, O, P> {
 }
 
 /// An optimizer in the process of optimization.
-pub trait RunningOptimizer<A, B, C> {
+pub trait RunningOptimizer<A, B, C, S> {
     /// Perform an optimization step.
     fn step(&mut self);
+
+    /// Return state of optimizer.
+    fn state(&self) -> &S;
 
     /// Return the best point discovered.
     fn best_point(&self) -> CowArray<A, Ix1>;
@@ -62,7 +65,7 @@ pub trait RunningOptimizer<A, B, C> {
 }
 
 /// An automatically implemented extension to [`RunningOptimizer`].
-pub trait RunningOptimizerExt<'a, A, B, P, C> {
+pub trait RunningOptimizerExt<'a, A, B, P, C, S> {
     /// Return the value of the best point discovered,
     /// evaluating the best point
     /// if necessary.
@@ -72,11 +75,11 @@ pub trait RunningOptimizerExt<'a, A, B, P, C> {
     fn problem(&'a self) -> &'a P;
 }
 
-impl<'a, A, B, P, C, T> RunningOptimizerExt<'a, A, B, P, C> for T
+impl<'a, A, B, P, C, S, T> RunningOptimizerExt<'a, A, B, P, C, S> for T
 where
     P: Problem<A, B> + 'a,
     C: OptimizerConfig<'a, T, P> + 'a,
-    T: RunningOptimizer<A, B, C>,
+    T: RunningOptimizer<A, B, C, S>,
 {
     fn best_point_value(&'a self) -> B {
         self.stored_best_point_value()
