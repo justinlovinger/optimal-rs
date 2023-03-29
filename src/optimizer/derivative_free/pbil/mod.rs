@@ -238,7 +238,7 @@ pub struct Config<BorrowedP, P> {
 }
 
 /// PBIL state.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum State {
     /// Initial and post-evaluation state.

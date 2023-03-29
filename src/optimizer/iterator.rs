@@ -83,107 +83,60 @@ where
 
 #[cfg(test)]
 mod tests {
+    use ndarray::{prelude::*, Data};
+    use rand::prelude::*;
+
+    use crate::optimizer::derivative_free::pbil;
+
     use super::*;
 
     #[test]
-    fn iterate_emits_initial_state() {
+    fn iterator_emits_initial_state() {
+        let config = pbil::Config::default(Count);
         assert_eq!(
-            MockConfig::default()
-                .start()
+            (&config)
+                .start_using(&mut StdRng::seed_from_u64(0))
                 .into_streaming_iter()
                 .next()
                 .unwrap()
-                .state
-                .steps,
-            0
-        )
+                .state(),
+            (&config).start_using(&mut StdRng::seed_from_u64(0)).state()
+        );
     }
 
     #[test]
-    fn iterate_emits_done_state() {
-        let config = MockConfig::default();
+    fn iterator_runs_for_same_number_of_steps() {
+        let steps = 100;
+        let config = pbil::Config::default(Count);
+        let mut o = (&config).start_using(&mut StdRng::seed_from_u64(0));
+        for _ in 0..steps {
+            o.step();
+        }
         assert_eq!(
-            MockConfig::default()
-                .start()
+            (&config)
+                .start_using(&mut StdRng::seed_from_u64(0))
                 .into_streaming_iter()
-                .find(|o| o.is_done())
+                .nth(steps)
                 .unwrap()
-                .state
-                .steps,
-            config.max_steps
-        )
+                .state(),
+            o.state()
+        );
     }
 
-    struct MockRunning {
-        pub config: MockConfig,
-        pub state: MockState,
-    }
+    struct Count;
 
-    struct MockConfig {
-        max_steps: usize,
-    }
-
-    struct MockState {
-        steps: usize,
-    }
-
-    impl MockRunning {
-        fn new(config: MockConfig, state: MockState) -> Self {
-            Self { config, state }
+    impl Problem<bool, u64> for Count {
+        fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> u64
+        where
+            S: ndarray::RawData<Elem = bool> + Data,
+        {
+            point.fold(0, |acc, b| acc + *b as u64)
         }
     }
 
-    impl OptimizerConfig<'_, MockRunning, ()> for MockConfig {
-        fn start(self) -> MockRunning {
-            MockRunning::new(self, MockState::new())
-        }
-
-        fn problem(&self) -> &() {
-            unimplemented!()
-        }
-    }
-
-    impl RunningOptimizer<f64, f64, MockConfig, MockState> for MockRunning {
-        fn step(&mut self) {
-            self.state.steps += 1;
-        }
-
-        fn config(&self) -> &MockConfig {
-            &self.config
-        }
-
-        fn state(&self) -> &MockState {
-            &self.state
-        }
-
-        fn stop(self) -> (MockConfig, MockState) {
-            (self.config, self.state)
-        }
-
-        fn best_point(&self) -> ndarray::CowArray<f64, ndarray::Ix1> {
-            unimplemented!()
-        }
-
-        fn stored_best_point_value(&self) -> Option<f64> {
-            unimplemented!()
-        }
-    }
-
-    impl Convergent for MockRunning {
-        fn is_done(&self) -> bool {
-            self.state.steps >= self.config.max_steps
-        }
-    }
-
-    impl Default for MockConfig {
-        fn default() -> Self {
-            MockConfig { max_steps: 10 }
-        }
-    }
-
-    impl MockState {
-        fn new() -> Self {
-            Self { steps: 0 }
+    impl FixedLength for Count {
+        fn len(&self) -> usize {
+            16
         }
     }
 }

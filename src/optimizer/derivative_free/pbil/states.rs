@@ -16,7 +16,7 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 /// Initial and post-evaluation state.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Init {
     probabilities: Array1<Probability>,
@@ -108,7 +108,7 @@ impl Init {
 }
 
 /// State with samples ready for evaluation.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct PreEval {
     probabilities: Array1<Probability>,
