@@ -15,15 +15,34 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Initial and post-evaluation state.
+/// PBIL state ready to start a new iteration.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Init {
+pub struct Ready {
     probabilities: Array1<Probability>,
     rng: Xoshiro256PlusPlus,
 }
 
-impl Init {
+/// PBIL state for sampling
+/// and adjusting probabilities
+/// based on samples.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Sampling {
+    probabilities: Array1<Probability>,
+    rng: Xoshiro256PlusPlus,
+    samples: Array2<bool>,
+}
+
+/// PBIL state for mutating probabilities.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Mutating {
+    probabilities: Array1<Probability>,
+    rng: Xoshiro256PlusPlus,
+}
+
+impl Ready {
     /// Return recommended initial state.
     ///
     /// # Arguments
@@ -57,10 +76,98 @@ impl Init {
         Self { probabilities, rng }
     }
 
-    /// With chance 'chance',
+    /// Step to a 'Sampling' state
+    /// by generating samples.
+    pub fn to_sampling(mut self, num_samples: NumSamples) -> Sampling {
+        Sampling {
+            samples: self.samples(num_samples),
+            probabilities: self.probabilities,
+            rng: self.rng,
+        }
+    }
+
+    fn samples(&mut self, num_samples: NumSamples) -> Array2<bool> {
+        self.probabilities
+            .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
+            .broadcast((num_samples.into(), self.probabilities.len()))
+            .unwrap()
+            .map(|distr| self.rng.sample(distr))
+    }
+
+    /// Return probabilities.
+    pub fn probabilities(&self) -> &Array1<Probability> {
+        &self.probabilities
+    }
+}
+
+impl Sampling {
+    /// Step to 'Mutating' state
+    /// by adjusting probabilities
+    /// towards the best sample.
+    ///
+    /// # Arguments
+    ///
+    /// - `point_values`: value of each sample,
+    ///    each element corresponding to a row of `samples`.
+    pub fn to_mutating<A, S>(
+        mut self,
+        adjust_rate: AdjustRate,
+        sample_values: ArrayBase<S, Ix1>,
+    ) -> Mutating
+    where
+        A: Debug + PartialOrd,
+        S: Data<Elem = A>,
+    {
+        adjust_probabilities(
+            &mut self.probabilities,
+            adjust_rate.into(),
+            best_sample(&self.samples, sample_values),
+        );
+        Mutating {
+            probabilities: self.probabilities,
+            rng: self.rng,
+        }
+    }
+
+    /// Step to 'Ready' state,
+    /// skipping 'Mutating'.
+    ///
+    /// # Arguments
+    ///
+    /// - `point_values`: value of each sample,
+    ///    each element corresponding to a row of `samples`.
+    #[allow(clippy::wrong_self_convention)]
+    pub fn to_ready<A, S>(self, adjust_rate: AdjustRate, sample_values: ArrayBase<S, Ix1>) -> Ready
+    where
+        A: Debug + PartialOrd,
+        S: Data<Elem = A>,
+    {
+        let x = self.to_mutating(adjust_rate, sample_values);
+        Ready {
+            probabilities: x.probabilities,
+            rng: x.rng,
+        }
+    }
+
+    /// Return probabilities.
+    pub fn probabilities(&self) -> &Array1<Probability> {
+        &self.probabilities
+    }
+
+    /// Return samples to evaluate.
+    pub fn samples(&self) -> &Array2<bool> {
+        &self.samples
+    }
+}
+
+impl Mutating {
+    /// Step to 'Ready' state
+    /// by randomly mutating probabilities.
+    ///
+    /// With chance `chance`,
     /// adjust each probability towards a random probability
-    /// at rate 'adjust_rate'.
-    pub fn mutate(&mut self, chance: MutationChance, adjust_rate: MutationAdjustRate) {
+    /// at rate `adjust_rate`.
+    pub fn to_ready(mut self, chance: MutationChance, adjust_rate: MutationAdjustRate) -> Ready {
         let distr: Bernoulli = chance.into();
         self.probabilities.zip_mut_with(
             &Array::random_using(self.probabilities.len(), distr, &mut self.rng),
@@ -82,76 +189,15 @@ impl Init {
                 }
             },
         );
-    }
-
-    /// Step to a 'PreEval' state.
-    pub fn to_pre_eval(mut self, num_samples: NumSamples) -> PreEval {
-        PreEval {
-            samples: self.samples(num_samples),
+        Ready {
             probabilities: self.probabilities,
             rng: self.rng,
         }
     }
 
-    fn samples(&mut self, num_samples: NumSamples) -> Array2<bool> {
-        self.probabilities
-            .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
-            .broadcast((num_samples.into(), self.probabilities.len()))
-            .unwrap()
-            .map(|distr| self.rng.sample(distr))
-    }
-
     /// Return probabilities.
     pub fn probabilities(&self) -> &Array1<Probability> {
         &self.probabilities
-    }
-}
-
-/// State with samples ready for evaluation.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct PreEval {
-    probabilities: Array1<Probability>,
-    rng: Xoshiro256PlusPlus,
-    samples: Array2<bool>,
-}
-
-impl PreEval {
-    /// Step to 'Init' state
-    /// by adjusting probabilities
-    /// towards the best sample.
-    ///
-    /// # Arguments
-    ///
-    /// - `point_values`: value of each sample,
-    ///    each element corresponding to a row of `samples`.
-    pub fn to_init<A: Debug + PartialOrd, S: Data<Elem = A>>(
-        mut self,
-        adjust_rate: AdjustRate,
-        sample_values: ArrayBase<S, Ix1>,
-    ) -> Init {
-        adjust_probabilities(
-            &mut self.probabilities,
-            adjust_rate.into(),
-            best_sample(&self.samples, sample_values),
-        );
-        Init {
-            probabilities: self.probabilities,
-            rng: self.rng,
-        }
-    }
-
-    // TODO: add `to_mutate` and `Mutate` state;
-    // move `mutate` out of `Init`.
-
-    /// Return probabilities.
-    pub fn probabilities(&self) -> &Array1<Probability> {
-        &self.probabilities
-    }
-
-    /// Return samples to evaluate.
-    pub fn samples(&self) -> &Array2<bool> {
-        &self.samples
     }
 }
 
@@ -224,35 +270,36 @@ mod tests {
     use test_strategy::proptest;
 
     #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
-    fn probabilities_are_valid_after_adjust(
+    fn probabilities_are_valid_after_adjusting(
         initial_probabilities: Vec<Probability>,
         seed: u64,
         num_samples: NumSamples,
         adjust_rate: AdjustRate,
     ) {
-        let init = Init::new(
+        let state = Ready::new(
             initial_probabilities.into(),
             Xoshiro256PlusPlus::seed_from_u64(seed),
-        );
-        let pre_eval = init.to_pre_eval(num_samples);
-        let point_values = f(pre_eval.samples().view());
-        let init = pre_eval.to_init(adjust_rate, point_values);
-        prop_assert!(are_valid(init.probabilities()));
+        )
+        .to_sampling(num_samples);
+        let point_values = f(state.samples().view());
+        prop_assert!(are_valid(
+            state.to_ready(adjust_rate, point_values).probabilities()
+        ));
     }
 
     #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
-    fn probabilities_are_valid_after_mutate(
+    fn probabilities_are_valid_after_mutating(
         initial_probabilities: Vec<Probability>,
         seed: u64,
         mutation_chance: MutationChance,
         mutation_adjust_rate: MutationAdjustRate,
     ) {
-        let mut init = Init::new(
-            initial_probabilities.into(),
-            Xoshiro256PlusPlus::seed_from_u64(seed),
-        );
-        init.mutate(mutation_chance, mutation_adjust_rate);
-        prop_assert!(are_valid(init.probabilities()));
+        let state = (Mutating {
+            probabilities: initial_probabilities.into(),
+            rng: Xoshiro256PlusPlus::seed_from_u64(seed),
+        })
+        .to_ready(mutation_chance, mutation_adjust_rate);
+        prop_assert!(are_valid(state.probabilities()));
     }
 
     macro_rules! arbitrary_from_bounded {

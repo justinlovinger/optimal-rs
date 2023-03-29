@@ -241,10 +241,14 @@ pub struct Config<BorrowedP, P> {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum State {
-    /// Initial and post-evaluation state.
-    Init(Init),
-    /// State with samples ready for evaluation.
-    PreEval(PreEval),
+    /// Ready to start a new iteration.
+    Ready(Ready),
+    /// For sampling
+    /// and adjusting probabilities
+    /// based on samples.
+    Sampling(Sampling),
+    /// For mutating probabilities.
+    Mutating(Mutating),
 }
 
 impl<B, BorrowedP, P, C> Running<B, BorrowedP, P, C> {
@@ -354,11 +358,10 @@ impl<BorrowedP, P> Config<BorrowedP, P> {
         S: Data<Elem = B>,
     {
         match state {
-            State::Init(s) => State::PreEval(s.to_pre_eval(self.num_samples)),
-            State::PreEval(s) => {
-                let mut s = s.to_init(self.adjust_rate, point_values);
-                s.mutate(self.mutation_chance, self.mutation_adjust_rate);
-                State::Init(s)
+            State::Ready(s) => State::Sampling(s.to_sampling(self.num_samples)),
+            State::Sampling(s) => State::Mutating(s.to_mutating(self.adjust_rate, point_values)),
+            State::Mutating(s) => {
+                State::Ready(s.to_ready(self.mutation_chance, self.mutation_adjust_rate))
             }
         }
     }
@@ -397,21 +400,22 @@ where
 
 impl State {
     fn initial(num_bits: usize) -> Self {
-        Self::Init(Init::initial(num_bits))
+        Self::Ready(Ready::initial(num_bits))
     }
 
     fn initial_using<R>(num_bits: usize, rng: &mut R) -> Self
     where
         R: Rng,
     {
-        Self::Init(Init::initial_using(num_bits, rng))
+        Self::Ready(Ready::initial_using(num_bits, rng))
     }
 
     /// Return PBIL probabilities.
     pub fn probabilities(&self) -> &Array1<Probability> {
         match &self {
-            State::Init(s) => s.probabilities(),
-            State::PreEval(s) => s.probabilities(),
+            State::Ready(s) => s.probabilities(),
+            State::Sampling(s) => s.probabilities(),
+            State::Mutating(s) => s.probabilities(),
         }
     }
 
@@ -420,8 +424,9 @@ impl State {
             static ref EMPTY: Array2<bool> = Array::from_elem((0, 0), false);
         }
         match self {
-            State::Init(_) => EMPTY.view(),
-            State::PreEval(s) => s.samples().view(),
+            State::Ready(_) => EMPTY.view(),
+            State::Sampling(s) => s.samples().view(),
+            State::Mutating(_) => EMPTY.view(),
         }
     }
 
