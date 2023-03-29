@@ -93,7 +93,7 @@ impl<B, BorrowedP, P, C> RunningDoneWhenConverged<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, DoneWhenConvergedConfig<BorrowedP, P>, State>
+impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, C, State>
     for RunningDoneWhenConverged<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
@@ -119,12 +119,16 @@ where
         &self.state
     }
 
+    fn stop(self) -> (C, State) {
+        (self.config, self.state)
+    }
+
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
     }
 
-    fn config(&self) -> &DoneWhenConvergedConfig<BorrowedP, P> {
-        self.config.borrow()
+    fn config(&self) -> &C {
+        &self.config
     }
 
     fn stored_best_point_value(&self) -> Option<B> {
@@ -256,8 +260,7 @@ impl<B, BorrowedP, P, C> Running<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, Config<BorrowedP, P>, State>
-    for Running<B, BorrowedP, P, C>
+impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, C, State> for Running<B, BorrowedP, P, C>
 where
     B: Debug + PartialOrd,
     BorrowedP: Problem<bool, B>,
@@ -281,12 +284,16 @@ where
         &self.state
     }
 
+    fn stop(self) -> (C, State) {
+        (self.config, self.state)
+    }
+
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
     }
 
-    fn config(&self) -> &Config<BorrowedP, P> {
-        self.config.borrow()
+    fn config(&self) -> &C {
+        &self.config
     }
 
     fn stored_best_point_value(&self) -> Option<B> {

@@ -152,6 +152,10 @@ mod tests {
             &self.state
         }
 
+        fn stop(self) -> (MockConfig, MockState) {
+            (self.config, self.state)
+        }
+
         fn best_point(&self) -> ndarray::CowArray<f64, ndarray::Ix1> {
             unimplemented!()
         }

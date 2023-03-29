@@ -95,8 +95,7 @@ impl<A, BorrowedP, P, C> Running<A, BorrowedP, P, C> {
     }
 }
 
-impl<A, BorrowedP, P, C> RunningOptimizer<A, A, Config<A, BorrowedP, P>, Point<A>>
-    for Running<A, BorrowedP, P, C>
+impl<A, BorrowedP, P, C> RunningOptimizer<A, A, C, Point<A>> for Running<A, BorrowedP, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
     BorrowedP: Differentiable<A, A>,
@@ -120,12 +119,16 @@ where
         &self.state
     }
 
+    fn stop(self) -> (C, Point<A>) {
+        (self.config, self.state)
+    }
+
     fn best_point(&self) -> CowArray<A, Ix1> {
         (&self.state).into()
     }
 
-    fn config(&self) -> &Config<A, BorrowedP, P> {
-        self.config.borrow()
+    fn config(&self) -> &C {
+        &self.config
     }
 
     fn stored_best_point_value(&self) -> Option<A> {

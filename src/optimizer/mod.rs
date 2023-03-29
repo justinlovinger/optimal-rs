@@ -46,6 +46,10 @@ pub trait RunningOptimizer<A, B, C, S> {
     /// Return state of optimizer.
     fn state(&self) -> &S;
 
+    /// Stop optimization run,
+    /// returning configuration and state.
+    fn stop(self) -> (C, S);
+
     /// Return the best point discovered.
     fn best_point(&self) -> CowArray<A, Ix1>;
 
