@@ -43,6 +43,9 @@ pub trait RunningOptimizer<A, B, C, S> {
     /// Perform an optimization step.
     fn step(&mut self);
 
+    /// Return optimizer configuration.
+    fn config(&self) -> &C;
+
     /// Return state of optimizer.
     fn state(&self) -> &S;
 
@@ -63,9 +66,6 @@ pub trait RunningOptimizer<A, B, C, S> {
     /// If an optimizer never stores the best point value,
     /// this will always return `None`.
     fn stored_best_point_value(&self) -> Option<B>;
-
-    /// Return optimizer configuration.
-    fn config(&self) -> &C;
 }
 
 /// An automatically implemented extension to [`RunningOptimizer`].

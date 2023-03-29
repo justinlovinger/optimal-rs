@@ -148,6 +148,10 @@ mod tests {
             self.state.steps += 1;
         }
 
+        fn config(&self) -> &MockConfig {
+            &self.config
+        }
+
         fn state(&self) -> &MockState {
             &self.state
         }
@@ -157,10 +161,6 @@ mod tests {
         }
 
         fn best_point(&self) -> ndarray::CowArray<f64, ndarray::Ix1> {
-            unimplemented!()
-        }
-
-        fn config(&self) -> &MockConfig {
             unimplemented!()
         }
 

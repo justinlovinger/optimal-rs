@@ -280,6 +280,10 @@ where
         })
     }
 
+    fn config(&self) -> &C {
+        &self.config
+    }
+
     fn state(&self) -> &State {
         &self.state
     }
@@ -290,10 +294,6 @@ where
 
     fn best_point(&self) -> CowArray<bool, Ix1> {
         self.state.best_point()
-    }
-
-    fn config(&self) -> &C {
-        &self.config
     }
 
     fn stored_best_point_value(&self) -> Option<B> {
