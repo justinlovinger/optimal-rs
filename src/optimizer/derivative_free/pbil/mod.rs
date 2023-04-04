@@ -57,9 +57,8 @@ use serde::{Deserialize, Serialize};
 /// Running PBIL optimizer with check for converged probabilities.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RunningDoneWhenConverged<B, BorrowedP, P, C> {
+pub struct RunningDoneWhenConverged<B, P, C> {
     point_value: PhantomData<B>,
-    borrowed_problem: PhantomData<BorrowedP>,
     problem: PhantomData<P>,
     /// PBIL configuration parameters
     /// with check for converged probabilities.
@@ -72,20 +71,19 @@ pub struct RunningDoneWhenConverged<B, BorrowedP, P, C> {
 /// with check for converged probabilities.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DoneWhenConvergedConfig<BorrowedP, P> {
+pub struct DoneWhenConvergedConfig<P> {
     /// Probability convergence parameter.
     pub converged_threshold: ConvergedThreshold,
     /// Regular PBIL configuration.
-    pub inner: Config<BorrowedP, P>,
+    pub inner: Config<P>,
 }
 
-impl<B, BorrowedP, P, C> RunningDoneWhenConverged<B, BorrowedP, P, C> {
+impl<B, P, C> RunningDoneWhenConverged<B, P, C> {
     /// Convenience function to return a 'PbilDoneWhenConverged'
     /// without setting 'PhantomData'.
     pub fn new(config: C, state: State) -> Self {
         Self {
             point_value: PhantomData,
-            borrowed_problem: PhantomData,
             problem: PhantomData,
             config,
             state,
@@ -93,13 +91,11 @@ impl<B, BorrowedP, P, C> RunningDoneWhenConverged<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, C, State>
-    for RunningDoneWhenConverged<B, BorrowedP, P, C>
+impl<B, P, C> RunningOptimizer<bool, B, C, State> for RunningDoneWhenConverged<B, P, C>
 where
     B: Debug + PartialOrd,
-    BorrowedP: Problem<bool, B>,
-    P: Borrow<BorrowedP>,
-    C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
+    P: Problem<bool, B>,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
@@ -108,7 +104,6 @@ where
                     .borrow()
                     .inner
                     .problem
-                    .borrow()
                     .evaluate_all(state.points().view()),
                 state,
             )
@@ -136,9 +131,9 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> Convergent for RunningDoneWhenConverged<B, BorrowedP, P, C>
+impl<B, P, C> Convergent for RunningDoneWhenConverged<B, P, C>
 where
-    C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn is_done(&self) -> bool {
         converged(
@@ -148,20 +143,19 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> PopulationBased<bool> for RunningDoneWhenConverged<B, BorrowedP, P, C> {
+impl<B, P, C> PopulationBased<bool> for RunningDoneWhenConverged<B, P, C> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
 
-impl<BorrowedP, P> DoneWhenConvergedConfig<BorrowedP, P> {
+impl<P> DoneWhenConvergedConfig<P> {
     /// Convenience function
     /// to populate every field
     /// with their default.
     pub fn default(problem: P) -> Self
     where
-        BorrowedP: FixedLength,
-        P: Borrow<BorrowedP>,
+        P: FixedLength,
     {
         Self {
             converged_threshold: ConvergedThreshold::default(),
@@ -170,45 +164,40 @@ impl<BorrowedP, P> DoneWhenConvergedConfig<BorrowedP, P> {
     }
 }
 
-impl<B, BorrowedP, P, C> StochasticOptimizerConfig<RunningDoneWhenConverged<B, BorrowedP, P, C>>
-    for C
+impl<B, P, C> StochasticOptimizerConfig<RunningDoneWhenConverged<B, P, C>> for C
 where
-    BorrowedP: FixedLength,
-    P: Borrow<BorrowedP>,
-    C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
+    P: FixedLength,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
 {
-    fn start_using<R>(self, rng: &mut R) -> RunningDoneWhenConverged<B, BorrowedP, P, C>
+    fn start_using<R>(self, rng: &mut R) -> RunningDoneWhenConverged<B, P, C>
     where
         R: Rng,
     {
-        let state = State::initial_using(self.borrow().inner.problem.borrow().len(), rng);
+        let state = State::initial_using(self.borrow().inner.problem.len(), rng);
         RunningDoneWhenConverged::new(self, state)
     }
 }
 
-impl<'a, B, BorrowedP, P, C>
-    OptimizerConfig<'a, RunningDoneWhenConverged<B, BorrowedP, P, C>, BorrowedP> for C
+impl<B, P, C> OptimizerConfig<RunningDoneWhenConverged<B, P, C>, P> for C
 where
-    BorrowedP: FixedLength,
-    P: Borrow<BorrowedP> + 'a,
-    C: Borrow<DoneWhenConvergedConfig<BorrowedP, P>>,
+    P: FixedLength,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
 {
-    fn start(self) -> RunningDoneWhenConverged<B, BorrowedP, P, C> {
-        let state = State::initial(self.borrow().inner.problem.borrow().len());
+    fn start(self) -> RunningDoneWhenConverged<B, P, C> {
+        let state = State::initial(self.borrow().inner.problem.len());
         RunningDoneWhenConverged::new(self, state)
     }
 
-    fn problem(&'a self) -> &'a BorrowedP {
-        self.borrow().inner.problem.borrow()
+    fn problem(&self) -> &P {
+        &self.borrow().inner.problem
     }
 }
 
 /// Running PBIL optimizer.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Running<B, BorrowedP, P, C> {
+pub struct Running<B, P, C> {
     point_value: PhantomData<B>,
-    borrowed_problem: PhantomData<BorrowedP>,
     problem: PhantomData<P>,
     /// PBIL configuration parameters.
     pub config: C,
@@ -219,8 +208,7 @@ pub struct Running<B, BorrowedP, P, C> {
 /// PBIL configuration parameters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config<BorrowedP, P> {
-    borrowed_problem: PhantomData<BorrowedP>,
+pub struct Config<P> {
     /// An optimization problem.
     pub problem: P,
     /// Number of samples generated
@@ -251,12 +239,11 @@ pub enum State {
     Mutating(Mutating),
 }
 
-impl<B, BorrowedP, P, C> Running<B, BorrowedP, P, C> {
+impl<B, P, C> Running<B, P, C> {
     /// Return a new 'Pbil'.
     pub fn new(config: C, state: State) -> Self {
         Self {
             point_value: PhantomData,
-            borrowed_problem: PhantomData,
             problem: PhantomData,
             config,
             state,
@@ -264,21 +251,16 @@ impl<B, BorrowedP, P, C> Running<B, BorrowedP, P, C> {
     }
 }
 
-impl<B, BorrowedP, P, C> RunningOptimizer<bool, B, C, State> for Running<B, BorrowedP, P, C>
+impl<B, P, C> RunningOptimizer<bool, B, C, State> for Running<B, P, C>
 where
     B: Debug + PartialOrd,
-    BorrowedP: Problem<bool, B>,
-    P: Borrow<BorrowedP>,
-    C: Borrow<Config<BorrowedP, P>>,
+    P: Problem<bool, B>,
+    C: Borrow<Config<P>>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
             self.config.borrow().step_from_evaluated(
-                self.config
-                    .borrow()
-                    .problem
-                    .borrow()
-                    .evaluate_all(state.points()),
+                self.config.borrow().problem.evaluate_all(state.points()),
                 state,
             )
         })
@@ -305,13 +287,13 @@ where
     }
 }
 
-impl<B, BorrowedP, P, C> PopulationBased<bool> for Running<B, BorrowedP, P, C> {
+impl<B, P, C> PopulationBased<bool> for Running<B, P, C> {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
 
-impl<BorrowedP, P> Config<BorrowedP, P> {
+impl<P> Config<P> {
     /// Return a new PBIL configuration.
     pub fn new(
         problem: P,
@@ -321,7 +303,6 @@ impl<BorrowedP, P> Config<BorrowedP, P> {
         mutation_adjust_rate: MutationAdjustRate,
     ) -> Self {
         Self {
-            borrowed_problem: PhantomData,
             problem,
             num_samples,
             adjust_rate,
@@ -335,21 +316,19 @@ impl<BorrowedP, P> Config<BorrowedP, P> {
     /// with their default.
     pub fn default(problem: P) -> Self
     where
-        BorrowedP: FixedLength,
-        P: Borrow<BorrowedP>,
+        P: FixedLength,
     {
         Self {
-            borrowed_problem: PhantomData,
             num_samples: Default::default(),
             adjust_rate: Default::default(),
-            mutation_chance: MutationChance::default(problem.borrow().len()),
+            mutation_chance: MutationChance::default(problem.len()),
             mutation_adjust_rate: Default::default(),
             problem,
         }
     }
 }
 
-impl<BorrowedP, P> Config<BorrowedP, P> {
+impl<P> Config<P> {
     /// Return the next state,
     /// given point values.
     fn step_from_evaluated<B, S>(&self, point_values: ArrayBase<S, Ix1>, state: State) -> State
@@ -367,34 +346,32 @@ impl<BorrowedP, P> Config<BorrowedP, P> {
     }
 }
 
-impl<B, BorrowedP, P, C> StochasticOptimizerConfig<Running<B, BorrowedP, P, C>> for C
+impl<B, P, C> StochasticOptimizerConfig<Running<B, P, C>> for C
 where
-    BorrowedP: FixedLength,
-    P: Borrow<BorrowedP>,
-    C: Borrow<Config<BorrowedP, P>>,
+    P: FixedLength,
+    C: Borrow<Config<P>>,
 {
-    fn start_using<R>(self, rng: &mut R) -> Running<B, BorrowedP, P, C>
+    fn start_using<R>(self, rng: &mut R) -> Running<B, P, C>
     where
         R: Rng,
     {
-        let state = State::initial_using(self.borrow().problem.borrow().len(), rng);
+        let state = State::initial_using(self.borrow().problem.len(), rng);
         Running::new(self, state)
     }
 }
 
-impl<'a, B, BorrowedP, P, C> OptimizerConfig<'a, Running<B, BorrowedP, P, C>, BorrowedP> for C
+impl<B, P, C> OptimizerConfig<Running<B, P, C>, P> for C
 where
-    BorrowedP: FixedLength,
-    P: Borrow<BorrowedP> + 'a,
-    C: Borrow<Config<BorrowedP, P>>,
+    P: FixedLength,
+    C: Borrow<Config<P>>,
 {
-    fn start(self) -> Running<B, BorrowedP, P, C> {
-        let state = State::initial(self.borrow().problem.borrow().len());
+    fn start(self) -> Running<B, P, C> {
+        let state = State::initial(self.borrow().problem.len());
         Running::new(self, state)
     }
 
-    fn problem(&'a self) -> &'a BorrowedP {
-        self.borrow().problem.borrow()
+    fn problem(&self) -> &P {
+        &self.borrow().problem
     }
 }
 

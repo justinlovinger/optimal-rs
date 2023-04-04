@@ -60,8 +60,7 @@ use serde::{Deserialize, Serialize};
 
 /// Running fixed step size steepest descent optimizer.
 #[derive(Clone, Debug)]
-pub struct Running<A, BorrowedP, P, C> {
-    borrowed_problem: PhantomData<BorrowedP>,
+pub struct Running<A, P, C> {
     problem: PhantomData<P>,
     /// Fixed step size steepest descent configuration parameters.
     pub config: C,
@@ -73,8 +72,7 @@ pub struct Running<A, BorrowedP, P, C> {
 /// Fixed step size steepest descent configuration parameters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config<A, BorrowedP, P> {
-    borrowed_problem: PhantomData<BorrowedP>,
+pub struct Config<A, P> {
     /// A differentiable objective function.
     pub problem: P,
     /// Length of each step.
@@ -83,11 +81,10 @@ pub struct Config<A, BorrowedP, P> {
 
 type Point<A> = Array1<A>;
 
-impl<A, BorrowedP, P, C> Running<A, BorrowedP, P, C> {
+impl<A, P, C> Running<A, P, C> {
     /// Return a new 'FixedStepSteepestDescent'.
     pub fn new(config: C, state: Point<A>) -> Self {
         Self {
-            borrowed_problem: PhantomData,
             problem: PhantomData,
             config,
             state,
@@ -95,21 +92,16 @@ impl<A, BorrowedP, P, C> Running<A, BorrowedP, P, C> {
     }
 }
 
-impl<A, BorrowedP, P, C> RunningOptimizer<A, A, C, Point<A>> for Running<A, BorrowedP, P, C>
+impl<A, P, C> RunningOptimizer<A, A, C, Point<A>> for Running<A, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
-    BorrowedP: Differentiable<A, A>,
-    P: Borrow<BorrowedP>,
-    C: Borrow<Config<A, BorrowedP, P>>,
+    P: Differentiable<A, A>,
+    C: Borrow<Config<A, P>>,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |point| {
             self.config.borrow().step_from_evaluated(
-                self.config
-                    .borrow()
-                    .problem
-                    .borrow()
-                    .differentiate(point.view()),
+                self.config.borrow().problem.differentiate(point.view()),
                 point,
             )
         });
@@ -136,24 +128,20 @@ where
     }
 }
 
-impl<A, BorrowedP, P, C> crate::prelude::PointBased<A> for Running<A, BorrowedP, P, C> {
+impl<A, P, C> crate::prelude::PointBased<A> for Running<A, P, C> {
     fn point(&self) -> Option<ArrayView1<A>> {
         Some(self.state.view())
     }
 }
 
-impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
+impl<A, P> Config<A, P> {
     /// Return a new 'Config'.
     pub fn new(problem: P, step_size: StepSize<A>) -> Self {
-        Self {
-            borrowed_problem: PhantomData,
-            problem,
-            step_size,
-        }
+        Self { problem, step_size }
     }
 }
 
-impl<A, BorrowedP, P> Config<A, BorrowedP, P>
+impl<A, P> Config<A, P>
 where
     A: Clone + SubAssign + Mul<Output = A>,
 {

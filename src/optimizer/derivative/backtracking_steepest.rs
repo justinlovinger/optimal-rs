@@ -83,8 +83,7 @@ use serde::{Deserialize, Serialize};
 /// Running backtracking line search steepest descent optimizer
 /// with initial line search step size chosen by incrementing previous step size.
 #[derive(Clone, Debug)]
-pub struct Running<A, BorrowedP, P, C> {
-    borrowed_problem: PhantomData<BorrowedP>,
+pub struct Running<A, P, C> {
     problem: PhantomData<P>,
     /// Backtracking steepest descent configuration parameters.
     pub config: C,
@@ -95,8 +94,7 @@ pub struct Running<A, BorrowedP, P, C> {
 /// Backtracking steepest descent configuration parameters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config<A, BorrowedP, P> {
-    borrowed_problem: PhantomData<BorrowedP>,
+pub struct Config<A, P> {
     /// A differentiable objective function.
     pub problem: P,
     /// The sufficient decrease parameter,
@@ -138,11 +136,10 @@ pub struct Searching<A> {
     point_at_step: Point<A>,
 }
 
-impl<A, BorrowedP, P, C> Running<A, BorrowedP, P, C> {
+impl<A, P, C> Running<A, P, C> {
     /// Return a new 'BacktrackingSteepestDescent'.
     pub fn new(config: C, state: State<A>) -> Self {
         Self {
-            borrowed_problem: PhantomData,
             problem: PhantomData,
             config,
             state,
@@ -150,7 +147,7 @@ impl<A, BorrowedP, P, C> Running<A, BorrowedP, P, C> {
     }
 }
 
-impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
+impl<A, P> Config<A, P> {
     /// Return a new 'Config'.
     pub fn new(
         problem: P,
@@ -159,7 +156,6 @@ impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
         initial_step_size_incr_rate: IncrRate<A>,
     ) -> Self {
         Self {
-            borrowed_problem: PhantomData,
             problem,
             c_1,
             backtracking_rate,
@@ -168,7 +164,7 @@ impl<A, BorrowedP, P> Config<A, BorrowedP, P> {
     }
 }
 
-impl<A, BorrowedP, P, C> RunningOptimizer<A, A, C, State<A>> for Running<A, BorrowedP, P, C>
+impl<A, P, C> RunningOptimizer<A, A, C, State<A>> for Running<A, P, C>
 where
     A: 'static
         + Clone
@@ -180,9 +176,8 @@ where
         + Div<Output = A>
         + Zero
         + One,
-    BorrowedP: Differentiable<A, A>,
-    P: Borrow<BorrowedP>,
-    C: Borrow<Config<A, BorrowedP, P>>,
+    P: Differentiable<A, A>,
+    C: Borrow<Config<A, P>>,
     f64: AsPrimitive<A>,
 {
     fn step(&mut self) {
@@ -192,17 +187,11 @@ where
                     .config
                     .borrow()
                     .problem
-                    .borrow()
                     .evaluate_differentiate(x.point().view());
                 x.step_from_evaluated(self.config.borrow(), point_value, point_derivatives)
             }
             State::Searching(x) => {
-                let point_value = self
-                    .config
-                    .borrow()
-                    .problem
-                    .borrow()
-                    .evaluate(x.point().view());
+                let point_value = self.config.borrow().problem.evaluate(x.point().view());
                 x.step_from_evaluated(self.config.borrow(), point_value)
             }
         })
@@ -232,7 +221,7 @@ where
     }
 }
 
-impl<A, BorrowedP, P, C> crate::prelude::PointBased<A> for Running<A, BorrowedP, P, C> {
+impl<A, P, C> crate::prelude::PointBased<A> for Running<A, P, C> {
     fn point(&self) -> Option<ArrayView1<A>> {
         self.state.point()
     }
@@ -275,9 +264,9 @@ impl<A> Ready<A> {
         &self.point
     }
 
-    fn step_from_evaluated<BorrowedP, P, S>(
+    fn step_from_evaluated<P, S>(
         self,
-        config: &Config<A, BorrowedP, P>,
+        config: &Config<A, P>,
         point_value: A,
         point_derivatives: ArrayBase<S, Ix1>,
     ) -> State<A>
@@ -318,11 +307,7 @@ impl<A> Searching<A> {
         &self.point_at_step
     }
 
-    fn step_from_evaluated<BorrowedP, P>(
-        mut self,
-        config: &Config<A, BorrowedP, P>,
-        point_value: A,
-    ) -> State<A>
+    fn step_from_evaluated<P>(mut self, config: &Config<A, P>, point_value: A) -> State<A>
     where
         A: Clone + Copy + PartialOrd + Add<Output = A> + Mul<Output = A>,
     {

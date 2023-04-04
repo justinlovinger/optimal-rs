@@ -28,14 +28,14 @@ pub trait StochasticOptimizerConfig<O> {
 }
 
 /// An optimizer configuration.
-pub trait OptimizerConfig<'a, O, P> {
+pub trait OptimizerConfig<O, P> {
     /// Return a running optimizer.
     ///
     /// This may be nondeterministic.
     fn start(self) -> O;
 
     /// Return problem to optimize.
-    fn problem(&'a self) -> &'a P;
+    fn problem(&self) -> &P;
 }
 
 /// An optimizer in the process of optimization.
@@ -82,7 +82,7 @@ pub trait RunningOptimizerExt<'a, A, B, P, C, S> {
 impl<'a, A, B, P, C, S, T> RunningOptimizerExt<'a, A, B, P, C, S> for T
 where
     P: Problem<A, B> + 'a,
-    C: OptimizerConfig<'a, T, P> + 'a,
+    C: OptimizerConfig<T, P> + 'a,
     T: RunningOptimizer<A, B, C, S>,
 {
     fn best_point_value(&'a self) -> B {
