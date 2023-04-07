@@ -213,10 +213,10 @@ where
         self.state.best_point()
     }
 
-    fn stored_best_point_value(&self) -> Option<A> {
+    fn stored_best_point_value(&self) -> Option<&A> {
         match &self.state {
             State::Ready(_) => None,
-            State::Searching(x) => Some(x.point_value),
+            State::Searching(x) => Some(&x.point_value),
         }
     }
 }

@@ -123,7 +123,7 @@ where
         (&self.state).into()
     }
 
-    fn stored_best_point_value(&self) -> Option<A> {
+    fn stored_best_point_value(&self) -> Option<&A> {
         None
     }
 }

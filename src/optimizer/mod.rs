@@ -65,7 +65,7 @@ pub trait RunningOptimizer<A, B, C, S> {
     ///
     /// If an optimizer never stores the best point value,
     /// this will always return `None`.
-    fn stored_best_point_value(&self) -> Option<B>;
+    fn stored_best_point_value(&self) -> Option<&B>;
 }
 
 /// An automatically implemented extension to [`RunningOptimizer`].
@@ -81,13 +81,14 @@ pub trait RunningOptimizerExt<'a, A, B, P, C, S> {
 
 impl<'a, A, B, P, C, S, T> RunningOptimizerExt<'a, A, B, P, C, S> for T
 where
+    B: Clone,
     P: Problem<A, B> + 'a,
     C: OptimizerConfig<T, P> + 'a,
     T: RunningOptimizer<A, B, C, S>,
 {
     fn best_point_value(&'a self) -> B {
         self.stored_best_point_value()
-            .unwrap_or_else(|| self.problem().evaluate(self.best_point()))
+            .map_or_else(|| self.problem().evaluate(self.best_point()), |x| x.clone())
     }
 
     fn problem(&'a self) -> &'a P {

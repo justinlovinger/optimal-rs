@@ -126,7 +126,7 @@ where
         &self.config
     }
 
-    fn stored_best_point_value(&self) -> Option<B> {
+    fn stored_best_point_value(&self) -> Option<&B> {
         None
     }
 }
@@ -282,7 +282,7 @@ where
         self.state.best_point()
     }
 
-    fn stored_best_point_value(&self) -> Option<B> {
+    fn stored_best_point_value(&self) -> Option<&B> {
         None
     }
 }
