@@ -1,5 +1,6 @@
 use std::ops::RangeInclusive;
 
+use blanket::blanket;
 use ndarray::{prelude::*, Data, RawData, RemoveAxis};
 
 // When stable,
@@ -8,6 +9,7 @@ use ndarray::{prelude::*, Data, RawData, RemoveAxis};
 // <https://github.com/rust-lang/rust/pull/92164>.
 /// An optimization problem,
 /// as defined by having an objective function.
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait Problem {
     /// Elements in points.
     type PointElem;
@@ -37,6 +39,7 @@ pub trait Problem {
 
 /// An optimization problem
 /// with a differentiable objective function.
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait Differentiable: Problem {
     /// Return objective value and partial derivatives of a point.
     ///
@@ -65,6 +68,7 @@ pub trait Differentiable: Problem {
 /// An optimization problem with a fixed length
 /// for every point
 /// in its problem space.
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 #[allow(clippy::len_without_is_empty)] // Problems should never have no length.
 pub trait FixedLength: Problem {
     /// Return length of points for this problem.
@@ -74,6 +78,7 @@ pub trait FixedLength: Problem {
 /// An optimization problem with fixed bounds
 /// for every element of every point
 /// in its problem space.
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait Bounded: Problem {
     /// Return whether this problem contains the given point.
     fn contains<S>(&self, point: ArrayBase<S, Ix1>) -> bool

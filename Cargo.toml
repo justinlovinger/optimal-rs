@@ -7,6 +7,7 @@ edition = "2021"
 serde = ["dep:serde", "ndarray/serde", "rand_xoshiro/serde1"]
 
 [dependencies]
+blanket = "0.2.0"
 derive_more = "0.99"
 lazy_static = "1.4.0"
 ndarray = "0.15"

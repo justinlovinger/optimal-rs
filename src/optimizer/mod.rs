@@ -9,6 +9,7 @@ pub mod derivative;
 pub mod derivative_free;
 mod iterator;
 
+use blanket::blanket;
 use ndarray::prelude::*;
 use rand::Rng;
 
@@ -17,6 +18,7 @@ use crate::prelude::Problem;
 pub use self::iterator::*;
 
 /// An optimizer configuration.
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait OptimizerConfig {
     /// Problem to optimize.
     type Problem;
@@ -43,7 +45,9 @@ pub trait RunningOptimizer {
     /// Initialize this optimizer using the given configuration.
     ///
     /// This may be nondeterministic.
-    fn new(config: Self::Config) -> Self;
+    fn new(config: Self::Config) -> Self
+    where
+        Self: Sized;
 
     /// Perform an optimization step.
     fn step(&mut self);
