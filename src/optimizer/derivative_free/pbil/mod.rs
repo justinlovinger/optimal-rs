@@ -6,16 +6,13 @@
 //!
 //! ```
 //! use ndarray::{Data, RemoveAxis, prelude::*};
-//! use optimal::{
-//!     optimizer::derivative_free::pbil::DoneWhenConvergedConfig,
-//!     prelude::*,
-//! };
+//! use optimal::{optimizer::derivative_free::pbil, prelude::*};
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut iter = DoneWhenConvergedConfig::default(Count)
-//!         .start()
-//!         .into_streaming_iter();
+//!     let mut iter =
+//!         pbil::RunningDoneWhenConverged::new(pbil::DoneWhenConvergedConfig::default(Count))
+//!             .into_streaming_iter();
 //!     let o = iter.find(|o| o.is_done()).expect("should converge");
 //!     println!("f({}) = {}", o.best_point(), o.best_point_value());
 //! }
@@ -78,10 +75,19 @@ pub struct DoneWhenConvergedConfig<P> {
     pub inner: Config<P>,
 }
 
-impl<B, P, C> RunningDoneWhenConverged<B, P, C> {
-    /// Convenience function to return a 'PbilDoneWhenConverged'
-    /// without setting 'PhantomData'.
-    pub fn new(config: C, state: State) -> Self {
+impl<B, P, C> RunningOptimizer for RunningDoneWhenConverged<B, P, C>
+where
+    B: Debug + PartialOrd,
+    P: Problem<bool, B> + FixedLength,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
+{
+    type PointElem = bool;
+    type PointValue = B;
+    type Config = C;
+    type State = State;
+
+    fn new(config: Self::Config) -> Self {
+        let state = State::initial(config.borrow().inner.problem.len());
         Self {
             point_value: PhantomData,
             problem: PhantomData,
@@ -89,14 +95,7 @@ impl<B, P, C> RunningDoneWhenConverged<B, P, C> {
             state,
         }
     }
-}
 
-impl<B, P, C> RunningOptimizer<bool, B, C, State> for RunningDoneWhenConverged<B, P, C>
-where
-    B: Debug + PartialOrd,
-    P: Problem<bool, B>,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
-{
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
             self.config.borrow().inner.step_from_evaluated(
@@ -108,6 +107,10 @@ where
                 state,
             )
         })
+    }
+
+    fn config(&self) -> &C {
+        &self.config
     }
 
     fn state(&self) -> &State {
@@ -122,17 +125,35 @@ where
         self.state.best_point()
     }
 
-    fn config(&self) -> &C {
-        &self.config
-    }
-
     fn stored_best_point_value(&self) -> Option<&B> {
         None
     }
 }
 
+impl<B, P, C> StochasticRunningOptimizer for RunningDoneWhenConverged<B, P, C>
+where
+    B: Debug + PartialOrd,
+    P: Problem<bool, B> + FixedLength,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
+{
+    fn new_using<R>(config: C, rng: &mut R) -> RunningDoneWhenConverged<B, P, C>
+    where
+        R: Rng,
+    {
+        let state = State::initial_using(config.borrow().inner.problem.len(), rng);
+        Self {
+            point_value: PhantomData,
+            problem: PhantomData,
+            config,
+            state,
+        }
+    }
+}
+
 impl<B, P, C> Convergent for RunningDoneWhenConverged<B, P, C>
 where
+    B: Debug + PartialOrd,
+    P: Problem<bool, B> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn is_done(&self) -> bool {
@@ -143,8 +164,13 @@ where
     }
 }
 
-impl<B, P, C> PopulationBased<bool> for RunningDoneWhenConverged<B, P, C> {
-    fn points(&self) -> ArrayView2<bool> {
+impl<B, P, C> PopulationBased for RunningDoneWhenConverged<B, P, C>
+where
+    B: Debug + PartialOrd,
+    P: Problem<bool, B> + FixedLength,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
+{
+    fn points(&self) -> ArrayView2<Self::PointElem> {
         self.state.points()
     }
 }
@@ -164,29 +190,8 @@ impl<P> DoneWhenConvergedConfig<P> {
     }
 }
 
-impl<B, P, C> StochasticOptimizerConfig<RunningDoneWhenConverged<B, P, C>> for C
-where
-    P: FixedLength,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
-{
-    fn start_using<R>(self, rng: &mut R) -> RunningDoneWhenConverged<B, P, C>
-    where
-        R: Rng,
-    {
-        let state = State::initial_using(self.borrow().inner.problem.len(), rng);
-        RunningDoneWhenConverged::new(self, state)
-    }
-}
-
-impl<B, P, C> OptimizerConfig<RunningDoneWhenConverged<B, P, C>, P> for C
-where
-    P: FixedLength,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
-{
-    fn start(self) -> RunningDoneWhenConverged<B, P, C> {
-        let state = State::initial(self.borrow().inner.problem.len());
-        RunningDoneWhenConverged::new(self, state)
-    }
+impl<P> OptimizerConfig for DoneWhenConvergedConfig<P> {
+    type Problem = P;
 
     fn problem(&self) -> &P {
         &self.borrow().inner.problem
@@ -239,9 +244,19 @@ pub enum State {
     Mutating(Mutating),
 }
 
-impl<B, P, C> Running<B, P, C> {
-    /// Return a new 'Pbil'.
-    pub fn new(config: C, state: State) -> Self {
+impl<B, P, C> RunningOptimizer for Running<B, P, C>
+where
+    B: Debug + PartialOrd,
+    P: Problem<bool, B> + FixedLength,
+    C: Borrow<Config<P>>,
+{
+    type PointElem = bool;
+    type PointValue = B;
+    type Config = C;
+    type State = State;
+
+    fn new(config: Self::Config) -> Running<B, P, C> {
+        let state = State::initial(config.borrow().problem.len());
         Self {
             point_value: PhantomData,
             problem: PhantomData,
@@ -249,14 +264,7 @@ impl<B, P, C> Running<B, P, C> {
             state,
         }
     }
-}
 
-impl<B, P, C> RunningOptimizer<bool, B, C, State> for Running<B, P, C>
-where
-    B: Debug + PartialOrd,
-    P: Problem<bool, B>,
-    C: Borrow<Config<P>>,
-{
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
             self.config.borrow().step_from_evaluated(
@@ -287,8 +295,33 @@ where
     }
 }
 
-impl<B, P, C> PopulationBased<bool> for Running<B, P, C> {
-    fn points(&self) -> ArrayView2<bool> {
+impl<B, P, C> StochasticRunningOptimizer for Running<B, P, C>
+where
+    B: Debug + PartialOrd,
+    P: Problem<bool, B> + FixedLength,
+    C: Borrow<Config<P>>,
+{
+    fn new_using<R>(config: C, rng: &mut R) -> Running<B, P, C>
+    where
+        R: Rng,
+    {
+        let state = State::initial_using(config.borrow().problem.len(), rng);
+        Self {
+            point_value: PhantomData,
+            problem: PhantomData,
+            config,
+            state,
+        }
+    }
+}
+
+impl<B, P, C> PopulationBased for Running<B, P, C>
+where
+    B: Debug + PartialOrd,
+    P: Problem<bool, B> + FixedLength,
+    C: Borrow<Config<P>>,
+{
+    fn points(&self) -> ArrayView2<Self::PointElem> {
         self.state.points()
     }
 }
@@ -346,29 +379,8 @@ impl<P> Config<P> {
     }
 }
 
-impl<B, P, C> StochasticOptimizerConfig<Running<B, P, C>> for C
-where
-    P: FixedLength,
-    C: Borrow<Config<P>>,
-{
-    fn start_using<R>(self, rng: &mut R) -> Running<B, P, C>
-    where
-        R: Rng,
-    {
-        let state = State::initial_using(self.borrow().problem.len(), rng);
-        Running::new(self, state)
-    }
-}
-
-impl<B, P, C> OptimizerConfig<Running<B, P, C>, P> for C
-where
-    P: FixedLength,
-    C: Borrow<Config<P>>,
-{
-    fn start(self) -> Running<B, P, C> {
-        let state = State::initial(self.borrow().problem.len());
-        Running::new(self, state)
-    }
+impl<P> OptimizerConfig for Config<P> {
+    type Problem = P;
 
     fn problem(&self) -> &P {
         &self.borrow().problem

@@ -164,7 +164,7 @@ impl<A, P> Config<A, P> {
     }
 }
 
-impl<A, P, C> RunningOptimizer<A, A, C, State<A>> for Running<A, P, C>
+impl<A, P, C> RunningOptimizer for Running<A, P, C>
 where
     A: 'static
         + Clone
@@ -180,6 +180,15 @@ where
     C: Borrow<Config<A, P>>,
     f64: AsPrimitive<A>,
 {
+    type PointElem = A;
+    type PointValue = A;
+    type Config = C;
+    type State = State<A>;
+
+    fn new(_config: Self::Config) -> Self {
+        todo!()
+    }
+
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| match state {
             State::Ready(x) => {
@@ -221,8 +230,23 @@ where
     }
 }
 
-impl<A, P, C> crate::prelude::PointBased<A> for Running<A, P, C> {
-    fn point(&self) -> Option<ArrayView1<A>> {
+impl<A, P, C> PointBased for Running<A, P, C>
+where
+    A: 'static
+        + Clone
+        + Copy
+        + PartialOrd
+        + Neg<Output = A>
+        + Add<Output = A>
+        + Sub<Output = A>
+        + Div<Output = A>
+        + Zero
+        + One,
+    P: Differentiable<A, A>,
+    C: Borrow<Config<A, P>>,
+    f64: AsPrimitive<A>,
+{
+    fn point(&self) -> Option<ArrayView1<Self::PointElem>> {
         self.state.point()
     }
 }

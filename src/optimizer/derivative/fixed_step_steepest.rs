@@ -92,12 +92,21 @@ impl<A, P, C> Running<A, P, C> {
     }
 }
 
-impl<A, P, C> RunningOptimizer<A, A, C, Point<A>> for Running<A, P, C>
+impl<A, P, C> RunningOptimizer for Running<A, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
     P: Differentiable<A, A>,
     C: Borrow<Config<A, P>>,
 {
+    type PointElem = A;
+    type PointValue = A;
+    type Config = C;
+    type State = Point<A>;
+
+    fn new(_config: Self::Config) -> Self {
+        todo!()
+    }
+
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |point| {
             self.config.borrow().step_from_evaluated(
@@ -128,8 +137,13 @@ where
     }
 }
 
-impl<A, P, C> crate::prelude::PointBased<A> for Running<A, P, C> {
-    fn point(&self) -> Option<ArrayView1<A>> {
+impl<A, P, C> PointBased for Running<A, P, C>
+where
+    A: Clone + SubAssign + Mul<Output = A>,
+    P: Differentiable<A, A>,
+    C: Borrow<Config<A, P>>,
+{
+    fn point(&self) -> Option<ArrayView1<Self::PointElem>> {
         Some(self.state.view())
     }
 }

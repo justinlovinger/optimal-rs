@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 impl<A, B, C, S, O> IntoStreamingIterator<A, B, C, S> for O
 where
-    O: RunningOptimizer<A, B, C, S>,
+    O: RunningOptimizer<PointElem = A, PointValue = B, Config = C, State = S>,
 {
     fn into_streaming_iter(self) -> StepIterator<A, B, C, S, O> {
         StepIterator::new(self)
@@ -62,7 +62,7 @@ impl<A, B, C, S, O> StepIterator<A, B, C, S, O> {
 
 impl<A, B, C, S, O> StreamingIterator for StepIterator<A, B, C, S, O>
 where
-    O: RunningOptimizer<A, B, C, S>,
+    O: RunningOptimizer<PointElem = A, PointValue = B, Config = C, State = S>,
 {
     type Item = O;
 
@@ -94,13 +94,12 @@ mod tests {
     fn iterator_emits_initial_state() {
         let config = pbil::Config::default(Count);
         assert_eq!(
-            (&config)
-                .start_using(&mut StdRng::seed_from_u64(0))
+            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(0))
                 .into_streaming_iter()
                 .next()
                 .unwrap()
                 .state(),
-            (&config).start_using(&mut StdRng::seed_from_u64(0)).state()
+            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(0)).state()
         );
     }
 
@@ -108,13 +107,12 @@ mod tests {
     fn iterator_runs_for_same_number_of_steps() {
         let steps = 100;
         let config = pbil::Config::default(Count);
-        let mut o = (&config).start_using(&mut StdRng::seed_from_u64(0));
+        let mut o = pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(0));
         for _ in 0..steps {
             o.step();
         }
         assert_eq!(
-            (&config)
-                .start_using(&mut StdRng::seed_from_u64(0))
+            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(0))
                 .into_streaming_iter()
                 .nth(steps)
                 .unwrap()
