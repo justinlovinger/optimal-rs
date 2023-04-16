@@ -19,7 +19,10 @@
 //!
 //! struct Count;
 //!
-//! impl Problem<bool, u64> for Count {
+//! impl Problem for Count {
+//!     type PointElem = bool;
+//!     type PointValue = u64;
+//!
 //!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> u64
 //!     where
 //!         S: ndarray::RawData<Elem = bool> + Data,
@@ -78,7 +81,7 @@ pub struct DoneWhenConvergedConfig<P> {
 impl<B, P, C> RunningOptimizer for RunningDoneWhenConverged<B, P, C>
 where
     B: Debug + PartialOrd,
-    P: Problem<bool, B> + FixedLength,
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     type PointElem = bool;
@@ -133,7 +136,7 @@ where
 impl<B, P, C> StochasticRunningOptimizer for RunningDoneWhenConverged<B, P, C>
 where
     B: Debug + PartialOrd,
-    P: Problem<bool, B> + FixedLength,
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn new_using<R>(config: C, rng: &mut R) -> RunningDoneWhenConverged<B, P, C>
@@ -153,7 +156,7 @@ where
 impl<B, P, C> Convergent for RunningDoneWhenConverged<B, P, C>
 where
     B: Debug + PartialOrd,
-    P: Problem<bool, B> + FixedLength,
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn is_done(&self) -> bool {
@@ -167,7 +170,7 @@ where
 impl<B, P, C> PopulationBased for RunningDoneWhenConverged<B, P, C>
 where
     B: Debug + PartialOrd,
-    P: Problem<bool, B> + FixedLength,
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn points(&self) -> ArrayView2<Self::PointElem> {
@@ -247,7 +250,7 @@ pub enum State {
 impl<B, P, C> RunningOptimizer for Running<B, P, C>
 where
     B: Debug + PartialOrd,
-    P: Problem<bool, B> + FixedLength,
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<Config<P>>,
 {
     type PointElem = bool;
@@ -298,7 +301,7 @@ where
 impl<B, P, C> StochasticRunningOptimizer for Running<B, P, C>
 where
     B: Debug + PartialOrd,
-    P: Problem<bool, B> + FixedLength,
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<Config<P>>,
 {
     fn new_using<R>(config: C, rng: &mut R) -> Running<B, P, C>
@@ -318,7 +321,7 @@ where
 impl<B, P, C> PopulationBased for Running<B, P, C>
 where
     B: Debug + PartialOrd,
-    P: Problem<bool, B> + FixedLength,
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<Config<P>>,
 {
     fn points(&self) -> ArrayView2<Self::PointElem> {

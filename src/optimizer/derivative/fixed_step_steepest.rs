@@ -23,19 +23,22 @@
 //!
 //! struct Sphere;
 //!
-//! impl Problem<f64, f64> for Sphere {
-//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> f64
+//! impl Problem for Sphere {
+//!     type PointElem = f64;
+//!     type PointValue = f64;
+//!
+//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> Self::PointValue
 //!     where
-//!         S: ndarray::RawData<Elem = f64> + Data,
+//!         S: ndarray::RawData<Elem = Self::PointElem> + Data,
 //!     {
 //!         point.map(|x| x.powi(2)).sum()
 //!     }
 //! }
 //!
-//! impl Differentiable<f64, f64> for Sphere {
-//!     fn differentiate<S>(&self, point: ArrayBase<S, Ix1>) -> Array1<f64>
+//! impl Differentiable for Sphere {
+//!     fn differentiate<S>(&self, point: ArrayBase<S, Ix1>) -> Array1<Self::PointElem>
 //!     where
-//!         S: ndarray::RawData<Elem = f64> + Data,
+//!         S: ndarray::RawData<Elem = Self::PointElem> + Data,
 //!     {
 //!         point.map(|x| 2.0 * x)
 //!     }
@@ -95,7 +98,7 @@ impl<A, P, C> Running<A, P, C> {
 impl<A, P, C> RunningOptimizer for Running<A, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
-    P: Differentiable<A, A>,
+    P: Differentiable<PointElem = A, PointValue = A>,
     C: Borrow<Config<A, P>>,
 {
     type PointElem = A;
@@ -140,7 +143,7 @@ where
 impl<A, P, C> PointBased for Running<A, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
-    P: Differentiable<A, A>,
+    P: Differentiable<PointElem = A, PointValue = A>,
     C: Borrow<Config<A, P>>,
 {
     fn point(&self) -> Option<ArrayView1<Self::PointElem>> {

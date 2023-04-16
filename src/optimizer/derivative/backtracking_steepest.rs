@@ -33,19 +33,22 @@
 //!
 //! struct Sphere;
 //!
-//! impl Problem<f64, f64> for Sphere {
-//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> f64
+//! impl Problem for Sphere {
+//!     type PointElem = f64;
+//!     type PointValue = f64;
+//!
+//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> Self::PointValue
 //!     where
-//!         S: ndarray::RawData<Elem = f64> + Data,
+//!         S: ndarray::RawData<Elem = Self::PointElem> + Data,
 //!     {
 //!         point.map(|x| x.powi(2)).sum()
 //!     }
 //! }
 //!
-//! impl Differentiable<f64, f64> for Sphere {
-//!     fn differentiate<S>(&self, point: ArrayBase<S, Ix1>) -> Array1<f64>
+//! impl Differentiable for Sphere {
+//!     fn differentiate<S>(&self, point: ArrayBase<S, Ix1>) -> Array1<Self::PointElem>
 //!     where
-//!         S: ndarray::RawData<Elem = f64> + Data,
+//!         S: ndarray::RawData<Elem = Self::PointElem> + Data,
 //!     {
 //!         point.map(|x| 2.0 * x)
 //!     }
@@ -176,7 +179,7 @@ where
         + Div<Output = A>
         + Zero
         + One,
-    P: Differentiable<A, A>,
+    P: Differentiable<PointElem = A, PointValue = A>,
     C: Borrow<Config<A, P>>,
     f64: AsPrimitive<A>,
 {
@@ -242,7 +245,7 @@ where
         + Div<Output = A>
         + Zero
         + One,
-    P: Differentiable<A, A>,
+    P: Differentiable<PointElem = A, PointValue = A>,
     C: Borrow<Config<A, P>>,
     f64: AsPrimitive<A>,
 {

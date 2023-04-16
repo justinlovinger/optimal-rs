@@ -98,7 +98,7 @@ pub trait RunningOptimizerExt<'a, A, B, P, C, S> {
 impl<'a, A, B, P, C, S, T> RunningOptimizerExt<'a, A, B, P, C, S> for T
 where
     B: Clone,
-    P: Problem<A, B> + 'a,
+    P: Problem<PointElem = A, PointValue = B> + 'a,
     C: OptimizerConfig<Problem = P> + 'a,
     T: RunningOptimizer<PointElem = A, PointValue = B, Config = C, State = S>,
 {

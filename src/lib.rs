@@ -29,7 +29,10 @@
 //!
 //! struct Count;
 //!
-//! impl Problem<bool, u64> for Count {
+//! impl Problem for Count {
+//!     type PointElem = bool;
+//!     type PointValue = u64;
+//!
 //!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> u64
 //!     where
 //!         S: ndarray::RawData<Elem = bool> + Data,
