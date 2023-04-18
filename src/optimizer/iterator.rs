@@ -92,27 +92,29 @@ mod tests {
 
     #[test]
     fn iterator_emits_initial_state() {
+        let seed = 0;
         let config = pbil::Config::default(Count);
         assert_eq!(
-            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(0))
+            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(seed))
                 .into_streaming_iter()
                 .next()
                 .unwrap()
                 .state(),
-            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(0)).state()
+            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(seed)).state()
         );
     }
 
     #[test]
     fn iterator_runs_for_same_number_of_steps() {
+        let seed = 0;
         let steps = 100;
         let config = pbil::Config::default(Count);
-        let mut o = pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(0));
+        let mut o = pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(seed));
         for _ in 0..steps {
             o.step();
         }
         assert_eq!(
-            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(0))
+            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(seed))
                 .into_streaming_iter()
                 .nth(steps)
                 .unwrap()
