@@ -48,8 +48,8 @@
 //! }
 //! ```
 
-#![deny(missing_debug_implementations)]
-#![deny(missing_docs)]
+#![warn(missing_debug_implementations)]
+#![warn(missing_docs)]
 
 mod derive;
 pub mod optimizer;
