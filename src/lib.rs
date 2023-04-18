@@ -48,6 +48,7 @@
 //! }
 //! ```
 
+#![deny(missing_debug_implementations)]
 #![deny(missing_docs)]
 
 mod derive;
