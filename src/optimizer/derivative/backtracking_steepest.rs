@@ -37,19 +37,13 @@
 //!     type PointElem = f64;
 //!     type PointValue = f64;
 //!
-//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> Self::PointValue
-//!     where
-//!         S: ndarray::RawData<Elem = Self::PointElem> + Data,
-//!     {
+//!     fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
 //!         point.map(|x| x.powi(2)).sum()
 //!     }
 //! }
 //!
 //! impl Differentiable for Sphere {
-//!     fn differentiate<S>(&self, point: ArrayBase<S, Ix1>) -> Array1<Self::PointElem>
-//!     where
-//!         S: ndarray::RawData<Elem = Self::PointElem> + Data,
-//!     {
+//!     fn differentiate(&self, point: CowArray<Self::PointElem, Ix1>) -> Array1<Self::PointElem> {
 //!         point.map(|x| 2.0 * x)
 //!     }
 //! }
@@ -199,11 +193,11 @@ where
                     .config
                     .borrow()
                     .problem
-                    .evaluate_differentiate(x.point().view());
+                    .evaluate_differentiate(x.point().into());
                 x.step_from_evaluated(self.config.borrow(), point_value, point_derivatives)
             }
             State::Searching(x) => {
-                let point_value = self.config.borrow().problem.evaluate(x.point().view());
+                let point_value = self.config.borrow().problem.evaluate(x.point().into());
                 x.step_from_evaluated(self.config.borrow(), point_value)
             }
         })

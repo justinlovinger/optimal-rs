@@ -15,7 +15,7 @@
 //! using a PBIL optimizer:
 //!
 //! ```
-//! use ndarray::{Data, RemoveAxis, prelude::*};
+//! use ndarray::prelude::*;
 //! use optimal::{optimizer::derivative_free::pbil, prelude::*};
 //! use streaming_iterator::StreamingIterator;
 //!
@@ -33,10 +33,7 @@
 //!     type PointElem = bool;
 //!     type PointValue = u64;
 //!
-//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> u64
-//!     where
-//!         S: ndarray::RawData<Elem = bool> + Data,
-//!     {
+//!     fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
 //!         point.fold(0, |acc, b| acc + *b as u64)
 //!     }
 //! }

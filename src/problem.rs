@@ -1,7 +1,7 @@
 use std::ops::RangeInclusive;
 
 use blanket::blanket;
-use ndarray::{prelude::*, Data, RawData, RemoveAxis};
+use ndarray::prelude::*;
 
 // When stable,
 // add default implementations for both methods
@@ -19,12 +19,11 @@ pub trait Problem {
     type PointValue;
 
     /// Return objective values of points.
-    fn evaluate_all<S, D>(&self, points: ArrayBase<S, D>) -> Array<Self::PointValue, D::Smaller>
-    where
-        S: RawData<Elem = Self::PointElem> + Data,
-        D: Dimension + RemoveAxis,
-    {
-        points.map_axis(Axis(points.ndim() - 1), |point| self.evaluate(point))
+    fn evaluate_population(
+        &self,
+        points: CowArray<Self::PointElem, Ix2>,
+    ) -> Array1<Self::PointValue> {
+        points.map_axis(Axis(points.ndim() - 1), |point| self.evaluate(point.into()))
     }
 
     /// Return the objective value of a point.
@@ -32,9 +31,7 @@ pub trait Problem {
     /// This can be implemented as
     /// `self.evaluate_all(point).into_scalar()`
     /// if `evaluate_all` is implemented.
-    fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> Self::PointValue
-    where
-        S: RawData<Elem = Self::PointElem> + Data;
+    fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue;
 }
 
 /// An optimization problem
@@ -46,23 +43,21 @@ pub trait Differentiable: Problem {
     /// Override for objective functions
     /// capable of more efficiently calculating both
     /// simultaneously.
-    fn evaluate_differentiate<S>(
+    fn evaluate_differentiate(
         &self,
-        point: ArrayBase<S, Ix1>,
-    ) -> (Self::PointValue, Array1<Self::PointElem>)
-    where
-        S: RawData<Elem = Self::PointElem> + Data,
-    {
-        (self.evaluate(point.view()), self.differentiate(point))
+        point: CowArray<Self::PointElem, Ix1>,
+    ) -> (Self::PointValue, Array1<Self::PointElem>) {
+        (
+            self.evaluate(point.view().into()),
+            self.differentiate(point),
+        )
     }
 
     // As of 2023-03-13,
     // `ndarray` lacks a method to map an axis to an axis,
     // making implementation of a row-polymorphic method difficult.
     /// Return partial derivatives of a point.
-    fn differentiate<S>(&self, point: ArrayBase<S, Ix1>) -> Array1<Self::PointElem>
-    where
-        S: RawData<Elem = Self::PointElem> + Data;
+    fn differentiate(&self, point: CowArray<Self::PointElem, Ix1>) -> Array1<Self::PointElem>;
 }
 
 /// An optimization problem with a fixed length
@@ -81,9 +76,8 @@ pub trait FixedLength: Problem {
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait Bounded: Problem {
     /// Return whether this problem contains the given point.
-    fn contains<S>(&self, point: ArrayBase<S, Ix1>) -> bool
+    fn contains(&self, point: ArrayView1<Self::PointElem>) -> bool
     where
-        S: RawData<Elem = Self::PointElem> + Data,
         Self::PointElem: PartialOrd,
     {
         point
@@ -94,4 +88,22 @@ pub trait Bounded: Problem {
 
     /// Return bounds for this problem.
     fn bounds(&self) -> Box<dyn Iterator<Item = RangeInclusive<Self::PointElem>>>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! test_is_object_safe {
+        ( $( $trait:ident ),* ) => {
+            paste::paste! {
+                $(
+                    #[allow(dead_code)]
+                    fn [< $trait:snake _is_object_safe >](_: &dyn $trait<PointElem = f64, PointValue = f64>) {}
+                )*
+            }
+        }
+    }
+
+    test_is_object_safe![Problem, Differentiable, FixedLength, Bounded];
 }

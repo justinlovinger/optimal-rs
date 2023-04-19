@@ -5,7 +5,7 @@
 //! # Examples
 //!
 //! ```
-//! use ndarray::{Data, RemoveAxis, prelude::*};
+//! use ndarray::prelude::*;
 //! use optimal::{optimizer::derivative_free::pbil, prelude::*};
 //! use streaming_iterator::StreamingIterator;
 //!
@@ -23,10 +23,7 @@
 //!     type PointElem = bool;
 //!     type PointValue = u64;
 //!
-//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> u64
-//!     where
-//!         S: ndarray::RawData<Elem = bool> + Data,
-//!     {
+//!     fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
 //!         point.fold(0, |acc, b| acc + *b as u64)
 //!     }
 //! }
@@ -106,7 +103,7 @@ where
                     .borrow()
                     .inner
                     .problem
-                    .evaluate_all(state.points().view()),
+                    .evaluate_population(state.points().into()),
                 state,
             )
         })
@@ -271,7 +268,10 @@ where
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
             self.config.borrow().step_from_evaluated(
-                self.config.borrow().problem.evaluate_all(state.points()),
+                self.config
+                    .borrow()
+                    .problem
+                    .evaluate_population(state.points().into()),
                 state,
             )
         })

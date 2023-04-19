@@ -6,7 +6,7 @@
 //! # Examples
 //!
 //! ```
-//! use ndarray::{prelude::*, Data};
+//! use ndarray::prelude::*;
 //! use ndarray_rand::RandomExt;
 //! use optimal::{optimizer::derivative::fixed_step_steepest::*, prelude::*};
 //! use rand::distributions::Uniform;
@@ -27,19 +27,13 @@
 //!     type PointElem = f64;
 //!     type PointValue = f64;
 //!
-//!     fn evaluate<S>(&self, point: ArrayBase<S, Ix1>) -> Self::PointValue
-//!     where
-//!         S: ndarray::RawData<Elem = Self::PointElem> + Data,
-//!     {
+//!     fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
 //!         point.map(|x| x.powi(2)).sum()
 //!     }
 //! }
 //!
 //! impl Differentiable for Sphere {
-//!     fn differentiate<S>(&self, point: ArrayBase<S, Ix1>) -> Array1<Self::PointElem>
-//!     where
-//!         S: ndarray::RawData<Elem = Self::PointElem> + Data,
-//!     {
+//!     fn differentiate(&self, point: CowArray<Self::PointElem, Ix1>) -> Array1<Self::PointElem> {
 //!         point.map(|x| 2.0 * x)
 //!     }
 //! }
@@ -113,7 +107,10 @@ where
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |point| {
             self.config.borrow().step_from_evaluated(
-                self.config.borrow().problem.differentiate(point.view()),
+                self.config
+                    .borrow()
+                    .problem
+                    .differentiate(point.view().into()),
                 point,
             )
         });
