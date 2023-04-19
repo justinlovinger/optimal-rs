@@ -9,6 +9,8 @@ pub mod derivative;
 pub mod derivative_free;
 mod iterator;
 
+use std::borrow::Cow;
+
 use blanket::blanket;
 use ndarray::prelude::*;
 use rand::Rng;
@@ -93,7 +95,9 @@ pub trait RunningOptimizerExt<'a, A, B, P, C, S> {
     /// Return the value of the best point discovered,
     /// evaluating the best point
     /// if necessary.
-    fn best_point_value(&'a self) -> B;
+    fn best_point_value(&self) -> Cow<B>
+    where
+        B: Clone;
 
     /// Return problem to optimize.
     fn problem(&'a self) -> &'a P;
@@ -101,14 +105,18 @@ pub trait RunningOptimizerExt<'a, A, B, P, C, S> {
 
 impl<'a, A, B, P, C, S, T> RunningOptimizerExt<'a, A, B, P, C, S> for T
 where
-    B: Clone,
     P: Problem<PointElem = A, PointValue = B> + 'a,
     C: OptimizerConfig<Problem = P> + 'a,
     T: RunningOptimizer<PointElem = A, PointValue = B, Config = C, State = S>,
 {
-    fn best_point_value(&'a self) -> B {
-        self.stored_best_point_value()
-            .map_or_else(|| self.problem().evaluate(self.best_point()), |x| x.clone())
+    fn best_point_value(&self) -> Cow<B>
+    where
+        B: Clone,
+    {
+        self.stored_best_point_value().map_or_else(
+            || Cow::Owned(self.problem().evaluate(self.best_point())),
+            |x| Cow::Borrowed(x),
+        )
     }
 
     fn problem(&'a self) -> &'a P {
