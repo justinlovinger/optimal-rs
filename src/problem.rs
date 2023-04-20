@@ -97,10 +97,7 @@ mod tests {
     macro_rules! test_is_object_safe {
         ( $( $trait:ident ),* ) => {
             paste::paste! {
-                $(
-                    #[allow(dead_code)]
-                    fn [< $trait:snake _is_object_safe >](_: &dyn $trait<PointElem = f64, PointValue = f64>) {}
-                )*
+                $( fn [< _ $trait:snake _is_object_safe >](_: &dyn $trait<PointElem = f64, PointValue = f64>) {} )*
             }
         }
     }

@@ -146,3 +146,22 @@ pub trait Convergent: RunningOptimizer {
     /// Return if optimizer is done.
     fn is_done(&self) -> bool;
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    macro_rules! is_object_safe {
+        ( $trait:ident $( < $( $bound:tt $( = $type:ty )?  ),* > )? ) => {
+            paste::paste! {
+                fn [< _ $trait:snake _is_object_safe >](_: &dyn $trait $( < $( $bound $( = $type )? ),* > )?) {}
+            }
+        }
+    }
+
+    is_object_safe!(OptimizerConfig<Problem = ()>);
+    is_object_safe!(RunningOptimizer<PointElem = (), PointValue = (), Config = (), State = ()>);
+    is_object_safe!(StochasticRunningOptimizer<(), PointElem = (), PointValue = (), Config = (), State = ()>);
+    is_object_safe!(PointBased<PointElem = (), PointValue = (), Config = (), State = ()>);
+    is_object_safe!(Convergent<PointElem = (), PointValue = (), Config = (), State = ()>);
+}
