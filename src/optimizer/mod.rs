@@ -47,12 +47,8 @@ impl<T> Optimizer for T where
 /// Optimizer methods requiring only a reference.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait OptimizerBase {
-    /// Elements in points.
-    type PointElem;
-
-    /// Value returned by problem
-    /// when point is evaluated.
-    type PointValue;
+    /// Problem to optimize.
+    type Problem: Problem;
 
     /// Configuration for this optimizer.
     type Config;
@@ -67,7 +63,7 @@ pub trait OptimizerBase {
     fn state(&self) -> &Self::State;
 
     /// Return the best point discovered.
-    fn best_point(&self) -> CowArray<Self::PointElem, Ix1>;
+    fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1>;
 
     /// Return the value of the best point discovered,
     /// if possible
@@ -78,7 +74,7 @@ pub trait OptimizerBase {
     ///
     /// If an optimizer never stores the best point value,
     /// this will always return `None`.
-    fn stored_best_point_value(&self) -> Option<&Self::PointValue>;
+    fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue>;
 }
 
 /// Step methods of an optimizer.
@@ -120,27 +116,26 @@ pub trait StochasticOptimizer<R>: OptimizerBase {
 }
 
 /// An automatically implemented extension to [`RunningOptimizer`].
-pub trait RunningOptimizerExt<'a, P>: OptimizerBase {
+pub trait RunningOptimizerExt<'a>: OptimizerBase {
     /// Return the value of the best point discovered,
     /// evaluating the best point
     /// if necessary.
-    fn best_point_value(&self) -> Cow<Self::PointValue>
+    fn best_point_value(&self) -> Cow<<Self::Problem as Problem>::PointValue>
     where
-        Self::PointValue: Clone;
+        <Self::Problem as Problem>::PointValue: Clone;
 
     /// Return problem to optimize.
-    fn problem(&'a self) -> &'a P;
+    fn problem(&'a self) -> &'a Self::Problem;
 }
 
-impl<'a, P, T> RunningOptimizerExt<'a, P> for T
+impl<'a, T> RunningOptimizerExt<'a> for T
 where
-    P: Problem<PointElem = Self::PointElem, PointValue = Self::PointValue> + 'a,
     T: OptimizerBase,
-    Self::Config: OptimizerConfig<Problem = P> + 'a,
+    Self::Config: OptimizerConfig<Problem = Self::Problem> + 'a,
 {
-    fn best_point_value(&self) -> Cow<Self::PointValue>
+    fn best_point_value(&self) -> Cow<<Self::Problem as Problem>::PointValue>
     where
-        Self::PointValue: Clone,
+        <Self::Problem as Problem>::PointValue: Clone,
     {
         self.stored_best_point_value().map_or_else(
             || Cow::Owned(self.problem().evaluate(self.best_point())),
@@ -148,7 +143,7 @@ where
         )
     }
 
-    fn problem(&'a self) -> &'a P {
+    fn problem(&'a self) -> &'a Self::Problem {
         self.config().problem()
     }
 }
@@ -158,7 +153,7 @@ where
 /// For optimizers evaluating at most one point per step.
 pub trait PointBased: OptimizerBase {
     /// Return point to be evaluated.
-    fn point(&self) -> Option<ArrayView1<Self::PointElem>>;
+    fn point(&self) -> Option<ArrayView1<<Self::Problem as Problem>::PointElem>>;
 }
 
 /// A running optimizer able to efficiently provide a view
@@ -166,7 +161,7 @@ pub trait PointBased: OptimizerBase {
 /// For optimizers evaluating more than one point per step.
 pub trait PopulationBased: OptimizerBase {
     /// Return points to be evaluated.
-    fn points(&self) -> ArrayView2<Self::PointElem>;
+    fn points(&self) -> ArrayView2<<Self::Problem as Problem>::PointElem>;
 }
 
 /// A running optimizer that may be done.
@@ -190,8 +185,8 @@ mod tests {
     }
 
     is_object_safe!(OptimizerConfig<Problem = ()>);
-    is_object_safe!(Optimizer<PointElem = (), PointValue = (), Config = (), State = ()>);
-    is_object_safe!(StochasticOptimizer<(), PointElem = (), PointValue = (), Config = (), State = ()>);
-    is_object_safe!(PointBased<PointElem = (), PointValue = (), Config = (), State = ()>);
-    is_object_safe!(Convergent<PointElem = (), PointValue = (), Config = (), State = ()>);
+    is_object_safe!(Optimizer<Problem = (), Config = (), State = ()>);
+    is_object_safe!(StochasticOptimizer<(), Problem = (), Config = (), State = ()>);
+    is_object_safe!(PointBased<Problem = (), Config = (), State = ()>);
+    is_object_safe!(Convergent<Problem = (), Config = (), State = ()>);
 }

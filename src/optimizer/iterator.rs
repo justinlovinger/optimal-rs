@@ -7,11 +7,8 @@ use crate::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-impl<A, B, C, S, O> IntoStreamingIterator<A, B, C, S> for O
-where
-    O: OptimizerBase<PointElem = A, PointValue = B, Config = C, State = S>,
-{
-    fn into_streaming_iter(self) -> StepIterator<A, B, C, S, O> {
+impl<P, C, S, O> IntoStreamingIterator<P, C, S> for O {
+    fn into_streaming_iter(self) -> StepIterator<P, C, S, O> {
         StepIterator::new(self)
     }
 }
@@ -23,9 +20,9 @@ where
 /// meaning the first call to `advance` or `next` will not change state.
 /// For example,
 /// `nth(100)` will step `99` times.
-pub trait IntoStreamingIterator<A, B, C, S> {
+pub trait IntoStreamingIterator<P, C, S> {
     /// Return an iterator over optimizer states.
-    fn into_streaming_iter(self) -> StepIterator<A, B, C, S, Self>
+    fn into_streaming_iter(self) -> StepIterator<P, C, S, Self>
     where
         Self: Sized;
 }
@@ -33,20 +30,18 @@ pub trait IntoStreamingIterator<A, B, C, S> {
 /// An iterator returned by [`into_streaming_iter`].
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StepIterator<A, B, C, S, O> {
-    point_elem: PhantomData<A>,
-    point_value: PhantomData<B>,
+pub struct StepIterator<P, C, S, O> {
+    problem: PhantomData<P>,
     config: PhantomData<C>,
     state: PhantomData<S>,
     inner: O,
     skipped_first_step: bool,
 }
 
-impl<A, B, C, S, O> StepIterator<A, B, C, S, O> {
+impl<P, C, S, O> StepIterator<P, C, S, O> {
     fn new(optimizer: O) -> Self {
         Self {
-            point_elem: PhantomData,
-            point_value: PhantomData,
+            problem: PhantomData,
             config: PhantomData,
             state: PhantomData,
             inner: optimizer,
@@ -60,9 +55,9 @@ impl<A, B, C, S, O> StepIterator<A, B, C, S, O> {
     }
 }
 
-impl<A, B, C, S, O> StreamingIterator for StepIterator<A, B, C, S, O>
+impl<P, C, S, O> StreamingIterator for StepIterator<P, C, S, O>
 where
-    O: OptimizerStep<PointElem = A, PointValue = B, Config = C, State = S>,
+    O: OptimizerStep<Problem = P, Config = C, State = S>,
 {
     type Item = O;
 

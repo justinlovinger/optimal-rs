@@ -76,9 +76,11 @@ pub struct DoneWhenConvergedConfig<P> {
     pub inner: Config<P>,
 }
 
-impl<B, P, C> OptimizerBase for RunningDoneWhenConverged<B, P, C> {
-    type PointElem = bool;
-    type PointValue = B;
+impl<B, P, C> OptimizerBase for RunningDoneWhenConverged<B, P, C>
+where
+    P: Problem<PointElem = bool, PointValue = B>,
+{
+    type Problem = P;
     type Config = C;
     type State = State;
 
@@ -135,7 +137,10 @@ where
     }
 }
 
-impl<B, P, C> OptimizerDeinitialization for RunningDoneWhenConverged<B, P, C> {
+impl<B, P, C> OptimizerDeinitialization for RunningDoneWhenConverged<B, P, C>
+where
+    P: Problem<PointElem = bool, PointValue = B>,
+{
     fn stop(self) -> (C, State) {
         (self.config, self.state)
     }
@@ -159,6 +164,7 @@ where
 
 impl<B, P, C> Convergent for RunningDoneWhenConverged<B, P, C>
 where
+    P: Problem<PointElem = bool, PointValue = B>,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn is_done(&self) -> bool {
@@ -169,8 +175,11 @@ where
     }
 }
 
-impl<B, P, C> PopulationBased for RunningDoneWhenConverged<B, P, C> {
-    fn points(&self) -> ArrayView2<Self::PointElem> {
+impl<B, P, C> PopulationBased for RunningDoneWhenConverged<B, P, C>
+where
+    P: Problem<PointElem = bool, PointValue = B>,
+{
+    fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }
@@ -244,9 +253,11 @@ pub enum State {
     Mutating(Mutating),
 }
 
-impl<B, P, C> OptimizerBase for Running<B, P, C> {
-    type PointElem = bool;
-    type PointValue = B;
+impl<B, P, C> OptimizerBase for Running<B, P, C>
+where
+    P: Problem<PointElem = bool, PointValue = B>,
+{
+    type Problem = P;
     type Config = C;
     type State = State;
 
@@ -302,7 +313,10 @@ where
     }
 }
 
-impl<B, P, C> OptimizerDeinitialization for Running<B, P, C> {
+impl<B, P, C> OptimizerDeinitialization for Running<B, P, C>
+where
+    P: Problem<PointElem = bool, PointValue = B>,
+{
     fn stop(self) -> (C, State) {
         (self.config, self.state)
     }
@@ -324,8 +338,11 @@ where
     }
 }
 
-impl<B, P, C> PopulationBased for Running<B, P, C> {
-    fn points(&self) -> ArrayView2<Self::PointElem> {
+impl<B, P, C> PopulationBased for Running<B, P, C>
+where
+    P: Problem<PointElem = bool, PointValue = B>,
+{
+    fn points(&self) -> ArrayView2<bool> {
         self.state.points()
     }
 }

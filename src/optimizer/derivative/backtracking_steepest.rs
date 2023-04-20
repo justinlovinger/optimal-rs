@@ -161,9 +161,11 @@ impl<A, P> Config<A, P> {
     }
 }
 
-impl<A, P, C> OptimizerBase for Running<A, P, C> {
-    type PointElem = A;
-    type PointValue = A;
+impl<A, P, C> OptimizerBase for Running<A, P, C>
+where
+    P: Problem<PointElem = A, PointValue = A>,
+{
+    type Problem = P;
     type Config = C;
     type State = State<A>;
 
@@ -221,14 +223,20 @@ where
     }
 }
 
-impl<A, P, C> OptimizerDeinitialization for Running<A, P, C> {
+impl<A, P, C> OptimizerDeinitialization for Running<A, P, C>
+where
+    P: Problem<PointElem = A, PointValue = A>,
+{
     fn stop(self) -> (C, State<A>) {
         (self.config, self.state)
     }
 }
 
-impl<A, P, C> PointBased for Running<A, P, C> {
-    fn point(&self) -> Option<ArrayView1<Self::PointElem>> {
+impl<A, P, C> PointBased for Running<A, P, C>
+where
+    P: Problem<PointElem = A, PointValue = A>,
+{
+    fn point(&self) -> Option<ArrayView1<A>> {
         self.state.point()
     }
 }

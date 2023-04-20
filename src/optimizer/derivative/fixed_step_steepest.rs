@@ -89,9 +89,11 @@ impl<A, P, C> Running<A, P, C> {
     }
 }
 
-impl<A, P, C> OptimizerBase for Running<A, P, C> {
-    type PointElem = A;
-    type PointValue = A;
+impl<A, P, C> OptimizerBase for Running<A, P, C>
+where
+    P: Problem<PointElem = A, PointValue = A>,
+{
+    type Problem = P;
     type Config = C;
     type State = Point<A>;
 
@@ -131,7 +133,10 @@ where
     }
 }
 
-impl<A, P, C> OptimizerDeinitialization for Running<A, P, C> {
+impl<A, P, C> OptimizerDeinitialization for Running<A, P, C>
+where
+    P: Problem<PointElem = A, PointValue = A>,
+{
     fn stop(self) -> (C, Point<A>) {
         (self.config, self.state)
     }
@@ -143,7 +148,7 @@ where
     P: Differentiable<PointElem = A, PointValue = A>,
     C: Borrow<Config<A, P>>,
 {
-    fn point(&self) -> Option<ArrayView1<Self::PointElem>> {
+    fn point(&self) -> Option<ArrayView1<A>> {
         Some(self.state.view())
     }
 }
