@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 impl<A, B, C, S, O> IntoStreamingIterator<A, B, C, S> for O
 where
-    O: RunningOptimizer<PointElem = A, PointValue = B, Config = C, State = S>,
+    O: OptimizerBase<PointElem = A, PointValue = B, Config = C, State = S>,
 {
     fn into_streaming_iter(self) -> StepIterator<A, B, C, S, O> {
         StepIterator::new(self)
@@ -62,7 +62,7 @@ impl<A, B, C, S, O> StepIterator<A, B, C, S, O> {
 
 impl<A, B, C, S, O> StreamingIterator for StepIterator<A, B, C, S, O>
 where
-    O: RunningOptimizer<PointElem = A, PointValue = B, Config = C, State = S>,
+    O: OptimizerStep<PointElem = A, PointValue = B, Config = C, State = S>,
 {
     type Item = O;
 

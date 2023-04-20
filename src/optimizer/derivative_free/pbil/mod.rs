@@ -76,27 +76,35 @@ pub struct DoneWhenConvergedConfig<P> {
     pub inner: Config<P>,
 }
 
-impl<B, P, C> RunningOptimizer for RunningDoneWhenConverged<B, P, C>
-where
-    B: Debug + PartialOrd,
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
-{
+impl<B, P, C> OptimizerBase for RunningDoneWhenConverged<B, P, C> {
     type PointElem = bool;
     type PointValue = B;
     type Config = C;
     type State = State;
 
-    fn new(config: Self::Config) -> Self {
-        let state = State::initial(config.borrow().inner.problem.len());
-        Self {
-            point_value: PhantomData,
-            problem: PhantomData,
-            config,
-            state,
-        }
+    fn config(&self) -> &C {
+        &self.config
     }
 
+    fn state(&self) -> &State {
+        &self.state
+    }
+
+    fn best_point(&self) -> CowArray<bool, Ix1> {
+        self.state.best_point()
+    }
+
+    fn stored_best_point_value(&self) -> Option<&B> {
+        None
+    }
+}
+
+impl<B, P, C> OptimizerStep for RunningDoneWhenConverged<B, P, C>
+where
+    B: Debug + PartialOrd,
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
+{
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
             self.config.borrow().inner.step_from_evaluated(
@@ -109,31 +117,32 @@ where
             )
         })
     }
+}
 
-    fn config(&self) -> &C {
-        &self.config
-    }
-
-    fn state(&self) -> &State {
-        &self.state
-    }
-
-    fn stop(self) -> (C, State) {
-        (self.config, self.state)
-    }
-
-    fn best_point(&self) -> CowArray<bool, Ix1> {
-        self.state.best_point()
-    }
-
-    fn stored_best_point_value(&self) -> Option<&B> {
-        None
+impl<B, P, C> OptimizerInitialization for RunningDoneWhenConverged<B, P, C>
+where
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
+{
+    fn new(config: Self::Config) -> Self {
+        let state = State::initial(config.borrow().inner.problem.len());
+        Self {
+            point_value: PhantomData,
+            problem: PhantomData,
+            config,
+            state,
+        }
     }
 }
 
-impl<B, P, C> StochasticRunningOptimizer<SplitMix64> for RunningDoneWhenConverged<B, P, C>
+impl<B, P, C> OptimizerDeinitialization for RunningDoneWhenConverged<B, P, C> {
+    fn stop(self) -> (C, State) {
+        (self.config, self.state)
+    }
+}
+
+impl<B, P, C> StochasticOptimizer<SplitMix64> for RunningDoneWhenConverged<B, P, C>
 where
-    B: Debug + PartialOrd,
     P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
@@ -150,8 +159,6 @@ where
 
 impl<B, P, C> Convergent for RunningDoneWhenConverged<B, P, C>
 where
-    B: Debug + PartialOrd,
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn is_done(&self) -> bool {
@@ -162,12 +169,7 @@ where
     }
 }
 
-impl<B, P, C> PopulationBased for RunningDoneWhenConverged<B, P, C>
-where
-    B: Debug + PartialOrd,
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
-{
+impl<B, P, C> PopulationBased for RunningDoneWhenConverged<B, P, C> {
     fn points(&self) -> ArrayView2<Self::PointElem> {
         self.state.points()
     }
@@ -242,38 +244,11 @@ pub enum State {
     Mutating(Mutating),
 }
 
-impl<B, P, C> RunningOptimizer for Running<B, P, C>
-where
-    B: Debug + PartialOrd,
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
-    C: Borrow<Config<P>>,
-{
+impl<B, P, C> OptimizerBase for Running<B, P, C> {
     type PointElem = bool;
     type PointValue = B;
     type Config = C;
     type State = State;
-
-    fn new(config: Self::Config) -> Running<B, P, C> {
-        let state = State::initial(config.borrow().problem.len());
-        Self {
-            point_value: PhantomData,
-            problem: PhantomData,
-            config,
-            state,
-        }
-    }
-
-    fn step(&mut self) {
-        replace_with_or_abort(&mut self.state, |state| {
-            self.config.borrow().step_from_evaluated(
-                self.config
-                    .borrow()
-                    .problem
-                    .evaluate_population(state.points().into()),
-                state,
-            )
-        })
-    }
 
     fn config(&self) -> &C {
         &self.config
@@ -281,10 +256,6 @@ where
 
     fn state(&self) -> &State {
         &self.state
-    }
-
-    fn stop(self) -> (C, State) {
-        (self.config, self.state)
     }
 
     fn best_point(&self) -> CowArray<bool, Ix1> {
@@ -296,9 +267,49 @@ where
     }
 }
 
-impl<B, P, C> StochasticRunningOptimizer<SplitMix64> for Running<B, P, C>
+impl<B, P, C> OptimizerStep for Running<B, P, C>
 where
     B: Debug + PartialOrd,
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
+    C: Borrow<Config<P>>,
+{
+    fn step(&mut self) {
+        replace_with_or_abort(&mut self.state, |state| {
+            self.config.borrow().step_from_evaluated(
+                self.config
+                    .borrow()
+                    .problem
+                    .evaluate_population(state.points().into()),
+                state,
+            )
+        })
+    }
+}
+
+impl<B, P, C> OptimizerInitialization for Running<B, P, C>
+where
+    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
+    C: Borrow<Config<P>>,
+{
+    fn new(config: Self::Config) -> Running<B, P, C> {
+        let state = State::initial(config.borrow().problem.len());
+        Self {
+            point_value: PhantomData,
+            problem: PhantomData,
+            config,
+            state,
+        }
+    }
+}
+
+impl<B, P, C> OptimizerDeinitialization for Running<B, P, C> {
+    fn stop(self) -> (C, State) {
+        (self.config, self.state)
+    }
+}
+
+impl<B, P, C> StochasticOptimizer<SplitMix64> for Running<B, P, C>
+where
     P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<Config<P>>,
 {
@@ -313,12 +324,7 @@ where
     }
 }
 
-impl<B, P, C> PopulationBased for Running<B, P, C>
-where
-    B: Debug + PartialOrd,
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
-    C: Borrow<Config<P>>,
-{
+impl<B, P, C> PopulationBased for Running<B, P, C> {
     fn points(&self) -> ArrayView2<Self::PointElem> {
         self.state.points()
     }

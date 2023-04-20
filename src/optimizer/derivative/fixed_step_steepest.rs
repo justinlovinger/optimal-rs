@@ -89,21 +89,35 @@ impl<A, P, C> Running<A, P, C> {
     }
 }
 
-impl<A, P, C> RunningOptimizer for Running<A, P, C>
-where
-    A: Clone + SubAssign + Mul<Output = A>,
-    P: Differentiable<PointElem = A, PointValue = A>,
-    C: Borrow<Config<A, P>>,
-{
+impl<A, P, C> OptimizerBase for Running<A, P, C> {
     type PointElem = A;
     type PointValue = A;
     type Config = C;
     type State = Point<A>;
 
-    fn new(_config: Self::Config) -> Self {
-        todo!()
+    fn config(&self) -> &C {
+        &self.config
     }
 
+    fn state(&self) -> &Point<A> {
+        &self.state
+    }
+
+    fn best_point(&self) -> CowArray<A, Ix1> {
+        (&self.state).into()
+    }
+
+    fn stored_best_point_value(&self) -> Option<&A> {
+        None
+    }
+}
+
+impl<A, P, C> OptimizerStep for Running<A, P, C>
+where
+    A: Clone + SubAssign + Mul<Output = A>,
+    P: Differentiable<PointElem = A, PointValue = A>,
+    C: Borrow<Config<A, P>>,
+{
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |point| {
             self.config.borrow().step_from_evaluated(
@@ -115,25 +129,11 @@ where
             )
         });
     }
+}
 
-    fn config(&self) -> &C {
-        &self.config
-    }
-
-    fn state(&self) -> &Point<A> {
-        &self.state
-    }
-
+impl<A, P, C> OptimizerDeinitialization for Running<A, P, C> {
     fn stop(self) -> (C, Point<A>) {
         (self.config, self.state)
-    }
-
-    fn best_point(&self) -> CowArray<A, Ix1> {
-        (&self.state).into()
-    }
-
-    fn stored_best_point_value(&self) -> Option<&A> {
-        None
     }
 }
 
