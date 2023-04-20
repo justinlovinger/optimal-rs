@@ -13,7 +13,6 @@ use std::borrow::Cow;
 
 use blanket::blanket;
 use ndarray::prelude::*;
-use rand::Rng;
 
 use crate::prelude::Problem;
 
@@ -82,12 +81,12 @@ pub trait RunningOptimizer {
 /// An optimizer
 /// requiring a source of randomness
 /// to initialize.
-pub trait StochasticRunningOptimizer: RunningOptimizer {
+pub trait StochasticRunningOptimizer<R>: RunningOptimizer {
     /// Initialize this optimizer
     /// using `rng`.
-    fn new_using<R>(config: Self::Config, rng: &mut R) -> Self
+    fn new_using(config: Self::Config, rng: &mut R) -> Self
     where
-        R: Rng;
+        Self: Sized;
 }
 
 /// An automatically implemented extension to [`RunningOptimizer`].

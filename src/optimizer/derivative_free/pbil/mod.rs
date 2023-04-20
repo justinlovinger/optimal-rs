@@ -41,6 +41,7 @@ mod types;
 use lazy_static::lazy_static;
 use ndarray::{prelude::*, Data};
 use rand::prelude::*;
+use rand_xoshiro::SplitMix64;
 use replace_with::replace_with_or_abort;
 use std::{borrow::Borrow, fmt::Debug, marker::PhantomData};
 
@@ -130,16 +131,13 @@ where
     }
 }
 
-impl<B, P, C> StochasticRunningOptimizer for RunningDoneWhenConverged<B, P, C>
+impl<B, P, C> StochasticRunningOptimizer<SplitMix64> for RunningDoneWhenConverged<B, P, C>
 where
     B: Debug + PartialOrd,
     P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
-    fn new_using<R>(config: C, rng: &mut R) -> RunningDoneWhenConverged<B, P, C>
-    where
-        R: Rng,
-    {
+    fn new_using(config: C, rng: &mut SplitMix64) -> RunningDoneWhenConverged<B, P, C> {
         let state = State::initial_using(config.borrow().inner.problem.len(), rng);
         Self {
             point_value: PhantomData,
@@ -298,16 +296,13 @@ where
     }
 }
 
-impl<B, P, C> StochasticRunningOptimizer for Running<B, P, C>
+impl<B, P, C> StochasticRunningOptimizer<SplitMix64> for Running<B, P, C>
 where
     B: Debug + PartialOrd,
     P: Problem<PointElem = bool, PointValue = B> + FixedLength,
     C: Borrow<Config<P>>,
 {
-    fn new_using<R>(config: C, rng: &mut R) -> Running<B, P, C>
-    where
-        R: Rng,
-    {
+    fn new_using(config: C, rng: &mut SplitMix64) -> Running<B, P, C> {
         let state = State::initial_using(config.borrow().problem.len(), rng);
         Self {
             point_value: PhantomData,

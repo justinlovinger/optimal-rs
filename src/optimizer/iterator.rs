@@ -85,6 +85,7 @@ where
 mod tests {
     use ndarray::prelude::*;
     use rand::prelude::*;
+    use rand_xoshiro::SplitMix64;
 
     use crate::optimizer::derivative_free::pbil;
 
@@ -95,12 +96,12 @@ mod tests {
         let seed = 0;
         let config = pbil::Config::default(Count);
         assert_eq!(
-            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(seed))
+            pbil::Running::new_using(&config, &mut SplitMix64::seed_from_u64(seed))
                 .into_streaming_iter()
                 .next()
                 .unwrap()
                 .state(),
-            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(seed)).state()
+            pbil::Running::new_using(&config, &mut SplitMix64::seed_from_u64(seed)).state()
         );
     }
 
@@ -109,12 +110,12 @@ mod tests {
         let seed = 0;
         let steps = 100;
         let config = pbil::Config::default(Count);
-        let mut o = pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(seed));
+        let mut o = pbil::Running::new_using(&config, &mut SplitMix64::seed_from_u64(seed));
         for _ in 0..steps {
             o.step();
         }
         assert_eq!(
-            pbil::Running::new_using(&config, &mut StdRng::seed_from_u64(seed))
+            pbil::Running::new_using(&config, &mut SplitMix64::seed_from_u64(seed))
                 .into_streaming_iter()
                 .nth(steps)
                 .unwrap()
