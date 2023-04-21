@@ -20,9 +20,9 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut iter =
-//!         pbil::RunningDoneWhenConverged::new(pbil::DoneWhenConvergedConfig::default(Count))
-//!             .into_streaming_iter();
+//!     let mut iter = pbil::DoneWhenConvergedConfig::default(Count)
+//!         .start()
+//!         .into_streaming_iter();
 //!     let o = iter.find(|o| o.is_done()).expect("should converge");
 //!     println!("f({}) = {}", o.best_point(), o.best_point_value());
 //! }

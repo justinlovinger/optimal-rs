@@ -19,13 +19,30 @@ use crate::prelude::Problem;
 pub use self::iterator::*;
 
 /// An optimizer configuration.
-#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
+// #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait OptimizerConfig {
     /// Problem to optimize.
     type Problem;
 
+    /// Optimizer this config can initialize.
+    type Optimizer;
+
+    /// Return a running optimizer.
+    ///
+    /// This may be nondeterministic.
+    fn start(self) -> Self::Optimizer;
+
     /// Return problem to optimize.
     fn problem(&self) -> &Self::Problem;
+}
+
+/// An optimizer configuration
+/// for an optimizer
+/// requiring a source of randomness.
+pub trait StochasticOptimizerConfig<R>: OptimizerConfig {
+    /// Return a running optimizer
+    /// initialized using `rng`.
+    fn start_using(self, rng: &mut R) -> Self::Optimizer;
 }
 
 /// A fully defined optimizer.
@@ -34,15 +51,9 @@ pub trait OptimizerConfig {
 /// should also implement one of
 /// `PointBased`
 /// or `PopulationBased`.
-pub trait Optimizer:
-    OptimizerBase + OptimizerStep + OptimizerDeinitialization + OptimizerInitialization
-{
-}
+pub trait Optimizer: OptimizerBase + OptimizerStep + OptimizerDeinitialization {}
 
-impl<T> Optimizer for T where
-    T: OptimizerBase + OptimizerStep + OptimizerDeinitialization + OptimizerInitialization
-{
-}
+impl<T> Optimizer for T where T: OptimizerBase + OptimizerStep + OptimizerDeinitialization {}
 
 /// Optimizer methods requiring only a reference.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
@@ -84,35 +95,12 @@ pub trait OptimizerStep: OptimizerBase {
     fn step(&mut self);
 }
 
-/// Standard initialization of an optimizer.
-pub trait OptimizerInitialization: OptimizerBase {
-    /// Initialize this optimizer
-    /// using the given configuration.
-    ///
-    /// This may be nondeterministic.
-    fn new(config: Self::Config) -> Self
-    where
-        Self: Sized;
-}
-
 /// Standard deinitialization of an optimizer.
 #[blanket(derive(Box))]
 pub trait OptimizerDeinitialization: OptimizerBase {
     /// Stop optimization run,
     /// returning configuration and state.
     fn stop(self) -> (Self::Config, Self::State);
-}
-
-/// An optimizer
-/// requiring a source of randomness
-/// to initialize.
-pub trait StochasticOptimizer<R>: OptimizerBase {
-    /// Initialize this optimizer
-    /// using the given configuration
-    /// and `rng`.
-    fn new_using(config: Self::Config, rng: &mut R) -> Self
-    where
-        Self: Sized;
 }
 
 /// An automatically implemented extension to [`RunningOptimizer`].
@@ -184,9 +172,9 @@ mod tests {
         }
     }
 
-    is_object_safe!(OptimizerConfig<Problem = ()>);
+    is_object_safe!(OptimizerConfig<Problem = (), Optimizer = ()>);
+    is_object_safe!(StochasticOptimizerConfig<(), Problem = (), Optimizer = ()>);
     is_object_safe!(Optimizer<Problem = (), Config = (), State = ()>);
-    is_object_safe!(StochasticOptimizer<(), Problem = (), Config = (), State = ()>);
     is_object_safe!(PointBased<Problem = (), Config = (), State = ()>);
     is_object_safe!(Convergent<Problem = (), Config = (), State = ()>);
 }

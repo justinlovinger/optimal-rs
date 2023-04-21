@@ -10,9 +10,9 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut iter =
-//!         pbil::RunningDoneWhenConverged::new(pbil::DoneWhenConvergedConfig::default(Count))
-//!             .into_streaming_iter();
+//!     let mut iter = pbil::DoneWhenConvergedConfig::default(Count)
+//!         .start()
+//!         .into_streaming_iter();
 //!     let o = iter.find(|o| o.is_done()).expect("should converge");
 //!     println!("f({}) = {}", o.best_point(), o.best_point_value());
 //! }
@@ -90,11 +90,41 @@ impl<P> DoneWhenConvergedConfig<P> {
     }
 }
 
-impl<P> OptimizerConfig for DoneWhenConvergedConfig<P> {
+impl<P> OptimizerConfig for DoneWhenConvergedConfig<P>
+where
+    P: Problem<PointElem = bool> + FixedLength,
+{
     type Problem = P;
+    type Optimizer = RunningDoneWhenConverged<P, Self>;
+
+    fn start(self) -> Self::Optimizer {
+        let state = State::initial(self.inner.problem.len());
+        RunningDoneWhenConverged {
+            problem: PhantomData,
+            config: self,
+            state,
+        }
+    }
 
     fn problem(&self) -> &P {
         &self.borrow().inner.problem
+    }
+}
+
+impl<P> StochasticOptimizerConfig<SplitMix64> for DoneWhenConvergedConfig<P>
+where
+    P: Problem<PointElem = bool> + FixedLength,
+{
+    fn start_using(
+        self,
+        rng: &mut SplitMix64,
+    ) -> RunningDoneWhenConverged<P, DoneWhenConvergedConfig<P>> {
+        let state = State::initial_using(self.inner.problem.len(), rng);
+        RunningDoneWhenConverged {
+            problem: PhantomData,
+            config: self,
+            state,
+        }
     }
 }
 
@@ -143,42 +173,12 @@ where
     }
 }
 
-impl<P, C> OptimizerInitialization for RunningDoneWhenConverged<P, C>
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
-{
-    fn new(config: Self::Config) -> Self {
-        let state = State::initial(config.borrow().inner.problem.len());
-        Self {
-            problem: PhantomData,
-            config,
-            state,
-        }
-    }
-}
-
 impl<P, C> OptimizerDeinitialization for RunningDoneWhenConverged<P, C>
 where
     P: Problem<PointElem = bool>,
 {
     fn stop(self) -> (C, State) {
         (self.config, self.state)
-    }
-}
-
-impl<P, C> StochasticOptimizer<SplitMix64> for RunningDoneWhenConverged<P, C>
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
-{
-    fn new_using(config: C, rng: &mut SplitMix64) -> RunningDoneWhenConverged<P, C> {
-        let state = State::initial_using(config.borrow().inner.problem.len(), rng);
-        Self {
-            problem: PhantomData,
-            config,
-            state,
-        }
     }
 }
 
@@ -302,11 +302,38 @@ impl<P> Config<P> {
     }
 }
 
-impl<P> OptimizerConfig for Config<P> {
+impl<P> OptimizerConfig for Config<P>
+where
+    P: Problem<PointElem = bool> + FixedLength,
+{
     type Problem = P;
+    type Optimizer = Running<P, Self>;
+
+    fn start(self) -> Running<P, Config<P>> {
+        let state = State::initial(self.problem.len());
+        Running {
+            problem: PhantomData,
+            config: self,
+            state,
+        }
+    }
 
     fn problem(&self) -> &P {
         &self.borrow().problem
+    }
+}
+
+impl<P> StochasticOptimizerConfig<SplitMix64> for Config<P>
+where
+    P: Problem<PointElem = bool> + FixedLength,
+{
+    fn start_using(self, rng: &mut SplitMix64) -> Running<P, Config<P>> {
+        let state = State::initial_using(self.problem.len(), rng);
+        Running {
+            problem: PhantomData,
+            config: self,
+            state,
+        }
     }
 }
 
@@ -354,42 +381,12 @@ where
     }
 }
 
-impl<P, C> OptimizerInitialization for Running<P, C>
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    C: Borrow<Config<P>>,
-{
-    fn new(config: Self::Config) -> Running<P, C> {
-        let state = State::initial(config.borrow().problem.len());
-        Self {
-            problem: PhantomData,
-            config,
-            state,
-        }
-    }
-}
-
 impl<P, C> OptimizerDeinitialization for Running<P, C>
 where
     P: Problem<PointElem = bool>,
 {
     fn stop(self) -> (C, State) {
         (self.config, self.state)
-    }
-}
-
-impl<P, C> StochasticOptimizer<SplitMix64> for Running<P, C>
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    C: Borrow<Config<P>>,
-{
-    fn new_using(config: C, rng: &mut SplitMix64) -> Running<P, C> {
-        let state = State::initial_using(config.borrow().problem.len(), rng);
-        Self {
-            problem: PhantomData,
-            config,
-            state,
-        }
     }
 }
 

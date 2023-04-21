@@ -91,12 +91,16 @@ mod tests {
         let seed = 0;
         let config = pbil::Config::default(Count);
         assert_eq!(
-            pbil::Running::new_using(&config, &mut SplitMix64::seed_from_u64(seed))
+            config
+                .clone()
+                .start_using(&mut SplitMix64::seed_from_u64(seed))
                 .into_streaming_iter()
                 .next()
                 .unwrap()
                 .state(),
-            pbil::Running::new_using(&config, &mut SplitMix64::seed_from_u64(seed)).state()
+            config
+                .start_using(&mut SplitMix64::seed_from_u64(seed))
+                .state()
         );
     }
 
@@ -105,12 +109,15 @@ mod tests {
         let seed = 0;
         let steps = 100;
         let config = pbil::Config::default(Count);
-        let mut o = pbil::Running::new_using(&config, &mut SplitMix64::seed_from_u64(seed));
+        let mut o = config
+            .clone()
+            .start_using(&mut SplitMix64::seed_from_u64(seed));
         for _ in 0..steps {
             o.step();
         }
         assert_eq!(
-            pbil::Running::new_using(&config, &mut SplitMix64::seed_from_u64(seed))
+            config
+                .start_using(&mut SplitMix64::seed_from_u64(seed))
                 .into_streaming_iter()
                 .nth(steps)
                 .unwrap()
@@ -119,6 +126,7 @@ mod tests {
         );
     }
 
+    #[derive(Clone, Debug)]
     struct Count;
 
     impl Problem for Count {
