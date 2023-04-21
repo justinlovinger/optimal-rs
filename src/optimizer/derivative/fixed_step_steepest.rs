@@ -55,6 +55,16 @@ use super::StepSize;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Fixed step size steepest descent configuration parameters.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Config<A, P> {
+    /// A differentiable objective function.
+    pub problem: P,
+    /// Length of each step.
+    pub step_size: StepSize<A>,
+}
+
 /// Running fixed step size steepest descent optimizer.
 #[derive(Clone, Debug)]
 pub struct Running<A, P, C> {
@@ -66,17 +76,35 @@ pub struct Running<A, P, C> {
     pub state: Point<A>,
 }
 
-/// Fixed step size steepest descent configuration parameters.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config<A, P> {
-    /// A differentiable objective function.
-    pub problem: P,
-    /// Length of each step.
-    pub step_size: StepSize<A>,
+type Point<A> = Array1<A>;
+
+impl<A, P> Config<A, P> {
+    /// Return a new 'Config'.
+    pub fn new(problem: P, step_size: StepSize<A>) -> Self {
+        Self { problem, step_size }
+    }
 }
 
-type Point<A> = Array1<A>;
+impl<A, P> Config<A, P>
+where
+    A: Clone + SubAssign + Mul<Output = A>,
+{
+    /// step from one state to another
+    /// given point derivatives.
+    fn step_from_evaluated<S>(
+        &self,
+        point_derivatives: ArrayBase<S, Ix1>,
+        mut state: Point<A>,
+    ) -> Point<A>
+    where
+        S: Data<Elem = A>,
+    {
+        state.zip_mut_with(&point_derivatives, |x, d| {
+            *x -= self.step_size.clone() * d.clone()
+        });
+        state
+    }
+}
 
 impl<A, P, C> Running<A, P, C> {
     /// Return a new 'FixedStepSteepestDescent'.
@@ -150,33 +178,5 @@ where
 {
     fn point(&self) -> Option<ArrayView1<A>> {
         Some(self.state.view())
-    }
-}
-
-impl<A, P> Config<A, P> {
-    /// Return a new 'Config'.
-    pub fn new(problem: P, step_size: StepSize<A>) -> Self {
-        Self { problem, step_size }
-    }
-}
-
-impl<A, P> Config<A, P>
-where
-    A: Clone + SubAssign + Mul<Output = A>,
-{
-    /// step from one state to another
-    /// given point derivatives.
-    fn step_from_evaluated<S>(
-        &self,
-        point_derivatives: ArrayBase<S, Ix1>,
-        mut state: Point<A>,
-    ) -> Point<A>
-    where
-        S: Data<Elem = A>,
-    {
-        state.zip_mut_with(&point_derivatives, |x, d| {
-            *x -= self.step_size.clone() * d.clone()
-        });
-        state
     }
 }

@@ -52,6 +52,17 @@ pub use self::{states::*, types::*};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// PBIL configuration parameters
+/// with check for converged probabilities.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct DoneWhenConvergedConfig<P> {
+    /// Probability convergence parameter.
+    pub converged_threshold: ConvergedThreshold,
+    /// Regular PBIL configuration.
+    pub inner: Config<P>,
+}
+
 /// Running PBIL optimizer with check for converged probabilities.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -64,15 +75,27 @@ pub struct RunningDoneWhenConverged<P, C> {
     pub state: State,
 }
 
-/// PBIL configuration parameters
-/// with check for converged probabilities.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DoneWhenConvergedConfig<P> {
-    /// Probability convergence parameter.
-    pub converged_threshold: ConvergedThreshold,
-    /// Regular PBIL configuration.
-    pub inner: Config<P>,
+impl<P> DoneWhenConvergedConfig<P> {
+    /// Convenience function
+    /// to populate every field
+    /// with their default.
+    pub fn default(problem: P) -> Self
+    where
+        P: FixedLength,
+    {
+        Self {
+            converged_threshold: ConvergedThreshold::default(),
+            inner: Config::default(problem),
+        }
+    }
+}
+
+impl<P> OptimizerConfig for DoneWhenConvergedConfig<P> {
+    type Problem = P;
+
+    fn problem(&self) -> &P {
+        &self.borrow().inner.problem
+    }
 }
 
 impl<P, C> OptimizerBase for RunningDoneWhenConverged<P, C>
@@ -181,40 +204,6 @@ where
     }
 }
 
-impl<P> DoneWhenConvergedConfig<P> {
-    /// Convenience function
-    /// to populate every field
-    /// with their default.
-    pub fn default(problem: P) -> Self
-    where
-        P: FixedLength,
-    {
-        Self {
-            converged_threshold: ConvergedThreshold::default(),
-            inner: Config::default(problem),
-        }
-    }
-}
-
-impl<P> OptimizerConfig for DoneWhenConvergedConfig<P> {
-    type Problem = P;
-
-    fn problem(&self) -> &P {
-        &self.borrow().inner.problem
-    }
-}
-
-/// Running PBIL optimizer.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Running<P, C> {
-    problem: PhantomData<P>,
-    /// PBIL configuration parameters.
-    pub config: C,
-    /// PBIL state.
-    pub state: State,
-}
-
 /// PBIL configuration parameters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -235,6 +224,17 @@ pub struct Config<P> {
     pub mutation_adjust_rate: MutationAdjustRate,
 }
 
+/// Running PBIL optimizer.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Running<P, C> {
+    problem: PhantomData<P>,
+    /// PBIL configuration parameters.
+    pub config: C,
+    /// PBIL state.
+    pub state: State,
+}
+
 /// PBIL state.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -247,6 +247,67 @@ pub enum State {
     Sampling(Sampling),
     /// For mutating probabilities.
     Mutating(Mutating),
+}
+
+impl<P> Config<P> {
+    /// Return a new PBIL configuration.
+    pub fn new(
+        problem: P,
+        num_samples: NumSamples,
+        adjust_rate: AdjustRate,
+        mutation_chance: MutationChance,
+        mutation_adjust_rate: MutationAdjustRate,
+    ) -> Self {
+        Self {
+            problem,
+            num_samples,
+            adjust_rate,
+            mutation_chance,
+            mutation_adjust_rate,
+        }
+    }
+
+    /// Convenience function
+    /// to populate every field
+    /// with their default.
+    pub fn default(problem: P) -> Self
+    where
+        P: FixedLength,
+    {
+        Self {
+            num_samples: Default::default(),
+            adjust_rate: Default::default(),
+            mutation_chance: MutationChance::default(problem.len()),
+            mutation_adjust_rate: Default::default(),
+            problem,
+        }
+    }
+}
+
+impl<P> Config<P> {
+    /// Return the next state,
+    /// given point values.
+    fn step_from_evaluated<B, S>(&self, point_values: ArrayBase<S, Ix1>, state: State) -> State
+    where
+        B: Debug + PartialOrd,
+        S: Data<Elem = B>,
+    {
+        match state {
+            State::Ready(s) => State::Sampling(s.to_sampling(self.num_samples)),
+            State::Sampling(s) => State::Mutating(s.to_mutating(self.adjust_rate, point_values)),
+            State::Mutating(s) => {
+                State::Ready(s.to_ready(self.mutation_chance, self.mutation_adjust_rate))
+            }
+        }
+    }
+}
+
+impl<P> OptimizerConfig for Config<P> {
+    type Problem = P;
+
+    fn problem(&self) -> &P {
+        &self.borrow().problem
+    }
 }
 
 impl<P, C> OptimizerBase for Running<P, C>
@@ -338,67 +399,6 @@ where
 {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
-    }
-}
-
-impl<P> Config<P> {
-    /// Return a new PBIL configuration.
-    pub fn new(
-        problem: P,
-        num_samples: NumSamples,
-        adjust_rate: AdjustRate,
-        mutation_chance: MutationChance,
-        mutation_adjust_rate: MutationAdjustRate,
-    ) -> Self {
-        Self {
-            problem,
-            num_samples,
-            adjust_rate,
-            mutation_chance,
-            mutation_adjust_rate,
-        }
-    }
-
-    /// Convenience function
-    /// to populate every field
-    /// with their default.
-    pub fn default(problem: P) -> Self
-    where
-        P: FixedLength,
-    {
-        Self {
-            num_samples: Default::default(),
-            adjust_rate: Default::default(),
-            mutation_chance: MutationChance::default(problem.len()),
-            mutation_adjust_rate: Default::default(),
-            problem,
-        }
-    }
-}
-
-impl<P> Config<P> {
-    /// Return the next state,
-    /// given point values.
-    fn step_from_evaluated<B, S>(&self, point_values: ArrayBase<S, Ix1>, state: State) -> State
-    where
-        B: Debug + PartialOrd,
-        S: Data<Elem = B>,
-    {
-        match state {
-            State::Ready(s) => State::Sampling(s.to_sampling(self.num_samples)),
-            State::Sampling(s) => State::Mutating(s.to_mutating(self.adjust_rate, point_values)),
-            State::Mutating(s) => {
-                State::Ready(s.to_ready(self.mutation_chance, self.mutation_adjust_rate))
-            }
-        }
-    }
-}
-
-impl<P> OptimizerConfig for Config<P> {
-    type Problem = P;
-
-    fn problem(&self) -> &P {
-        &self.borrow().problem
     }
 }
 

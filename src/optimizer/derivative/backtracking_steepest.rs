@@ -77,17 +77,6 @@ use super::StepSize;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Running backtracking line search steepest descent optimizer
-/// with initial line search step size chosen by incrementing previous step size.
-#[derive(Clone, Debug)]
-pub struct Running<A, P, C> {
-    problem: PhantomData<P>,
-    /// Backtracking steepest descent configuration parameters.
-    pub config: C,
-    /// Backtracking steepest descent state.
-    pub state: State<A>,
-}
-
 /// Backtracking steepest descent configuration parameters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -101,6 +90,17 @@ pub struct Config<A, P> {
     pub backtracking_rate: BacktrackingRate<A>,
     /// Rate to increase step size before starting each line search.
     pub initial_step_size_incr_rate: IncrRate<A>,
+}
+
+/// Running backtracking line search steepest descent optimizer
+/// with initial line search step size chosen by incrementing previous step size.
+#[derive(Clone, Debug)]
+pub struct Running<A, P, C> {
+    problem: PhantomData<P>,
+    /// Backtracking steepest descent configuration parameters.
+    pub config: C,
+    /// Backtracking steepest descent state.
+    pub state: State<A>,
 }
 
 /// Backtracking steepest descent state.
@@ -133,17 +133,6 @@ pub struct Searching<A> {
     point_at_step: Point<A>,
 }
 
-impl<A, P, C> Running<A, P, C> {
-    /// Return a new 'BacktrackingSteepestDescent'.
-    pub fn new(config: C, state: State<A>) -> Self {
-        Self {
-            problem: PhantomData,
-            config,
-            state,
-        }
-    }
-}
-
 impl<A, P> Config<A, P> {
     /// Return a new 'Config'.
     pub fn new(
@@ -157,6 +146,17 @@ impl<A, P> Config<A, P> {
             c_1,
             backtracking_rate,
             initial_step_size_incr_rate,
+        }
+    }
+}
+
+impl<A, P, C> Running<A, P, C> {
+    /// Return a new 'BacktrackingSteepestDescent'.
+    pub fn new(config: C, state: State<A>) -> Self {
+        Self {
+            problem: PhantomData,
+            config,
+            state,
         }
     }
 }
