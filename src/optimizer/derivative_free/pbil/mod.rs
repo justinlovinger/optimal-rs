@@ -55,8 +55,7 @@ use serde::{Deserialize, Serialize};
 /// Running PBIL optimizer with check for converged probabilities.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RunningDoneWhenConverged<B, P, C> {
-    point_value: PhantomData<B>,
+pub struct RunningDoneWhenConverged<P, C> {
     problem: PhantomData<P>,
     /// PBIL configuration parameters
     /// with check for converged probabilities.
@@ -76,9 +75,9 @@ pub struct DoneWhenConvergedConfig<P> {
     pub inner: Config<P>,
 }
 
-impl<B, P, C> OptimizerBase for RunningDoneWhenConverged<B, P, C>
+impl<P, C> OptimizerBase for RunningDoneWhenConverged<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B>,
+    P: Problem<PointElem = bool>,
 {
     type Problem = P;
     type Config = C;
@@ -96,16 +95,16 @@ where
         self.state.best_point()
     }
 
-    fn stored_best_point_value(&self) -> Option<&B> {
+    fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue> {
         None
     }
 }
 
-impl<B, P, C> OptimizerStep for RunningDoneWhenConverged<B, P, C>
+impl<P, C> OptimizerStep for RunningDoneWhenConverged<P, C>
 where
-    B: Debug + PartialOrd,
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
+    P: Problem<PointElem = bool> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
+    <Self::Problem as Problem>::PointValue: Debug + PartialOrd,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
@@ -121,15 +120,14 @@ where
     }
 }
 
-impl<B, P, C> OptimizerInitialization for RunningDoneWhenConverged<B, P, C>
+impl<P, C> OptimizerInitialization for RunningDoneWhenConverged<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
+    P: Problem<PointElem = bool> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn new(config: Self::Config) -> Self {
         let state = State::initial(config.borrow().inner.problem.len());
         Self {
-            point_value: PhantomData,
             problem: PhantomData,
             config,
             state,
@@ -137,24 +135,23 @@ where
     }
 }
 
-impl<B, P, C> OptimizerDeinitialization for RunningDoneWhenConverged<B, P, C>
+impl<P, C> OptimizerDeinitialization for RunningDoneWhenConverged<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B>,
+    P: Problem<PointElem = bool>,
 {
     fn stop(self) -> (C, State) {
         (self.config, self.state)
     }
 }
 
-impl<B, P, C> StochasticOptimizer<SplitMix64> for RunningDoneWhenConverged<B, P, C>
+impl<P, C> StochasticOptimizer<SplitMix64> for RunningDoneWhenConverged<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
+    P: Problem<PointElem = bool> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
-    fn new_using(config: C, rng: &mut SplitMix64) -> RunningDoneWhenConverged<B, P, C> {
+    fn new_using(config: C, rng: &mut SplitMix64) -> RunningDoneWhenConverged<P, C> {
         let state = State::initial_using(config.borrow().inner.problem.len(), rng);
         Self {
-            point_value: PhantomData,
             problem: PhantomData,
             config,
             state,
@@ -162,9 +159,9 @@ where
     }
 }
 
-impl<B, P, C> Convergent for RunningDoneWhenConverged<B, P, C>
+impl<P, C> Convergent for RunningDoneWhenConverged<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B>,
+    P: Problem<PointElem = bool>,
     C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn is_done(&self) -> bool {
@@ -175,9 +172,9 @@ where
     }
 }
 
-impl<B, P, C> PopulationBased for RunningDoneWhenConverged<B, P, C>
+impl<P, C> PopulationBased for RunningDoneWhenConverged<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B>,
+    P: Problem<PointElem = bool>,
 {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
@@ -210,8 +207,7 @@ impl<P> OptimizerConfig for DoneWhenConvergedConfig<P> {
 /// Running PBIL optimizer.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Running<B, P, C> {
-    point_value: PhantomData<B>,
+pub struct Running<P, C> {
     problem: PhantomData<P>,
     /// PBIL configuration parameters.
     pub config: C,
@@ -253,9 +249,9 @@ pub enum State {
     Mutating(Mutating),
 }
 
-impl<B, P, C> OptimizerBase for Running<B, P, C>
+impl<P, C> OptimizerBase for Running<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B>,
+    P: Problem<PointElem = bool>,
 {
     type Problem = P;
     type Config = C;
@@ -273,16 +269,16 @@ where
         self.state.best_point()
     }
 
-    fn stored_best_point_value(&self) -> Option<&B> {
+    fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue> {
         None
     }
 }
 
-impl<B, P, C> OptimizerStep for Running<B, P, C>
+impl<P, C> OptimizerStep for Running<P, C>
 where
-    B: Debug + PartialOrd,
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
+    P: Problem<PointElem = bool> + FixedLength,
     C: Borrow<Config<P>>,
+    <Self::Problem as Problem>::PointValue: Debug + PartialOrd,
 {
     fn step(&mut self) {
         replace_with_or_abort(&mut self.state, |state| {
@@ -297,15 +293,14 @@ where
     }
 }
 
-impl<B, P, C> OptimizerInitialization for Running<B, P, C>
+impl<P, C> OptimizerInitialization for Running<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
+    P: Problem<PointElem = bool> + FixedLength,
     C: Borrow<Config<P>>,
 {
-    fn new(config: Self::Config) -> Running<B, P, C> {
+    fn new(config: Self::Config) -> Running<P, C> {
         let state = State::initial(config.borrow().problem.len());
         Self {
-            point_value: PhantomData,
             problem: PhantomData,
             config,
             state,
@@ -313,24 +308,23 @@ where
     }
 }
 
-impl<B, P, C> OptimizerDeinitialization for Running<B, P, C>
+impl<P, C> OptimizerDeinitialization for Running<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B>,
+    P: Problem<PointElem = bool>,
 {
     fn stop(self) -> (C, State) {
         (self.config, self.state)
     }
 }
 
-impl<B, P, C> StochasticOptimizer<SplitMix64> for Running<B, P, C>
+impl<P, C> StochasticOptimizer<SplitMix64> for Running<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B> + FixedLength,
+    P: Problem<PointElem = bool> + FixedLength,
     C: Borrow<Config<P>>,
 {
-    fn new_using(config: C, rng: &mut SplitMix64) -> Running<B, P, C> {
+    fn new_using(config: C, rng: &mut SplitMix64) -> Running<P, C> {
         let state = State::initial_using(config.borrow().problem.len(), rng);
         Self {
-            point_value: PhantomData,
             problem: PhantomData,
             config,
             state,
@@ -338,9 +332,9 @@ where
     }
 }
 
-impl<B, P, C> PopulationBased for Running<B, P, C>
+impl<P, C> PopulationBased for Running<P, C>
 where
-    P: Problem<PointElem = bool, PointValue = B>,
+    P: Problem<PointElem = bool>,
 {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
