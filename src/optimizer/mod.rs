@@ -13,10 +13,42 @@ use std::borrow::Cow;
 
 use blanket::blanket;
 use ndarray::prelude::*;
+use streaming_iterator::StreamingIterator;
 
 use crate::prelude::Problem;
 
 pub use self::iterator::*;
+
+/// An optimizer
+/// capable of solving an optimization problem,
+/// automatically implemented on compatible [`OptimizerConfig`]s.
+pub trait Optimizer<P>
+where
+    P: Problem,
+{
+    /// Return point that attempts to minimize the given problem.
+    ///
+    /// How well the point minimizes the problem
+    /// depends on the optimizer.
+    fn argmin(self) -> Array1<P::PointElem>;
+}
+
+impl<P, T> Optimizer<P> for T
+where
+    P: Problem,
+    P::PointElem: Clone,
+    T: OptimizerConfig<Problem = P>,
+    T::Optimizer: RunningOptimizer<Problem = P> + Convergent,
+{
+    fn argmin(self) -> Array1<P::PointElem> {
+        self.start()
+            .into_streaming_iter()
+            .find(|o| o.is_done())
+            .expect("should converge")
+            .best_point()
+            .to_owned()
+    }
+}
 
 /// An optimizer configuration.
 #[blanket(derive(Box))]

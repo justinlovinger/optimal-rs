@@ -10,11 +10,9 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut iter = pbil::DoneWhenConvergedConfig::default(Count)
-//!         .start()
-//!         .into_streaming_iter();
-//!     let o = iter.find(|o| o.is_done()).expect("should converge");
-//!     println!("f({}) = {}", o.best_point(), o.best_point_value());
+//!     let point = pbil::DoneWhenConvergedConfig::default(Count).argmin();
+//!     let point_value = Count.evaluate(point.view().into());
+//!     println!("f({}) = {}", point, point_value);
 //! }
 //!
 //! struct Count;
