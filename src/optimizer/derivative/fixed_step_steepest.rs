@@ -117,7 +117,7 @@ impl<A, P, C> Running<A, P, C> {
     }
 }
 
-impl<A, P, C> OptimizerBase for Running<A, P, C>
+impl<A, P, C> RunningOptimizerBase for Running<A, P, C>
 where
     P: Problem<PointElem = A, PointValue = A>,
 {
@@ -142,7 +142,7 @@ where
     }
 }
 
-impl<A, P, C> OptimizerStep for Running<A, P, C>
+impl<A, P, C> RunningOptimizerStep for Running<A, P, C>
 where
     A: Clone + SubAssign + Mul<Output = A>,
     P: Differentiable<PointElem = A, PointValue = A>,
@@ -161,7 +161,7 @@ where
     }
 }
 
-impl<A, P, C> OptimizerDeinitialization for Running<A, P, C>
+impl<A, P, C> RunningOptimizerDeinitialization for Running<A, P, C>
 where
     P: Problem<PointElem = A, PointValue = A>,
 {

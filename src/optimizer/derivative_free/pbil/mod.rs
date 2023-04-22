@@ -128,7 +128,7 @@ where
     }
 }
 
-impl<P, C> OptimizerBase for RunningDoneWhenConverged<P, C>
+impl<P, C> RunningOptimizerBase for RunningDoneWhenConverged<P, C>
 where
     P: Problem<PointElem = bool>,
 {
@@ -153,7 +153,7 @@ where
     }
 }
 
-impl<P, C> OptimizerStep for RunningDoneWhenConverged<P, C>
+impl<P, C> RunningOptimizerStep for RunningDoneWhenConverged<P, C>
 where
     P: Problem<PointElem = bool> + FixedLength,
     C: Borrow<DoneWhenConvergedConfig<P>>,
@@ -173,7 +173,7 @@ where
     }
 }
 
-impl<P, C> OptimizerDeinitialization for RunningDoneWhenConverged<P, C>
+impl<P, C> RunningOptimizerDeinitialization for RunningDoneWhenConverged<P, C>
 where
     P: Problem<PointElem = bool>,
 {
@@ -337,7 +337,7 @@ where
     }
 }
 
-impl<P, C> OptimizerBase for Running<P, C>
+impl<P, C> RunningOptimizerBase for Running<P, C>
 where
     P: Problem<PointElem = bool>,
 {
@@ -362,7 +362,7 @@ where
     }
 }
 
-impl<P, C> OptimizerStep for Running<P, C>
+impl<P, C> RunningOptimizerStep for Running<P, C>
 where
     P: Problem<PointElem = bool> + FixedLength,
     C: Borrow<Config<P>>,
@@ -381,7 +381,7 @@ where
     }
 }
 
-impl<P, C> OptimizerDeinitialization for Running<P, C>
+impl<P, C> RunningOptimizerDeinitialization for Running<P, C>
 where
     P: Problem<PointElem = bool>,
 {

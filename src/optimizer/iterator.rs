@@ -57,7 +57,7 @@ impl<P, C, S, O> StepIterator<P, C, S, O> {
 
 impl<P, C, S, O> StreamingIterator for StepIterator<P, C, S, O>
 where
-    O: OptimizerStep<Problem = P, Config = C, State = S>,
+    O: RunningOptimizerStep<Problem = P, Config = C, State = S>,
 {
     type Item = O;
 

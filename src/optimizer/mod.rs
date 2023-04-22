@@ -46,19 +46,25 @@ pub trait StochasticOptimizerConfig<R>: OptimizerConfig {
     fn start_using(self, rng: &mut R) -> Self::Optimizer;
 }
 
-/// A fully defined optimizer.
+/// A fully defined running optimizer.
 ///
 /// A type implementing this
 /// should also implement one of
 /// `PointBased`
 /// or `PopulationBased`.
-pub trait Optimizer: OptimizerBase + OptimizerStep + OptimizerDeinitialization {}
+pub trait RunningOptimizer:
+    RunningOptimizerBase + RunningOptimizerStep + RunningOptimizerDeinitialization
+{
+}
 
-impl<T> Optimizer for T where T: OptimizerBase + OptimizerStep + OptimizerDeinitialization {}
+impl<T> RunningOptimizer for T where
+    T: RunningOptimizerBase + RunningOptimizerStep + RunningOptimizerDeinitialization
+{
+}
 
-/// Optimizer methods requiring only a reference.
+/// Running optimizer methods requiring only a reference.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait OptimizerBase {
+pub trait RunningOptimizerBase {
     /// Problem to optimize.
     type Problem: Problem;
 
@@ -89,23 +95,23 @@ pub trait OptimizerBase {
     fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue>;
 }
 
-/// Step methods of an optimizer.
+/// Step methods of a running optimizer.
 #[blanket(derive(Mut, Box))]
-pub trait OptimizerStep: OptimizerBase {
+pub trait RunningOptimizerStep: RunningOptimizerBase {
     /// Perform an optimization step.
     fn step(&mut self);
 }
 
-/// Standard deinitialization of an optimizer.
+/// Standard deinitialization of a running optimizer.
 #[blanket(derive(Box))]
-pub trait OptimizerDeinitialization: OptimizerBase {
+pub trait RunningOptimizerDeinitialization: RunningOptimizerBase {
     /// Stop optimization run,
     /// returning configuration and state.
     fn stop(self) -> (Self::Config, Self::State);
 }
 
 /// An automatically implemented extension to [`RunningOptimizer`].
-pub trait RunningOptimizerExt<'a>: OptimizerBase {
+pub trait RunningOptimizerExt<'a>: RunningOptimizerBase {
     /// Return the value of the best point discovered,
     /// evaluating the best point
     /// if necessary.
@@ -119,7 +125,7 @@ pub trait RunningOptimizerExt<'a>: OptimizerBase {
 
 impl<'a, T> RunningOptimizerExt<'a> for T
 where
-    T: OptimizerBase,
+    T: RunningOptimizerBase,
     Self::Config: OptimizerConfig<Problem = Self::Problem> + 'a,
 {
     fn best_point_value(&self) -> Cow<<Self::Problem as Problem>::PointValue>
@@ -140,7 +146,7 @@ where
 /// A running optimizer able to efficiently provide a view
 /// of a point to be evaluated.
 /// For optimizers evaluating at most one point per step.
-pub trait PointBased: OptimizerBase {
+pub trait PointBased: RunningOptimizerBase {
     /// Return point to be evaluated.
     fn point(&self) -> Option<ArrayView1<<Self::Problem as Problem>::PointElem>>;
 }
@@ -148,7 +154,7 @@ pub trait PointBased: OptimizerBase {
 /// A running optimizer able to efficiently provide a view
 /// of points to be evaluated.
 /// For optimizers evaluating more than one point per step.
-pub trait PopulationBased: OptimizerBase {
+pub trait PopulationBased: RunningOptimizerBase {
     /// Return points to be evaluated.
     fn points(&self) -> ArrayView2<<Self::Problem as Problem>::PointElem>;
 }
@@ -156,7 +162,7 @@ pub trait PopulationBased: OptimizerBase {
 /// A running optimizer that may be done.
 /// This does *not* guarantee the optimizer *will* converge,
 /// only that it *may*.
-pub trait Convergent: OptimizerBase {
+pub trait Convergent: RunningOptimizerBase {
     /// Return if optimizer is done.
     fn is_done(&self) -> bool;
 }
@@ -175,7 +181,7 @@ mod tests {
 
     is_object_safe!(OptimizerConfig<Problem = (), Optimizer = ()>);
     is_object_safe!(StochasticOptimizerConfig<(), Problem = (), Optimizer = ()>);
-    is_object_safe!(Optimizer<Problem = (), Config = (), State = ()>);
+    is_object_safe!(RunningOptimizer<Problem = (), Config = (), State = ()>);
     is_object_safe!(PointBased<Problem = (), Config = (), State = ()>);
     is_object_safe!(Convergent<Problem = (), Config = (), State = ()>);
 }

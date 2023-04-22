@@ -2,9 +2,9 @@
 
 pub use crate::{
     optimizer::{
-        derivative::StepSize, Convergent, IntoStreamingIterator, Optimizer, OptimizerBase,
-        OptimizerConfig, OptimizerDeinitialization, OptimizerStep, PointBased, PopulationBased,
-        RunningOptimizerExt, StochasticOptimizerConfig,
+        derivative::StepSize, Convergent, IntoStreamingIterator, OptimizerConfig, PointBased,
+        PopulationBased, RunningOptimizer, RunningOptimizerBase, RunningOptimizerDeinitialization,
+        RunningOptimizerExt, RunningOptimizerStep, StochasticOptimizerConfig,
     },
     problem::*,
 };
