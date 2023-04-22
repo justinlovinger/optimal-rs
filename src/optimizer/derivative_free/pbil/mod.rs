@@ -107,7 +107,7 @@ where
     }
 
     fn problem(&self) -> &P {
-        &self.borrow().inner.problem
+        &self.inner.problem
     }
 }
 
@@ -319,7 +319,7 @@ where
     }
 
     fn problem(&self) -> &P {
-        &self.borrow().problem
+        &self.problem
     }
 }
 
