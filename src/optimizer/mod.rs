@@ -19,7 +19,7 @@ use crate::prelude::Problem;
 pub use self::iterator::*;
 
 /// An optimizer configuration.
-// #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
+#[blanket(derive(Box))]
 pub trait OptimizerConfig {
     /// Problem to optimize.
     type Problem;
@@ -39,6 +39,7 @@ pub trait OptimizerConfig {
 /// An optimizer configuration
 /// for an optimizer
 /// requiring a source of randomness.
+#[blanket(derive(Box))]
 pub trait StochasticOptimizerConfig<R>: OptimizerConfig {
     /// Return a running optimizer
     /// initialized using `rng`.
