@@ -13,11 +13,9 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut iter = Running::new(
-//!         Config::new(Sphere, StepSize::new(0.5).unwrap()),
-//!         Array::random(2, Uniform::new(-1.0, 1.0)),
-//!     )
-//!     .into_streaming_iter();
+//!     let mut iter = Config::new(Sphere, StepSize::new(0.5).unwrap())
+//!         .start()
+//!         .into_streaming_iter();
 //!     println!("{}", iter.nth(100).unwrap().best_point());
 //! }
 //!
@@ -37,6 +35,18 @@
 //!         point.map(|x| 2.0 * x)
 //!     }
 //! }
+//!
+//! impl FixedLength for Sphere {
+//!     fn len(&self) -> usize {
+//!         2
+//!     }
+//! }
+//!
+//! impl Bounded for Sphere {
+//!     fn bounds(&self) -> Box<dyn Iterator<Item = std::ops::RangeInclusive<Self::PointElem>>> {
+//!         Box::new(std::iter::repeat(-10.0..=10.0).take(self.len()))
+//!     }
+//! }
 //! ```
 
 use std::{
@@ -46,6 +56,10 @@ use std::{
 };
 
 use ndarray::{prelude::*, Data};
+use rand::{
+    distributions::uniform::{SampleUniform, Uniform},
+    prelude::*,
+};
 use replace_with::replace_with_or_abort;
 
 use crate::prelude::*;
@@ -85,30 +99,36 @@ impl<A, P> Config<A, P> {
     }
 }
 
-impl<A, P> Config<A, P>
+impl<A, P> OptimizerConfig for Config<A, P>
 where
-    A: Clone + SubAssign + Mul<Output = A>,
+    P: Problem<PointElem = A> + FixedLength + Bounded,
+    P::PointElem: SampleUniform,
 {
-    /// step from one state to another
-    /// given point derivatives.
-    fn step_from_evaluated<S>(
-        &self,
-        point_derivatives: ArrayBase<S, Ix1>,
-        mut state: Point<A>,
-    ) -> Point<A>
-    where
-        S: Data<Elem = A>,
-    {
-        state.zip_mut_with(&point_derivatives, |x, d| {
-            *x -= self.step_size.clone() * d.clone()
-        });
-        state
+    type Problem = P;
+
+    type Optimizer = Running<A, P, Self>;
+
+    fn start(self) -> Self::Optimizer {
+        let mut rng = thread_rng();
+        let state = self
+            .problem
+            .bounds()
+            .take(self.problem.len())
+            .map(|range| {
+                let (start, end) = range.into_inner();
+                Uniform::new_inclusive(start, end).sample(&mut rng)
+            })
+            .collect();
+        Running::new(self, state)
+    }
+
+    fn problem(&self) -> &Self::Problem {
+        &self.problem
     }
 }
 
 impl<A, P, C> Running<A, P, C> {
-    /// Return a new 'FixedStepSteepestDescent'.
-    pub fn new(config: C, state: Point<A>) -> Self {
+    fn new(config: C, state: Point<A>) -> Self {
         Self {
             problem: PhantomData,
             config,
@@ -178,5 +198,26 @@ where
 {
     fn point(&self) -> Option<ArrayView1<A>> {
         Some(self.state.view())
+    }
+}
+
+impl<A, P> Config<A, P>
+where
+    A: Clone + SubAssign + Mul<Output = A>,
+{
+    /// step from one state to another
+    /// given point derivatives.
+    fn step_from_evaluated<S>(
+        &self,
+        point_derivatives: ArrayBase<S, Ix1>,
+        mut state: Point<A>,
+    ) -> Point<A>
+    where
+        S: Data<Elem = A>,
+    {
+        state.zip_mut_with(&point_derivatives, |x, d| {
+            *x -= self.step_size.clone() * d.clone()
+        });
+        state
     }
 }

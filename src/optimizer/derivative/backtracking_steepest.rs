@@ -15,18 +15,13 @@
 //!
 //! fn main() {
 //!     let backtracking_rate = BacktrackingRate::default();
-//!     let mut iter = Running::new(
-//!         Config::new(
-//!             Sphere,
-//!             SufficientDecreaseParameter::default(),
-//!             backtracking_rate,
-//!             IncrRate::from_backtracking_rate(backtracking_rate),
-//!         ),
-//!         State::new(
-//!             Array::random(2, Uniform::new(-1.0, 1.0)),
-//!             StepSize::new(1.0).unwrap(),
-//!         ),
+//!     let mut iter = Config::new(
+//!         Sphere,
+//!         SufficientDecreaseParameter::default(),
+//!         backtracking_rate,
+//!         IncrRate::from_backtracking_rate(backtracking_rate),
 //!     )
+//!     .start()
 //!     .into_streaming_iter();
 //!     println!("{}", iter.nth(100).unwrap().best_point());
 //! }
@@ -47,6 +42,18 @@
 //!         point.map(|x| 2.0 * x)
 //!     }
 //! }
+//!
+//! impl FixedLength for Sphere {
+//!     fn len(&self) -> usize {
+//!         2
+//!     }
+//! }
+//!
+//! impl Bounded for Sphere {
+//!     fn bounds(&self) -> Box<dyn Iterator<Item = std::ops::RangeInclusive<Self::PointElem>>> {
+//!         Box::new(std::iter::repeat(-10.0..=10.0).take(self.len()))
+//!     }
+//! }
 //! ```
 
 use std::{
@@ -61,6 +68,10 @@ use num_traits::{
     bounds::{LowerBounded, UpperBounded},
     real::Real,
     AsPrimitive, One, Zero,
+};
+use rand::{
+    distributions::uniform::{SampleUniform, Uniform},
+    prelude::*,
 };
 use replace_with::replace_with_or_abort;
 
@@ -150,9 +161,38 @@ impl<A, P> Config<A, P> {
     }
 }
 
+impl<A, P> OptimizerConfig for Config<A, P>
+where
+    P: Problem<PointElem = A> + FixedLength + Bounded,
+    P::PointElem: SampleUniform + Real,
+{
+    type Problem = P;
+
+    type Optimizer = Running<A, P, Self>;
+
+    fn start(self) -> Self::Optimizer {
+        let mut rng = thread_rng();
+        let state = State::new(
+            self.problem
+                .bounds()
+                .take(self.problem.len())
+                .map(|range| {
+                    let (start, end) = range.into_inner();
+                    Uniform::new_inclusive(start, end).sample(&mut rng)
+                })
+                .collect(),
+            StepSize::new(A::one()).unwrap(),
+        );
+        Running::new(self, state)
+    }
+
+    fn problem(&self) -> &Self::Problem {
+        &self.problem
+    }
+}
+
 impl<A, P, C> Running<A, P, C> {
-    /// Return a new 'BacktrackingSteepestDescent'.
-    pub fn new(config: C, state: State<A>) -> Self {
+    fn new(config: C, state: State<A>) -> Self {
         Self {
             problem: PhantomData,
             config,
