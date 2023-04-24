@@ -15,6 +15,7 @@
 //!     println!("f({}) = {}", point, point_value);
 //! }
 //!
+//! #[derive(Clone, Debug)]
 //! struct Count;
 //!
 //! impl Problem for Count {

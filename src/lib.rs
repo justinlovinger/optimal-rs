@@ -87,3 +87,296 @@ mod derive;
 pub mod optimizer;
 pub mod prelude;
 mod problem;
+
+#[cfg(test)]
+mod tests {
+    // These tests checks API flexibility
+    // and usability,
+    // not implementation details.
+    // As such,
+    // whether or not the desired use-case can be expressed,
+    // and the code compiles,
+    // is more important
+    // than particular values.
+
+    use ndarray::prelude::*;
+    use num_traits::Zero;
+    use replace_with::replace_with_or_abort;
+    use serde::{Deserialize, Serialize};
+
+    use super::prelude::*;
+
+    #[derive(Clone, Debug, Serialize, Deserialize)]
+    struct MockProblem;
+
+    impl Problem for MockProblem {
+        type PointElem = usize;
+        type PointValue = usize;
+        fn evaluate(&self, _point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
+            0
+        }
+    }
+
+    macro_rules! mock_optimizer {
+        ( $id:ident ) => {
+            paste::paste! {
+                #[derive(Clone, Debug, Serialize, Deserialize)]
+                struct [< MockConfig $id >]<P>(P);
+
+                #[derive(Clone, Debug, Serialize, Deserialize)]
+                struct [< MockState $id >];
+
+                #[derive(Clone, Debug, Serialize, Deserialize)]
+                struct [< MockRunning $id >]<P>([< MockConfig $id >]<P>);
+
+                impl<P> OptimizerConfig for [< MockConfig $id >]<P> {
+                    type Problem = P;
+                    type Optimizer = [< MockRunning $id >]<P>;
+
+                    fn start(self) -> Self::Optimizer {
+                        [< MockRunning $id >](self)
+                    }
+
+                    fn problem(&self) -> &Self::Problem {
+                        &self.0
+                    }
+                }
+
+                impl<P> RunningOptimizerBase for [< MockRunning $id >]<P>
+                where
+                    P: Problem,
+                    P::PointElem: Clone + Zero,
+                {
+                    type Problem = P;
+                    type Config = [< MockConfig $id >]<P>;
+                    type State = [< MockState $id >];
+
+                    fn config(&self) -> &Self::Config {
+                        &self.0
+                    }
+
+                    fn state(&self) -> &Self::State {
+                        &[< MockState $id >]
+                    }
+
+                    fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1> {
+                        Array::from_elem(1, <Self::Problem as Problem>::PointElem::zero()).into()
+                    }
+
+                    fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue> {
+                        None
+                    }
+                }
+
+                impl<P> RunningOptimizerStep for [< MockRunning $id >]<P>
+                where
+                    P: Problem,
+                    P::PointElem: Clone + Zero,
+                {
+                    fn step(&mut self) {}
+                }
+
+                impl<P> RunningOptimizerDeinitialization for [< MockRunning $id >]<P>
+                where
+                    P: Problem,
+                    P::PointElem: Clone + Zero,
+                {
+                    fn stop(self) -> (Self::Config, Self::State) {
+                        (self.0, [< MockState $id >])
+                    }
+                }
+
+                impl<P> Convergent for [< MockRunning $id >]<P>
+                where
+                    P: Problem,
+                    P::PointElem: Clone + Zero,
+                {
+                    fn is_done(&self) -> bool {
+                        true
+                    }
+                }
+            }
+        };
+    }
+
+    mock_optimizer!(A);
+    mock_optimizer!(B);
+
+    #[test]
+    fn optimizers_should_be_easily_comparable() {
+        fn best_optimizer<P, I>(problem: P, optimizers: I) -> usize
+        where
+            P: Problem,
+            P::PointValue: Ord,
+            I: IntoIterator<Item = Box<dyn Optimizer<P>>>,
+        {
+            optimizers
+                .into_iter()
+                .enumerate()
+                .map(|(i, o)| (problem.evaluate(o.argmin().into()), i))
+                .min()
+                .expect("`optimizers` should be non-empty")
+                .1
+        }
+
+        best_optimizer(
+            MockProblem,
+            [
+                Box::new(MockConfigA(MockProblem)) as Box<dyn Optimizer<MockProblem>>,
+                Box::new(MockConfigB(MockProblem)) as Box<dyn Optimizer<MockProblem>>,
+            ],
+        );
+    }
+
+    #[test]
+    fn optimizers_should_be_able_to_restart_automatically() {
+        struct Restarter<O> {
+            inner: O,
+            restarts: usize,
+        }
+
+        // We only implement `step`
+        // to minimize code.
+        impl<O> Restarter<O>
+        where
+            O: RunningOptimizer + Convergent,
+            O::Config: OptimizerConfig<Optimizer = O>,
+        {
+            fn step(&mut self) {
+                if self.inner.is_done() {
+                    self.restarts += 1;
+                    replace_with_or_abort(&mut self.inner, |inner| {
+                        let (config, _) = inner.stop();
+                        config.start()
+                    })
+                } else {
+                    self.inner.step()
+                }
+            }
+        }
+
+        let mut o = Restarter {
+            restarts: 0,
+            inner: MockConfigA(MockProblem).start(),
+        };
+        o.step();
+    }
+
+    #[test]
+    fn parallel_optimization_runs_should_be_easy() {
+        use std::{sync::Arc, thread::spawn};
+
+        fn parallel(config: Arc<dyn Optimizer<MockProblem> + Send + Sync>) {
+            let config1 = Arc::clone(&config);
+            let handler1 = spawn(move || config1.argmin());
+            let handler2 = spawn(move || config.argmin());
+            handler1.join().unwrap();
+            handler2.join().unwrap();
+        }
+
+        parallel(Arc::new(MockConfigA(MockProblem)));
+    }
+
+    // Applications may need to select an optimizer at runtime,
+    // run it for less than a full optimization,
+    // save the partial run,
+    // and resume it later.
+    #[test]
+    fn dynamic_optimizers_should_be_partially_runable() {
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        enum MockConfig {
+            A(MockConfigA<MockProblem>),
+            B(MockConfigB<MockProblem>),
+        }
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        enum MockState {
+            A(MockStateA),
+            B(MockStateB),
+        }
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        enum MockRunning {
+            A(MockRunningA<MockProblem>),
+            B(MockRunningB<MockProblem>),
+        }
+
+        impl OptimizerConfig for MockConfig {
+            type Problem = MockProblem;
+            type Optimizer = MockRunning;
+
+            fn start(self) -> Self::Optimizer {
+                match self {
+                    Self::A(x) => MockRunning::A(x.start()),
+                    Self::B(x) => MockRunning::B(x.start()),
+                }
+            }
+
+            fn problem(&self) -> &Self::Problem {
+                match self {
+                    Self::A(x) => x.problem(),
+                    Self::B(x) => x.problem(),
+                }
+            }
+        }
+
+        impl RunningOptimizerBase for MockRunning {
+            type Problem = MockProblem;
+            type Config = MockConfig;
+            type State = MockState;
+
+            fn config(&self) -> &Self::Config {
+                unimplemented!()
+            }
+
+            fn state(&self) -> &Self::State {
+                unimplemented!()
+            }
+
+            fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1> {
+                match self {
+                    Self::A(x) => x.best_point(),
+                    Self::B(x) => x.best_point(),
+                }
+            }
+
+            fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue> {
+                match self {
+                    Self::A(x) => x.stored_best_point_value(),
+                    Self::B(x) => x.stored_best_point_value(),
+                }
+            }
+        }
+
+        impl RunningOptimizerStep for MockRunning {
+            fn step(&mut self) {
+                match self {
+                    Self::A(x) => x.step(),
+                    Self::B(x) => x.step(),
+                }
+            }
+        }
+
+        impl RunningOptimizerDeinitialization for MockRunning {
+            fn stop(self) -> (Self::Config, Self::State) {
+                match self {
+                    Self::A(x) => {
+                        let (c, s) = x.stop();
+                        (MockConfig::A(c), MockState::A(s))
+                    }
+                    Self::B(x) => {
+                        let (c, s) = x.stop();
+                        (MockConfig::B(c), MockState::B(s))
+                    }
+                }
+            }
+        }
+
+        let mut o = MockConfig::A(MockConfigA(MockProblem)).start();
+        o.step();
+        let store = serde_json::to_string(&o).unwrap();
+        o = serde_json::from_str(&store).unwrap();
+        o.step();
+        // o.best_point_value(); // TODO
+    }
+}

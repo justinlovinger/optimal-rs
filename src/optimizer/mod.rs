@@ -30,18 +30,22 @@ where
     ///
     /// How well the point minimizes the problem
     /// depends on the optimizer.
-    fn argmin(self) -> Array1<P::PointElem>;
+    fn argmin(&self) -> Array1<P::PointElem>;
 }
 
 impl<P, T> Optimizer<P> for T
 where
     P: Problem,
     P::PointElem: Clone,
-    T: OptimizerConfig<Problem = P>,
+    T: OptimizerConfig<Problem = P> + Clone,
     T::Optimizer: RunningOptimizer<Problem = P> + Convergent,
 {
-    fn argmin(self) -> Array1<P::PointElem> {
-        self.start()
+    fn argmin(&self) -> Array1<P::PointElem> {
+        // Calling `clone` here is not ideal,
+        // but taking `self` would make this method unusable
+        // in many use cases.
+        self.clone()
+            .start()
             .into_streaming_iter()
             .find(|o| o.is_done())
             .expect("should converge")
