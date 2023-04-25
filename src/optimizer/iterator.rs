@@ -7,12 +7,6 @@ use crate::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-impl<P, C, S, O> IntoStreamingIterator<P, C, S> for O {
-    fn into_streaming_iter(self) -> StepIterator<P, C, S, O> {
-        StepIterator::new(self)
-    }
-}
-
 /// An automatically implemented extension to [`RunningOptimizer`]
 /// providing an iterator-based API.
 ///
@@ -20,30 +14,32 @@ impl<P, C, S, O> IntoStreamingIterator<P, C, S> for O {
 /// meaning the first call to `advance` or `next` will not change state.
 /// For example,
 /// `nth(100)` will step `99` times.
-pub trait IntoStreamingIterator<P, C, S> {
+pub trait IntoStreamingIterator<P> {
     /// Return an iterator over optimizer states.
-    fn into_streaming_iter(self) -> StepIterator<P, C, S, Self>
+    fn into_streaming_iter(self) -> StepIterator<P, Self>
     where
         Self: Sized;
+}
+
+impl<P, O> IntoStreamingIterator<P> for O {
+    fn into_streaming_iter(self) -> StepIterator<P, O> {
+        StepIterator::new(self)
+    }
 }
 
 /// An iterator returned by [`into_streaming_iter`].
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StepIterator<P, C, S, O> {
+pub struct StepIterator<P, O> {
     problem: PhantomData<P>,
-    config: PhantomData<C>,
-    state: PhantomData<S>,
     inner: O,
     skipped_first_step: bool,
 }
 
-impl<P, C, S, O> StepIterator<P, C, S, O> {
+impl<P, O> StepIterator<P, O> {
     fn new(optimizer: O) -> Self {
         Self {
             problem: PhantomData,
-            config: PhantomData,
-            state: PhantomData,
             inner: optimizer,
             skipped_first_step: false,
         }
@@ -55,9 +51,9 @@ impl<P, C, S, O> StepIterator<P, C, S, O> {
     }
 }
 
-impl<P, C, S, O> StreamingIterator for StepIterator<P, C, S, O>
+impl<P, O> StreamingIterator for StepIterator<P, O>
 where
-    O: RunningOptimizerStep<Problem = P, Config = C, State = S>,
+    O: RunningOptimizerStep<Problem = P>,
 {
     type Item = O;
 

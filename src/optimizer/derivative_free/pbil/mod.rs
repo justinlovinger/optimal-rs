@@ -127,20 +127,33 @@ where
     }
 }
 
-impl<P, C> RunningOptimizerBase for RunningDoneWhenConverged<P, C>
-where
-    P: Problem<PointElem = bool>,
-{
-    type Problem = P;
-    type Config = C;
-    type State = State;
-
-    fn config(&self) -> &C {
+impl<P, C> RunningDoneWhenConverged<P, C> {
+    /// Return optimizer configuration.
+    pub fn config(&self) -> &C {
         &self.config
     }
 
-    fn state(&self) -> &State {
+    /// Return state of optimizer.
+    pub fn state(&self) -> &State {
         &self.state
+    }
+
+    /// Stop optimization run,
+    /// returning configuration and state.
+    pub fn into_inner(self) -> (C, State) {
+        (self.config, self.state)
+    }
+}
+
+impl<P, C> RunningOptimizerBase for RunningDoneWhenConverged<P, C>
+where
+    P: Problem<PointElem = bool>,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
+{
+    type Problem = P;
+
+    fn problem(&self) -> &Self::Problem {
+        &self.config.borrow().inner.problem
     }
 
     fn best_point(&self) -> CowArray<bool, Ix1> {
@@ -172,15 +185,6 @@ where
     }
 }
 
-impl<P, C> RunningOptimizerDeinitialization for RunningDoneWhenConverged<P, C>
-where
-    P: Problem<PointElem = bool>,
-{
-    fn stop(self) -> (C, State) {
-        (self.config, self.state)
-    }
-}
-
 impl<P, C> Convergent for RunningDoneWhenConverged<P, C>
 where
     P: Problem<PointElem = bool>,
@@ -197,6 +201,7 @@ where
 impl<P, C> PopulationBased for RunningDoneWhenConverged<P, C>
 where
     P: Problem<PointElem = bool>,
+    C: Borrow<DoneWhenConvergedConfig<P>>,
 {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()
@@ -336,20 +341,33 @@ where
     }
 }
 
-impl<P, C> RunningOptimizerBase for Running<P, C>
-where
-    P: Problem<PointElem = bool>,
-{
-    type Problem = P;
-    type Config = C;
-    type State = State;
-
-    fn config(&self) -> &C {
+impl<P, C> Running<P, C> {
+    /// Return optimizer configuration.
+    pub fn config(&self) -> &C {
         &self.config
     }
 
-    fn state(&self) -> &State {
+    /// Return state of optimizer.
+    pub fn state(&self) -> &State {
         &self.state
+    }
+
+    /// Stop optimization run,
+    /// returning configuration and state.
+    pub fn into_inner(self) -> (C, State) {
+        (self.config, self.state)
+    }
+}
+
+impl<P, C> RunningOptimizerBase for Running<P, C>
+where
+    P: Problem<PointElem = bool>,
+    C: Borrow<Config<P>>,
+{
+    type Problem = P;
+
+    fn problem(&self) -> &Self::Problem {
+        &self.config.borrow().problem
     }
 
     fn best_point(&self) -> CowArray<bool, Ix1> {
@@ -380,18 +398,10 @@ where
     }
 }
 
-impl<P, C> RunningOptimizerDeinitialization for Running<P, C>
-where
-    P: Problem<PointElem = bool>,
-{
-    fn stop(self) -> (C, State) {
-        (self.config, self.state)
-    }
-}
-
 impl<P, C> PopulationBased for Running<P, C>
 where
     P: Problem<PointElem = bool>,
+    C: Borrow<Config<P>>,
 {
     fn points(&self) -> ArrayView2<bool> {
         self.state.points()

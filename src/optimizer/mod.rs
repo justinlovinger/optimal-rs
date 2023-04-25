@@ -88,15 +88,9 @@ pub trait StochasticOptimizerConfig<R>: OptimizerConfig {
 /// should also implement one of
 /// `PointBased`
 /// or `PopulationBased`.
-pub trait RunningOptimizer:
-    RunningOptimizerBase + RunningOptimizerStep + RunningOptimizerDeinitialization
-{
-}
+pub trait RunningOptimizer: RunningOptimizerBase + RunningOptimizerStep {}
 
-impl<T> RunningOptimizer for T where
-    T: RunningOptimizerBase + RunningOptimizerStep + RunningOptimizerDeinitialization
-{
-}
+impl<T> RunningOptimizer for T where T: RunningOptimizerBase + RunningOptimizerStep {}
 
 /// Running optimizer methods requiring only a reference.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
@@ -104,17 +98,8 @@ pub trait RunningOptimizerBase {
     /// Problem to optimize.
     type Problem: Problem;
 
-    /// Configuration for this optimizer.
-    type Config;
-
-    /// State of this optimizer.
-    type State;
-
-    /// Return optimizer configuration.
-    fn config(&self) -> &Self::Config;
-
-    /// Return state of optimizer.
-    fn state(&self) -> &Self::State;
+    /// Return problem being optimized.
+    fn problem(&self) -> &Self::Problem;
 
     /// Return the best point discovered.
     fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1>;
@@ -138,14 +123,6 @@ pub trait RunningOptimizerStep: RunningOptimizerBase {
     fn step(&mut self);
 }
 
-/// Standard deinitialization of a running optimizer.
-#[blanket(derive(Box))]
-pub trait RunningOptimizerDeinitialization: RunningOptimizerBase {
-    /// Stop optimization run,
-    /// returning configuration and state.
-    fn stop(self) -> (Self::Config, Self::State);
-}
-
 /// An automatically implemented extension to [`RunningOptimizer`].
 pub trait RunningOptimizerExt<'a>: RunningOptimizerBase {
     /// Return the value of the best point discovered,
@@ -154,15 +131,11 @@ pub trait RunningOptimizerExt<'a>: RunningOptimizerBase {
     fn best_point_value(&self) -> Cow<<Self::Problem as Problem>::PointValue>
     where
         <Self::Problem as Problem>::PointValue: Clone;
-
-    /// Return problem to optimize.
-    fn problem(&'a self) -> &'a Self::Problem;
 }
 
 impl<'a, T> RunningOptimizerExt<'a> for T
 where
     T: RunningOptimizerBase,
-    Self::Config: OptimizerConfig<Problem = Self::Problem> + 'a,
 {
     fn best_point_value(&self) -> Cow<<Self::Problem as Problem>::PointValue>
     where
@@ -172,10 +145,6 @@ where
             || Cow::Owned(self.problem().evaluate(self.best_point())),
             Cow::Borrowed,
         )
-    }
-
-    fn problem(&'a self) -> &'a Self::Problem {
-        self.config().problem()
     }
 }
 
@@ -217,7 +186,7 @@ mod tests {
 
     is_object_safe!(OptimizerConfig<Problem = (), Optimizer = ()>);
     is_object_safe!(StochasticOptimizerConfig<(), Problem = (), Optimizer = ()>);
-    is_object_safe!(RunningOptimizer<Problem = (), Config = (), State = ()>);
-    is_object_safe!(PointBased<Problem = (), Config = (), State = ()>);
-    is_object_safe!(Convergent<Problem = (), Config = (), State = ()>);
+    is_object_safe!(RunningOptimizer<Problem = ()>);
+    is_object_safe!(PointBased<Problem = ()>);
+    is_object_safe!(Convergent<Problem = ()>);
 }

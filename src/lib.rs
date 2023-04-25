@@ -101,7 +101,6 @@ mod tests {
 
     use ndarray::prelude::*;
     use num_traits::Zero;
-    use replace_with::replace_with_or_abort;
     use serde::{Deserialize, Serialize};
 
     use super::prelude::*;
@@ -148,15 +147,9 @@ mod tests {
                     P::PointElem: Clone + Zero,
                 {
                     type Problem = P;
-                    type Config = [< MockConfig $id >]<P>;
-                    type State = [< MockState $id >];
 
-                    fn config(&self) -> &Self::Config {
-                        &self.0
-                    }
-
-                    fn state(&self) -> &Self::State {
-                        &[< MockState $id >]
+                    fn problem(&self) -> &Self::Problem {
+                        &self.0.0
                     }
 
                     fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1> {
@@ -174,16 +167,6 @@ mod tests {
                     P::PointElem: Clone + Zero,
                 {
                     fn step(&mut self) {}
-                }
-
-                impl<P> RunningOptimizerDeinitialization for [< MockRunning $id >]<P>
-                where
-                    P: Problem,
-                    P::PointElem: Clone + Zero,
-                {
-                    fn stop(self) -> (Self::Config, Self::State) {
-                        (self.0, [< MockState $id >])
-                    }
                 }
 
                 impl<P> Convergent for [< MockRunning $id >]<P>
@@ -230,35 +213,45 @@ mod tests {
 
     #[test]
     fn optimizers_should_be_able_to_restart_automatically() {
-        struct Restarter<O> {
-            inner: O,
+        struct Restarter<C>
+        where
+            C: OptimizerConfig,
+        {
+            config: C,
+            inner: C::Optimizer,
             restarts: usize,
         }
 
         // We only implement `step`
         // to minimize code.
-        impl<O> Restarter<O>
+        impl<C> Restarter<C>
         where
-            O: RunningOptimizer + Convergent,
-            O::Config: OptimizerConfig<Optimizer = O>,
+            C: Clone + OptimizerConfig,
         {
-            fn step(&mut self) {
+            fn new(config: C) -> Self {
+                Self {
+                    restarts: 0,
+                    inner: config.clone().start(),
+                    config,
+                }
+            }
+
+            fn step(&mut self)
+            where
+                C::Optimizer: RunningOptimizer + Convergent,
+            {
                 if self.inner.is_done() {
                     self.restarts += 1;
-                    replace_with_or_abort(&mut self.inner, |inner| {
-                        let (config, _) = inner.stop();
-                        config.start()
-                    })
+                    // Ideally,
+                    // we would not need to clone.
+                    self.inner = self.config.clone().start();
                 } else {
                     self.inner.step()
                 }
             }
         }
 
-        let mut o = Restarter {
-            restarts: 0,
-            inner: MockConfigA(MockProblem).start(),
-        };
+        let mut o = Restarter::new(MockConfigA(MockProblem));
         o.step();
     }
 
@@ -322,15 +315,12 @@ mod tests {
 
         impl RunningOptimizerBase for MockRunning {
             type Problem = MockProblem;
-            type Config = MockConfig;
-            type State = MockState;
 
-            fn config(&self) -> &Self::Config {
-                unimplemented!()
-            }
-
-            fn state(&self) -> &Self::State {
-                unimplemented!()
+            fn problem(&self) -> &Self::Problem {
+                match self {
+                    Self::A(x) => x.problem(),
+                    Self::B(x) => x.problem(),
+                }
             }
 
             fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1> {
@@ -357,26 +347,11 @@ mod tests {
             }
         }
 
-        impl RunningOptimizerDeinitialization for MockRunning {
-            fn stop(self) -> (Self::Config, Self::State) {
-                match self {
-                    Self::A(x) => {
-                        let (c, s) = x.stop();
-                        (MockConfig::A(c), MockState::A(s))
-                    }
-                    Self::B(x) => {
-                        let (c, s) = x.stop();
-                        (MockConfig::B(c), MockState::B(s))
-                    }
-                }
-            }
-        }
-
         let mut o = MockConfig::A(MockConfigA(MockProblem)).start();
         o.step();
         let store = serde_json::to_string(&o).unwrap();
         o = serde_json::from_str(&store).unwrap();
         o.step();
-        // o.best_point_value(); // TODO
+        o.best_point_value();
     }
 }

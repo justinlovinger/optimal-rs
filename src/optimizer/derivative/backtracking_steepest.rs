@@ -199,22 +199,33 @@ impl<A, P, C> Running<A, P, C> {
             state,
         }
     }
+
+    /// Return optimizer configuration.
+    pub fn config(&self) -> &C {
+        &self.config
+    }
+
+    /// Return state of optimizer.
+    pub fn state(&self) -> &State<A> {
+        &self.state
+    }
+
+    /// Stop optimization run,
+    /// returning configuration and state.
+    pub fn into_inner(self) -> (C, State<A>) {
+        (self.config, self.state)
+    }
 }
 
 impl<A, P, C> RunningOptimizerBase for Running<A, P, C>
 where
     P: Problem<PointElem = A, PointValue = A>,
+    C: Borrow<Config<A, P>>,
 {
     type Problem = P;
-    type Config = C;
-    type State = State<A>;
 
-    fn config(&self) -> &C {
-        &self.config
-    }
-
-    fn state(&self) -> &State<A> {
-        &self.state
+    fn problem(&self) -> &Self::Problem {
+        &self.config.borrow().problem
     }
 
     fn best_point(&self) -> CowArray<A, Ix1> {
@@ -263,18 +274,10 @@ where
     }
 }
 
-impl<A, P, C> RunningOptimizerDeinitialization for Running<A, P, C>
-where
-    P: Problem<PointElem = A, PointValue = A>,
-{
-    fn stop(self) -> (C, State<A>) {
-        (self.config, self.state)
-    }
-}
-
 impl<A, P, C> PointBased for Running<A, P, C>
 where
     P: Problem<PointElem = A, PointValue = A>,
+    C: Borrow<Config<A, P>>,
 {
     fn point(&self) -> Option<ArrayView1<A>> {
         self.state.point()
