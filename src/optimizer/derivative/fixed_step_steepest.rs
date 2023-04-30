@@ -101,8 +101,8 @@ impl<A, P> Config<A, P> {
 
 impl<A, P> OptimizerConfig for Config<A, P>
 where
-    P: Problem<PointElem = A> + FixedLength + Bounded,
-    P::PointElem: SampleUniform,
+    P: Differentiable<PointElem = A, PointValue = A> + FixedLength + Bounded,
+    P::PointElem: Clone + SubAssign + Mul<Output = A> + SampleUniform,
 {
     type Problem = P;
 

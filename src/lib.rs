@@ -128,7 +128,11 @@ mod tests {
                 #[derive(Clone, Debug, Serialize, Deserialize)]
                 struct [< MockRunning $id >]<P>([< MockConfig $id >]<P>);
 
-                impl<P> OptimizerConfig for [< MockConfig $id >]<P> {
+                impl<P> OptimizerConfig for [< MockConfig $id >]<P>
+                where
+                    P: Problem,
+                    P::PointElem: Clone + Zero,
+                {
                     type Problem = P;
                     type Optimizer = [< MockRunning $id >]<P>;
 

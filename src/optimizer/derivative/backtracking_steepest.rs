@@ -163,8 +163,9 @@ impl<A, P> Config<A, P> {
 
 impl<A, P> OptimizerConfig for Config<A, P>
 where
-    P: Problem<PointElem = A> + FixedLength + Bounded,
-    P::PointElem: SampleUniform + Real,
+    P: Differentiable<PointElem = A, PointValue = A> + FixedLength + Bounded,
+    P::PointElem: SampleUniform + Real + 'static,
+    f64: AsPrimitive<A>,
 {
     type Problem = P;
 

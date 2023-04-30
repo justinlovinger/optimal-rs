@@ -92,6 +92,7 @@ impl<P> DoneWhenConvergedConfig<P> {
 impl<P> OptimizerConfig for DoneWhenConvergedConfig<P>
 where
     P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
 {
     type Problem = P;
     type Optimizer = RunningDoneWhenConverged<P, Self>;
@@ -113,6 +114,7 @@ where
 impl<P> StochasticOptimizerConfig<SplitMix64> for DoneWhenConvergedConfig<P>
 where
     P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
 {
     fn start_using(
         self,
@@ -309,6 +311,7 @@ impl<P> Config<P> {
 impl<P> OptimizerConfig for Config<P>
 where
     P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
 {
     type Problem = P;
     type Optimizer = Running<P, Self>;
@@ -330,6 +333,7 @@ where
 impl<P> StochasticOptimizerConfig<SplitMix64> for Config<P>
 where
     P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
 {
     fn start_using(self, rng: &mut SplitMix64) -> Running<P, Config<P>> {
         let state = State::initial_using(self.problem.len(), rng);

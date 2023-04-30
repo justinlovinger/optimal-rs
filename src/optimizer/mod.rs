@@ -58,10 +58,10 @@ where
 #[blanket(derive(Box))]
 pub trait OptimizerConfig {
     /// Problem to optimize.
-    type Problem;
+    type Problem: Problem;
 
     /// Optimizer this config can initialize.
-    type Optimizer;
+    type Optimizer: RunningOptimizer<Problem = Self::Problem>;
 
     /// Return a running optimizer.
     ///
