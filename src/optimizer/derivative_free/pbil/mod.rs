@@ -169,7 +169,7 @@ where
 
 impl<P, C> RunningOptimizerStep for RunningDoneWhenConverged<P, C>
 where
-    P: Problem<PointElem = bool> + FixedLength,
+    P: Problem<PointElem = bool>,
     C: Borrow<DoneWhenConvergedConfig<P>>,
     <Self::Problem as Problem>::PointValue: Debug + PartialOrd,
 {
@@ -385,7 +385,7 @@ where
 
 impl<P, C> RunningOptimizerStep for Running<P, C>
 where
-    P: Problem<PointElem = bool> + FixedLength,
+    P: Problem<PointElem = bool>,
     C: Borrow<Config<P>>,
     <Self::Problem as Problem>::PointValue: Debug + PartialOrd,
 {
