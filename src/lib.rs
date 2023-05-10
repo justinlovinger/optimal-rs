@@ -98,7 +98,7 @@ mod tests {
     // is more important
     // than particular values.
 
-    use std::{borrow::Borrow, marker::PhantomData};
+    use std::{borrow::Borrow, marker::PhantomData, rc::Rc, sync::Arc};
 
     use ndarray::prelude::*;
     use num_traits::Zero;
@@ -130,6 +130,7 @@ mod tests {
                 struct [< MockRunning $id >]<P, C>{
                     problem: PhantomData<P>,
                     config: C,
+                    state: [< MockState $id >],
                 }
 
                 impl<P, C> [< MockRunning $id >]<P, C> {
@@ -137,6 +138,7 @@ mod tests {
                         Self {
                             problem: PhantomData,
                             config,
+                            state: [< MockState $id >],
                         }
                     }
                 }
@@ -250,45 +252,142 @@ mod tests {
 
     #[test]
     fn optimizers_should_be_able_to_restart_automatically() {
-        struct Restarter<C>
-        where
-            C: OptimizerConfig,
-        {
-            config: C,
-            inner: C::Optimizer,
-            restarts: usize,
+        // This is a partial implementation
+        // of a restart mixin,
+        // missing best point tracking
+        // and a `Convergent` implementation.
+
+        struct RestarterConfig<P, IC> {
+            problem: PhantomData<P>,
+            inner: IC,
+            _max_restarts: usize,
         }
 
-        // We only implement `step`
-        // to minimize code.
-        impl<C> Restarter<C>
+        struct RunningRestarter<P, C, IC>
         where
-            C: Clone + OptimizerConfig,
+            P: Problem,
+            IC: OptimizerConfig,
+        {
+            problem: PhantomData<P>,
+            config: C,
+            inner_config: PhantomData<IC>,
+            state: RestarterState<P, IC::Optimizer>,
+        }
+
+        struct RestarterState<P, O>
+        where
+            P: Problem,
+        {
+            problem: PhantomData<P>,
+            inner: O,
+            restarts: usize,
+            _best_point: Option<Array1<P::PointElem>>,
+            _best_point_value: Option<P::PointValue>,
+        }
+
+        impl<P, C> RestarterConfig<P, C> {
+            fn new(inner: C, max_restarts: usize) -> Self {
+                Self {
+                    problem: PhantomData,
+                    inner,
+                    _max_restarts: max_restarts,
+                }
+            }
+        }
+
+        macro_rules! impl_optimizer_config_for_config {
+            ( $( $type:ty ),* ) => {
+                $(
+                    impl<P, IC> OptimizerConfig for $type
+                    where
+                        P: Problem,
+                        IC: Clone + OptimizerConfig<Problem = P>,
+                        IC::Optimizer: Convergent,
+                    {
+                        type Problem = P;
+                        type Optimizer = RunningRestarter<P, Self, IC>;
+
+                        fn start(self) -> Self::Optimizer {
+                            RunningRestarter::new(self)
+                        }
+
+                        fn problem(&self) -> &Self::Problem {
+                            self.inner.problem()
+                        }
+                    }
+                )*
+            };
+        }
+
+        impl_optimizer_config_for_config![
+            RestarterConfig<P, IC>,
+            &RestarterConfig<P, IC>,
+            Rc<RestarterConfig<P, IC>>,
+            Arc<RestarterConfig<P, IC>>,
+            Box<RestarterConfig<P, IC>>
+        ];
+
+        impl<P, C, IC> RunningRestarter<P, C, IC>
+        where
+            P: Problem,
+            C: Borrow<RestarterConfig<P, IC>>,
+            IC: Clone + OptimizerConfig,
         {
             fn new(config: C) -> Self {
                 Self {
-                    restarts: 0,
-                    inner: config.clone().start(),
+                    problem: PhantomData,
+                    inner_config: PhantomData,
+                    state: RestarterState {
+                        problem: PhantomData,
+                        inner: config.borrow().inner.clone().start(),
+                        restarts: 0,
+                        _best_point: None,
+                        _best_point_value: None,
+                    },
                     config,
-                }
-            }
-
-            fn step(&mut self)
-            where
-                C::Optimizer: RunningOptimizer + Convergent,
-            {
-                if self.inner.is_done() {
-                    self.restarts += 1;
-                    // Ideally,
-                    // we would not need to clone.
-                    self.inner = self.config.clone().start();
-                } else {
-                    self.inner.step()
                 }
             }
         }
 
-        let mut o = Restarter::new(MockConfigA(MockProblem));
+        impl<P, C, IC> RunningOptimizerBase for RunningRestarter<P, C, IC>
+        where
+            P: Problem,
+            IC: OptimizerConfig,
+            IC::Optimizer: RunningOptimizerBase<Problem = P>,
+        {
+            type Problem = P;
+
+            fn problem(&self) -> &Self::Problem {
+                self.state.inner.problem()
+            }
+
+            fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1> {
+                unimplemented!()
+            }
+
+            fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue> {
+                unimplemented!()
+            }
+        }
+
+        impl<P, C, IC> RunningOptimizerStep for RunningRestarter<P, C, IC>
+        where
+            P: Problem,
+            C: Borrow<RestarterConfig<P, IC>>,
+            IC: Clone + OptimizerConfig<Problem = P>,
+            IC::Optimizer: RunningOptimizer + Convergent,
+        {
+            fn step(&mut self) {
+                if self.state.inner.is_done() {
+                    self.state.restarts += 1;
+                    self.state.inner = self.config.borrow().inner.clone().start()
+                } else {
+                    self.state.inner.step()
+                }
+            }
+        }
+
+        let mut o = RestarterConfig::new(MockConfigA(MockProblem), 10).start();
         o.step();
     }
 
