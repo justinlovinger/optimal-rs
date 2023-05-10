@@ -15,7 +15,6 @@
 //!     println!("f({}) = {}", point, point_value);
 //! }
 //!
-//! #[derive(Clone, Debug)]
 //! struct Count;
 //!
 //! impl Problem for Count {
@@ -42,7 +41,7 @@ use ndarray::{prelude::*, Data};
 use rand::prelude::*;
 use rand_xoshiro::SplitMix64;
 use replace_with::replace_with_or_abort;
-use std::{borrow::Borrow, fmt::Debug, marker::PhantomData};
+use std::{borrow::Borrow, fmt::Debug, marker::PhantomData, rc::Rc, sync::Arc};
 
 use crate::prelude::*;
 
@@ -89,45 +88,56 @@ impl<P> DoneWhenConvergedConfig<P> {
     }
 }
 
-impl<P> OptimizerConfig for DoneWhenConvergedConfig<P>
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
-{
-    type Problem = P;
-    type Optimizer = RunningDoneWhenConverged<P, Self>;
+macro_rules! impl_optimizer_config_for_done_when_converged_config {
+    ( $( $type:ty ),* ) => {
+        $(
+            impl<P> OptimizerConfig for $type
+            where
+                P: Problem<PointElem = bool> + FixedLength,
+                P::PointValue: Debug + PartialOrd,
+            {
+                type Problem = P;
+                type Optimizer = RunningDoneWhenConverged<P, Self>;
 
-    fn start(self) -> Self::Optimizer {
-        let state = State::initial(self.inner.problem.len());
-        RunningDoneWhenConverged {
-            problem: PhantomData,
-            config: self,
-            state,
-        }
-    }
+                fn start(self) -> Self::Optimizer {
+                    let state = State::initial(self.inner.problem.len());
+                    RunningDoneWhenConverged {
+                        problem: PhantomData,
+                        config: self,
+                        state,
+                    }
+                }
 
-    fn problem(&self) -> &P {
-        &self.inner.problem
-    }
+                fn problem(&self) -> &P {
+                    &self.inner.problem
+                }
+            }
+
+            impl<P> StochasticOptimizerConfig<SplitMix64> for $type
+            where
+                P: Problem<PointElem = bool> + FixedLength,
+                P::PointValue: Debug + PartialOrd,
+            {
+                fn start_using(self, rng: &mut SplitMix64) -> Self::Optimizer {
+                    let state = State::initial_using(self.inner.problem.len(), rng);
+                    RunningDoneWhenConverged {
+                        problem: PhantomData,
+                        config: self,
+                        state,
+                    }
+                }
+            }
+        )*
+    };
 }
 
-impl<P> StochasticOptimizerConfig<SplitMix64> for DoneWhenConvergedConfig<P>
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
-{
-    fn start_using(
-        self,
-        rng: &mut SplitMix64,
-    ) -> RunningDoneWhenConverged<P, DoneWhenConvergedConfig<P>> {
-        let state = State::initial_using(self.inner.problem.len(), rng);
-        RunningDoneWhenConverged {
-            problem: PhantomData,
-            config: self,
-            state,
-        }
-    }
-}
+impl_optimizer_config_for_done_when_converged_config![
+    DoneWhenConvergedConfig<P>,
+    &DoneWhenConvergedConfig<P>,
+    Rc<DoneWhenConvergedConfig<P>>,
+    Arc<DoneWhenConvergedConfig<P>>,
+    Box<DoneWhenConvergedConfig<P>>
+];
 
 impl<P, C> RunningDoneWhenConverged<P, C> {
     /// Return optimizer configuration.
@@ -308,42 +318,56 @@ impl<P> Config<P> {
     }
 }
 
-impl<P> OptimizerConfig for Config<P>
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
-{
-    type Problem = P;
-    type Optimizer = Running<P, Self>;
+macro_rules! impl_optimizer_config_for_config {
+    ( $( $type:ty ),* ) => {
+        $(
+            impl<P> OptimizerConfig for $type
+            where
+                P: Problem<PointElem = bool> + FixedLength,
+                P::PointValue: Debug + PartialOrd,
+            {
+                type Problem = P;
+                type Optimizer = Running<P, Self>;
 
-    fn start(self) -> Running<P, Config<P>> {
-        let state = State::initial(self.problem.len());
-        Running {
-            problem: PhantomData,
-            config: self,
-            state,
-        }
-    }
+                fn start(self) -> Self::Optimizer {
+                    let state = State::initial(self.problem.len());
+                    Running {
+                        problem: PhantomData,
+                        config: self,
+                        state,
+                    }
+                }
 
-    fn problem(&self) -> &P {
-        &self.problem
-    }
+                fn problem(&self) -> &P {
+                    &self.problem
+                }
+            }
+
+            impl<P> StochasticOptimizerConfig<SplitMix64> for $type
+            where
+                P: Problem<PointElem = bool> + FixedLength,
+                P::PointValue: Debug + PartialOrd,
+            {
+                fn start_using(self, rng: &mut SplitMix64) -> Self::Optimizer {
+                    let state = State::initial_using(self.problem.len(), rng);
+                    Running {
+                        problem: PhantomData,
+                        config: self,
+                        state,
+                    }
+                }
+            }
+        )*
+    };
 }
 
-impl<P> StochasticOptimizerConfig<SplitMix64> for Config<P>
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
-{
-    fn start_using(self, rng: &mut SplitMix64) -> Running<P, Config<P>> {
-        let state = State::initial_using(self.problem.len(), rng);
-        Running {
-            problem: PhantomData,
-            config: self,
-            state,
-        }
-    }
-}
+impl_optimizer_config_for_config![
+    Config<P>,
+    &Config<P>,
+    Rc<Config<P>>,
+    Arc<Config<P>>,
+    Box<Config<P>>
+];
 
 impl<P, C> Running<P, C> {
     /// Return optimizer configuration.

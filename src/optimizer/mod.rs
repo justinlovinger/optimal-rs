@@ -37,15 +37,11 @@ impl<P, T> Optimizer<P> for T
 where
     P: Problem,
     P::PointElem: Clone,
-    T: OptimizerConfig<Problem = P> + Clone,
-    T::Optimizer: RunningOptimizer<Problem = P> + Convergent,
+    for<'a> &'a T: OptimizerConfig<Problem = P>,
+    for<'a> <&'a T as OptimizerConfig>::Optimizer: Convergent,
 {
     fn argmin(&self) -> Array1<P::PointElem> {
-        // Calling `clone` here is not ideal,
-        // but taking `self` would make this method unusable
-        // in many use cases.
-        self.clone()
-            .start()
+        self.start()
             .into_streaming_iter()
             .find(|o| o.is_done())
             .expect("should converge")
@@ -55,7 +51,6 @@ where
 }
 
 /// An optimizer configuration.
-#[blanket(derive(Box))]
 pub trait OptimizerConfig {
     /// Problem to optimize.
     type Problem: Problem;
@@ -75,7 +70,6 @@ pub trait OptimizerConfig {
 /// An optimizer configuration
 /// for an optimizer
 /// requiring a source of randomness.
-#[blanket(derive(Box))]
 pub trait StochasticOptimizerConfig<R>: OptimizerConfig {
     /// Return a running optimizer
     /// initialized using `rng`.

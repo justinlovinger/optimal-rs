@@ -25,7 +25,6 @@
 //!     println!("f({}) = {}", point, point_value);
 //! }
 //!
-//! #[derive(Clone, Debug)]
 //! struct Count;
 //!
 //! impl Problem for Count {
@@ -99,6 +98,8 @@ mod tests {
     // is more important
     // than particular values.
 
+    use std::{borrow::Borrow, marker::PhantomData};
+
     use ndarray::prelude::*;
     use num_traits::Zero;
     use serde::{Deserialize, Serialize};
@@ -126,7 +127,19 @@ mod tests {
                 struct [< MockState $id >];
 
                 #[derive(Clone, Debug, Serialize, Deserialize)]
-                struct [< MockRunning $id >]<P>([< MockConfig $id >]<P>);
+                struct [< MockRunning $id >]<P, C>{
+                    problem: PhantomData<P>,
+                    config: C,
+                }
+
+                impl<P, C> [< MockRunning $id >]<P, C> {
+                    fn new(config: C) -> Self {
+                        Self {
+                            problem: PhantomData,
+                            config,
+                        }
+                    }
+                }
 
                 impl<P> OptimizerConfig for [< MockConfig $id >]<P>
                 where
@@ -134,10 +147,10 @@ mod tests {
                     P::PointElem: Clone + Zero,
                 {
                     type Problem = P;
-                    type Optimizer = [< MockRunning $id >]<P>;
+                    type Optimizer = [< MockRunning $id >]<P, Self>;
 
                     fn start(self) -> Self::Optimizer {
-                        [< MockRunning $id >](self)
+                        [< MockRunning $id >]::new(self)
                     }
 
                     fn problem(&self) -> &Self::Problem {
@@ -145,15 +158,33 @@ mod tests {
                     }
                 }
 
-                impl<P> RunningOptimizerBase for [< MockRunning $id >]<P>
+                impl<P> OptimizerConfig for &[< MockConfig $id >]<P>
                 where
                     P: Problem,
                     P::PointElem: Clone + Zero,
                 {
                     type Problem = P;
+                    type Optimizer = [< MockRunning $id >]<P, Self>;
+
+                    fn start(self) -> Self::Optimizer {
+                        [< MockRunning $id >]::new(self)
+                    }
 
                     fn problem(&self) -> &Self::Problem {
-                        &self.0.0
+                        &self.0
+                    }
+                }
+
+                impl<P, C> RunningOptimizerBase for [< MockRunning $id >]<P, C>
+                where
+                    P: Problem,
+                    P::PointElem: Clone + Zero,
+                    C: Borrow<[< MockConfig $id >]<P>>,
+                {
+                    type Problem = P;
+
+                    fn problem(&self) -> &Self::Problem {
+                        &self.config.borrow().0
                     }
 
                     fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1> {
@@ -165,18 +196,20 @@ mod tests {
                     }
                 }
 
-                impl<P> RunningOptimizerStep for [< MockRunning $id >]<P>
+                impl<P, C> RunningOptimizerStep for [< MockRunning $id >]<P, C>
                 where
                     P: Problem,
                     P::PointElem: Clone + Zero,
+                    C: Borrow<[< MockConfig $id >]<P>>,
                 {
                     fn step(&mut self) {}
                 }
 
-                impl<P> Convergent for [< MockRunning $id >]<P>
+                impl<P, C> Convergent for [< MockRunning $id >]<P, C>
                 where
                     P: Problem,
                     P::PointElem: Clone + Zero,
+                    C: Borrow<[< MockConfig $id >]<P>>,
                 {
                     fn is_done(&self) -> bool {
                         true
@@ -294,8 +327,8 @@ mod tests {
 
         #[derive(Clone, Debug, Serialize, Deserialize)]
         enum MockRunning {
-            A(MockRunningA<MockProblem>),
-            B(MockRunningB<MockProblem>),
+            A(MockRunningA<MockProblem, MockConfigA<MockProblem>>),
+            B(MockRunningB<MockProblem, MockConfigB<MockProblem>>),
         }
 
         impl OptimizerConfig for MockConfig {
