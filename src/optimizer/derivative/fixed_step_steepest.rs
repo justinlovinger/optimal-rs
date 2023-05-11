@@ -53,8 +53,6 @@ use std::{
     borrow::Borrow,
     marker::PhantomData,
     ops::{Mul, SubAssign},
-    rc::Rc,
-    sync::Arc,
 };
 
 use ndarray::{prelude::*, Data};
@@ -64,7 +62,7 @@ use rand::{
 };
 use replace_with::replace_with_or_abort;
 
-use crate::prelude::*;
+use crate::{for_fundamental_types::for_fundamental_types, prelude::*};
 
 use super::StepSize;
 
@@ -101,47 +99,35 @@ impl<A, P> Config<A, P> {
     }
 }
 
-macro_rules! impl_optimizer_config_for_config {
-    ( $( $type:ty ),* ) => {
-        $(
-            impl<A, P> OptimizerConfig for $type
-            where
-                P: Differentiable<PointElem = A, PointValue = A> + FixedLength + Bounded,
-                P::PointElem: Clone + SubAssign + Mul<Output = A> + SampleUniform,
-            {
-                type Problem = P;
+for_fundamental_types! {
+    impl<A, P> OptimizerConfig for Config<A, P>
+    where
+        P: Differentiable<PointElem = A, PointValue = A> + FixedLength + Bounded,
+        P::PointElem: Clone + SubAssign + Mul<Output = A> + SampleUniform,
+    {
+        type Problem = P;
 
-                type Optimizer = Running<A, P, Self>;
+        type Optimizer = Running<A, P, Self>;
 
-                fn start(self) -> Self::Optimizer {
-                    let mut rng = thread_rng();
-                    let state = self
-                        .problem
-                        .bounds()
-                        .take(self.problem.len())
-                        .map(|range| {
-                            let (start, end) = range.into_inner();
-                            Uniform::new_inclusive(start, end).sample(&mut rng)
-                        })
-                        .collect();
-                    Running::new(self, state)
-                }
+        fn start(self) -> Self::Optimizer {
+            let mut rng = thread_rng();
+            let state = self
+                .problem
+                .bounds()
+                .take(self.problem.len())
+                .map(|range| {
+                    let (start, end) = range.into_inner();
+                    Uniform::new_inclusive(start, end).sample(&mut rng)
+                })
+                .collect();
+            Running::new(self, state)
+        }
 
-                fn problem(&self) -> &Self::Problem {
-                    &self.problem
-                }
-            }
-        )*
-    };
+        fn problem(&self) -> &Self::Problem {
+            &self.problem
+        }
+    }
 }
-
-impl_optimizer_config_for_config![
-    Config<A, P>,
-    &Config<A, P>,
-    Rc<Config<A, P>>,
-    Arc<Config<A, P>>,
-    Box<Config<A, P>>
-];
 
 impl<A, P, C> Running<A, P, C> {
     fn new(config: C, state: Point<A>) -> Self {

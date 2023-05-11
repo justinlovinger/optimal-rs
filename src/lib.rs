@@ -83,6 +83,7 @@
 #![warn(missing_docs)]
 
 mod derive;
+mod for_fundamental_types;
 pub mod optimizer;
 pub mod prelude;
 mod problem;
@@ -103,6 +104,8 @@ mod tests {
     use ndarray::prelude::*;
     use num_traits::Zero;
     use serde::{Deserialize, Serialize};
+
+    use crate::for_fundamental_types::for_fundamental_types;
 
     use super::prelude::*;
 
@@ -143,37 +146,23 @@ mod tests {
                     }
                 }
 
-                impl<P> OptimizerConfig for [< MockConfig $id >]<P>
-                where
-                    P: Problem,
-                    P::PointElem: Clone + Zero,
-                {
-                    type Problem = P;
-                    type Optimizer = [< MockRunning $id >]<P, Self>;
 
-                    fn start(self) -> Self::Optimizer {
-                        [< MockRunning $id >]::new(self)
-                    }
+                for_fundamental_types! {
+                    impl<P> OptimizerConfig for [< MockConfig $id >]<P>
+                    where
+                        P: Problem,
+                        P::PointElem: Clone + Zero,
+                    {
+                        type Problem = P;
+                        type Optimizer = [< MockRunning $id >]<P, Self>;
 
-                    fn problem(&self) -> &Self::Problem {
-                        &self.0
-                    }
-                }
+                        fn start(self) -> Self::Optimizer {
+                            [< MockRunning $id >]::new(self)
+                        }
 
-                impl<P> OptimizerConfig for &[< MockConfig $id >]<P>
-                where
-                    P: Problem,
-                    P::PointElem: Clone + Zero,
-                {
-                    type Problem = P;
-                    type Optimizer = [< MockRunning $id >]<P, Self>;
-
-                    fn start(self) -> Self::Optimizer {
-                        [< MockRunning $id >]::new(self)
-                    }
-
-                    fn problem(&self) -> &Self::Problem {
-                        &self.0
+                        fn problem(&self) -> &Self::Problem {
+                            &self.0
+                        }
                     }
                 }
 
