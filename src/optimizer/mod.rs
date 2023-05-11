@@ -168,19 +168,13 @@ pub trait Convergent: RunningOptimizerBase {
 
 #[cfg(test)]
 mod tests {
+    use static_assertions::assert_obj_safe;
+
     use super::*;
 
-    macro_rules! is_object_safe {
-        ( $trait:ident $( < $( $bound:tt $( = $type:ty )?  ),* > )? ) => {
-            paste::paste! {
-                fn [< _ $trait:snake _is_object_safe >](_: &dyn $trait $( < $( $bound $( = $type )? ),* > )?) {}
-            }
-        }
-    }
-
-    is_object_safe!(OptimizerConfig<Problem = (), Optimizer = ()>);
-    is_object_safe!(StochasticOptimizerConfig<(), Problem = (), Optimizer = ()>);
-    is_object_safe!(RunningOptimizer<Problem = ()>);
-    is_object_safe!(PointBased<Problem = ()>);
-    is_object_safe!(Convergent<Problem = ()>);
+    assert_obj_safe!(OptimizerConfig<Problem = (), Optimizer = ()>);
+    assert_obj_safe!(StochasticOptimizerConfig<(), Problem = (), Optimizer = ()>);
+    assert_obj_safe!(RunningOptimizer<Problem = ()>);
+    assert_obj_safe!(PointBased<Problem = ()>);
+    assert_obj_safe!(Convergent<Problem = ()>);
 }

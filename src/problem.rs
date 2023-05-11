@@ -92,15 +92,12 @@ pub trait Bounded: Problem {
 
 #[cfg(test)]
 mod tests {
+    use static_assertions::assert_obj_safe;
+
     use super::*;
 
-    macro_rules! test_is_object_safe {
-        ( $( $trait:ident ),* ) => {
-            paste::paste! {
-                $( fn [< _ $trait:snake _is_object_safe >](_: &dyn $trait<PointElem = f64, PointValue = f64>) {} )*
-            }
-        }
-    }
-
-    test_is_object_safe![Problem, Differentiable, FixedLength, Bounded];
+    assert_obj_safe!(Problem<PointElem = f64, PointValue = f64>);
+    assert_obj_safe!(Differentiable<PointElem = f64, PointValue = f64>);
+    assert_obj_safe!(FixedLength<PointElem = f64, PointValue = f64>);
+    assert_obj_safe!(Bounded<PointElem = f64, PointValue = f64>);
 }
