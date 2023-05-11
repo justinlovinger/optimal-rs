@@ -19,6 +19,7 @@ rand_xoshiro = "0.6.0"
 replace_with = "0.1"
 serde = { version = "1", features = ["derive"], optional = true }
 streaming-iterator = "0.1"
+thiserror = "1.0.40"
 
 [dev-dependencies]
 proptest = "1"

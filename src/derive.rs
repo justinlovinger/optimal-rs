@@ -33,26 +33,29 @@ macro_rules! _derive_new_from_bounded_partial_ord {
     ( $type:ident $( < $a:ty : $bound:ident > )?, $inner:ty, $incomparable_name:ident, $incomparable_str:literal ) => {
         paste::paste! {
             #[doc = "Error returned when '" $type "' is given an invalid value."]
-            #[derive(Clone, Copy, Debug, derive_more::Display, PartialEq, Eq)]
-            pub enum [<Invalid $type Error>] {
+            #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
+            pub enum [<Invalid $type Error>] $(< $a : $bound >)? {
                 #[doc = "Value is " $incomparable_str "."]
-                $incomparable_name,
+                #[error("{0} is {}", $incomparable_str)]
+                $incomparable_name($inner),
                 /// Value is below the lower bound.
-                TooLow,
+                #[error("{0} is below the lower bound ({})", < $type $(< $a >)? > ::min_value())]
+                TooLow($inner),
                 /// Value is above the upper bound.
-                TooHigh,
+                #[error("{0} is above the upper bound ({})", < $type $(< $a >)? > ::max_value())]
+                TooHigh($inner),
             }
 
             impl $(< $a : $bound >)? $type $(< $a >)? {
                 #[doc = "Return a new '" $type "' if given a valid value."]
-                pub fn new(value: $inner) -> Result<Self, [<Invalid $type Error>]> {
+                pub fn new(value: $inner) -> Result<Self, [<Invalid $type Error>]  $(< $a >)? > {
                     match (
                         Self(value).partial_cmp(&Self::min_value()),
                         Self(value).partial_cmp(&Self::max_value()),
                     ) {
-                        (None, _) | (_, None) => Err([<Invalid $type Error>]::$incomparable_name),
-                        (Some(std::cmp::Ordering::Less), _) => Err([<Invalid $type Error>]::TooLow),
-                        (_, Some(std::cmp::Ordering::Greater)) => Err([<Invalid $type Error>]::TooHigh),
+                        (None, _) | (_, None) => Err([<Invalid $type Error>]::$incomparable_name(value)),
+                        (Some(std::cmp::Ordering::Less), _) => Err([<Invalid $type Error>]::TooLow(value)),
+                        (_, Some(std::cmp::Ordering::Greater)) => Err([<Invalid $type Error>]::TooHigh(value)),
                         _ => Ok(Self(value)),
                     }
                 }
@@ -98,20 +101,22 @@ macro_rules! _derive_new_from_lower_bounded_partial_ord {
     ( $type:ident $( < $a:ty : $bound:ident > )?, $inner:ty, $incomparable_name:ident, $incomparable_str:literal ) => {
         paste::paste! {
             #[doc = "Error returned when '" $type "' is given an invalid value."]
-            #[derive(Clone, Copy, Debug, derive_more::Display, PartialEq, Eq)]
-            pub enum [<Invalid $type Error>] {
+            #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
+            pub enum [<Invalid $type Error>] $(< $a : $bound >)? {
                 #[doc = "Value is " $incomparable_str "."]
-                $incomparable_name,
+                #[error("{0} is {}", $incomparable_str)]
+                $incomparable_name($inner),
                 /// Value is below the lower bound.
-                TooLow,
+                #[error("{0} is below the lower bound ({})", < $type $(< $a >)? > ::min_value())]
+                TooLow($inner),
             }
 
             impl $(< $a : $bound >)? $type $(< $a >)? {
                 #[doc = "Return a new '" $type "' if given a valid value."]
-                pub fn new(value: $inner) -> Result<Self, [<Invalid $type Error>]> {
+                pub fn new(value: $inner) -> Result<Self, [<Invalid $type Error>] $(< $a >)? > {
                     match Self(value).partial_cmp(&Self::min_value()) {
-                        None => Err([<Invalid $type Error>]::$incomparable_name),
-                        Some(std::cmp::Ordering::Less) => Err([<Invalid $type Error>]::TooLow),
+                        None => Err([<Invalid $type Error>]::$incomparable_name(value)),
+                        Some(std::cmp::Ordering::Less) => Err([<Invalid $type Error>]::TooLow(value)),
                         _ => Ok(Self(value)),
                     }
                 }
@@ -124,14 +129,15 @@ macro_rules! derive_new_from_lower_bounded {
     ( $type:ident ( $inner: ty ) ) => {
         paste::paste! {
             #[doc = "Error returned when '" $type "' is given a value below the lower bound."]
-            #[derive(Clone, Copy, Debug, derive_more::Display)]
-            pub struct [<Invalid $type Error>];
+            #[derive(Clone, Copy, Debug, thiserror::Error)]
+            #[error("{0} is below the lower bound ({})", $type::min_value())]
+            pub struct [<Invalid $type Error>]($inner);
 
             impl $type {
                 #[doc = "Return a new '" $type "' if given a valid value."]
                 pub fn new(value: $inner) -> Result<Self, [<Invalid $type Error>]> {
                     if Self(value) < Self::min_value() {
-                        Err([<Invalid $type Error>])
+                        Err([<Invalid $type Error>](value))
                     } else {
                         Ok(Self(value))
                     }
@@ -158,7 +164,7 @@ macro_rules! derive_from_str_from_try_into {
     ( $type:ident ( $inner:ty ) ) => {
         paste::paste! {
             #[doc = "Error returned when failing to convert from a string or into '" $type "'."]
-            #[derive(Clone, Copy, Debug)]
+            #[derive(Clone, Copy, Debug, thiserror::Error)]
             pub enum [<$type FromStrError>]<A, B> {
                 #[doc = "Error convering to '" $inner "'."]
                 FromStr(A),

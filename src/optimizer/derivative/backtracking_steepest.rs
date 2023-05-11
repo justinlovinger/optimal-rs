@@ -58,6 +58,7 @@
 
 use std::{
     borrow::Borrow,
+    fmt::Debug,
     marker::PhantomData,
     ops::{Add, Div, Mul, Neg, Sub},
 };
@@ -165,6 +166,7 @@ impl<A, P> Config<A, P> {
 for_fundamental_types! {
     impl<A, P> OptimizerConfig for Config<A, P>
     where
+        A: Debug,
         P: Differentiable<PointElem = A, PointValue = A> + FixedLength + Bounded,
         P::PointElem: SampleUniform + Real + 'static,
         f64: AsPrimitive<A>,
