@@ -7,9 +7,12 @@ use std::f64::EPSILON;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-use crate::derive::{
-    derive_from_str_from_try_into, derive_into_inner, derive_new_from_bounded_float,
-    derive_new_from_lower_bounded, derive_try_from_from_new,
+use crate::{
+    derive::{
+        derive_from_str_from_try_into, derive_into_inner, derive_new_from_bounded_float,
+        derive_new_from_lower_bounded, derive_try_from_from_new,
+    },
+    prelude::{DefaultFor, FixedLength},
 };
 
 /// Number of samples generated
@@ -73,14 +76,17 @@ derive_from_str_from_try_into!(AdjustRate(f64));
 #[cfg_attr(feature = "serde", serde(try_from = "f64"))]
 pub struct MutationChance(f64);
 
-impl MutationChance {
+impl<P> DefaultFor<&P> for MutationChance
+where
+    P: FixedLength,
+{
     /// Return recommended default mutation chance,
     /// average of one mutation per step.
-    pub fn default(num_bits: usize) -> Self {
-        if num_bits == 0 {
+    fn default_for(problem: &P) -> Self {
+        if problem.len() == 0 {
             Self(1.)
         } else {
-            Self(1. / num_bits as f64)
+            Self(1. / problem.len() as f64)
         }
     }
 }

@@ -7,18 +7,21 @@
 //!
 //! ```
 //! use ndarray::prelude::*;
-//! use ndarray_rand::RandomExt;
 //! use optimal::{optimizer::derivative::fixed_step_steepest::*, prelude::*};
-//! use rand::distributions::Uniform;
-//! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut iter = Config::new(Sphere, StepSize::new(0.5).unwrap())
-//!         .start()
-//!         .into_streaming_iter();
-//!     println!("{}", iter.nth(100).unwrap().best_point());
+//!     println!(
+//!         "{}",
+//!         FixedStepSteepest::new(Sphere, Config::new(StepSize::new(0.5).unwrap()))
+//!             .expect("should never fail")
+//!             .start()
+//!             .nth(100)
+//!             .unwrap()
+//!             .best_point()
+//!     );
 //! }
 //!
+//! #[derive(Clone, Debug)]
 //! struct Sphere;
 //!
 //! impl Problem for Sphere {
@@ -49,163 +52,42 @@
 //! }
 //! ```
 
-use std::{
-    borrow::Borrow,
-    marker::PhantomData,
-    ops::{Mul, SubAssign},
-};
+use std::ops::{Mul, SubAssign};
 
 use ndarray::{prelude::*, Data};
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
     prelude::*,
 };
-use replace_with::replace_with_or_abort;
 
-use crate::{for_fundamental_types::for_fundamental_types, prelude::*};
+use crate::{optimizer::MismatchedLengthError, prelude::*};
 
 use super::StepSize;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// Fixed step size steepest descent optimizer.
+pub type FixedStepSteepest<A, P> = Optimizer<P, Config<A>>;
+
 /// Fixed step size steepest descent configuration parameters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config<A, P> {
-    /// A differentiable objective function.
-    pub problem: P,
+pub struct Config<A> {
     /// Length of each step.
     pub step_size: StepSize<A>,
 }
 
-/// Running fixed step size steepest descent optimizer.
-#[derive(Clone, Debug)]
-pub struct Running<A, P, C> {
-    problem: PhantomData<P>,
-    /// Fixed step size steepest descent configuration parameters.
-    pub config: C,
-    /// Fixed step size steepest descent state,
-    /// a point.
-    pub state: Point<A>,
-}
-
 type Point<A> = Array1<A>;
 
-impl<A, P> Config<A, P> {
+impl<A> Config<A> {
     /// Return a new 'Config'.
-    pub fn new(problem: P, step_size: StepSize<A>) -> Self {
-        Self { problem, step_size }
+    pub fn new(step_size: StepSize<A>) -> Self {
+        Self { step_size }
     }
 }
 
-for_fundamental_types! {
-    impl<A, P> OptimizerConfig for Config<A, P>
-    where
-        P: Differentiable<PointElem = A, PointValue = A> + FixedLength + Bounded,
-        P::PointElem: Clone + SubAssign + Mul<Output = A> + SampleUniform,
-    {
-        type Problem = P;
-
-        type Optimizer = Running<A, P, Self>;
-
-        fn start(self) -> Self::Optimizer {
-            let mut rng = thread_rng();
-            let state = self
-                .problem
-                .bounds()
-                .take(self.problem.len())
-                .map(|range| {
-                    let (start, end) = range.into_inner();
-                    Uniform::new_inclusive(start, end).sample(&mut rng)
-                })
-                .collect();
-            Running::new(self, state)
-        }
-
-        fn problem(&self) -> &Self::Problem {
-            &self.problem
-        }
-    }
-}
-
-impl<A, P, C> Running<A, P, C> {
-    fn new(config: C, state: Point<A>) -> Self {
-        Self {
-            problem: PhantomData,
-            config,
-            state,
-        }
-    }
-
-    /// Return optimizer configuration.
-    pub fn config(&self) -> &C {
-        &self.config
-    }
-
-    /// Return state of optimizer.
-    pub fn state(&self) -> &Point<A> {
-        &self.state
-    }
-
-    /// Stop optimization run,
-    /// returning configuration and state.
-    pub fn into_inner(self) -> (C, Point<A>) {
-        (self.config, self.state)
-    }
-}
-
-impl<A, P, C> RunningOptimizerBase for Running<A, P, C>
-where
-    P: Problem<PointElem = A, PointValue = A>,
-    C: Borrow<Config<A, P>>,
-{
-    type Problem = P;
-
-    fn problem(&self) -> &Self::Problem {
-        &self.config.borrow().problem
-    }
-
-    fn best_point(&self) -> CowArray<A, Ix1> {
-        (&self.state).into()
-    }
-
-    fn stored_best_point_value(&self) -> Option<&A> {
-        None
-    }
-}
-
-impl<A, P, C> RunningOptimizerStep for Running<A, P, C>
-where
-    A: Clone + SubAssign + Mul<Output = A>,
-    P: Differentiable<PointElem = A, PointValue = A>,
-    C: Borrow<Config<A, P>>,
-{
-    fn step(&mut self) {
-        replace_with_or_abort(&mut self.state, |point| {
-            self.config.borrow().step_from_evaluated(
-                self.config
-                    .borrow()
-                    .problem
-                    .differentiate(point.view().into()),
-                point,
-            )
-        });
-    }
-}
-
-impl<A, P, C> PointBased for Running<A, P, C>
-where
-    A: Clone + SubAssign + Mul<Output = A>,
-    P: Differentiable<PointElem = A, PointValue = A>,
-    C: Borrow<Config<A, P>>,
-{
-    fn point(&self) -> Option<ArrayView1<A>> {
-        Some(self.state.view())
-    }
-}
-
-impl<A, P> Config<A, P>
+impl<A> Config<A>
 where
     A: Clone + SubAssign + Mul<Output = A>,
 {
@@ -223,5 +105,63 @@ where
             *x -= self.step_size.clone() * d.clone()
         });
         state
+    }
+}
+
+impl<A, P> OptimizerConfig<P> for Config<A>
+where
+    A: Clone + SubAssign + Mul<Output = A> + SampleUniform,
+    P: Differentiable<PointElem = A> + FixedLength + Bounded,
+{
+    type Err = ();
+
+    type State = Point<A>;
+
+    type StateErr = MismatchedLengthError;
+
+    fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    fn validate_state(&self, problem: &P, state: &Self::State) -> Result<(), Self::StateErr> {
+        if state.len() == problem.len() {
+            Ok(())
+        } else {
+            Err(MismatchedLengthError)
+        }
+    }
+
+    unsafe fn initial_state(&self, problem: &P) -> Self::State {
+        let mut rng = thread_rng();
+        problem
+            .bounds()
+            .take(problem.len())
+            .map(|range| {
+                let (start, end) = range.into_inner();
+                Uniform::new_inclusive(start, end).sample(&mut rng)
+            })
+            .collect()
+    }
+
+    unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
+        self.step_from_evaluated(problem.differentiate(state.view().into()), state)
+    }
+}
+
+impl<A, P> OptimizerState<P> for Point<A>
+where
+    P: Problem<PointElem = A>,
+{
+    fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
+        self.into()
+    }
+}
+
+impl<A, P> PointBased<P> for Point<A>
+where
+    P: Problem<PointElem = A>,
+{
+    fn point(&self) -> Option<ArrayView1<P::PointElem>> {
+        Some(self.view())
     }
 }

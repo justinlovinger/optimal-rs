@@ -20,7 +20,7 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let point = pbil::DoneWhenConvergedConfig::default(Count).argmin();
+//!     let point = pbil::PbilDoneWhenConverged::default_for(Count).argmin();
 //!     let point_value = Count.evaluate(point.view().into());
 //!     println!("f({}) = {}", point, point_value);
 //! }
@@ -69,24 +69,23 @@
 //! #     }
 //! # }
 //! #
-//! let mut iter = pbil::DoneWhenConvergedConfig::default(Count)
+//! let mut o = pbil::PbilDoneWhenConverged::default_for(Count)
 //!     .start()
-//!     .into_streaming_iter()
 //!     .inspect(|o| println!("{:?}", o.state()));
-//! let o = iter
+//! let last = o
 //!     .find(|o| o.is_done())
 //!     .expect("should converge");
-//! println!("f({}) = {}", o.best_point(), o.best_point_value());
+//! println!("f({}) = {}", last.best_point(), last.best_point_value());
 //! ```
 
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
 
 mod derive;
-mod for_fundamental_types;
 pub mod optimizer;
 pub mod prelude;
 mod problem;
+mod traits;
 
 #[cfg(test)]
 mod tests {
@@ -99,13 +98,9 @@ mod tests {
     // is more important
     // than particular values.
 
-    use std::{borrow::Borrow, marker::PhantomData, rc::Rc, sync::Arc};
-
     use ndarray::prelude::*;
     use num_traits::Zero;
     use serde::{Deserialize, Serialize};
-
-    use crate::for_fundamental_types::for_fundamental_types;
 
     use super::prelude::*;
 
@@ -124,86 +119,50 @@ mod tests {
         ( $id:ident ) => {
             paste::paste! {
                 #[derive(Clone, Debug, Serialize, Deserialize)]
-                struct [< MockConfig $id >]<P>(P);
+                struct [< MockConfig $id >];
 
                 #[derive(Clone, Debug, Serialize, Deserialize)]
                 struct [< MockState $id >];
 
-                #[derive(Clone, Debug, Serialize, Deserialize)]
-                struct [< MockRunning $id >]<P, C>{
-                    problem: PhantomData<P>,
-                    config: C,
-                    state: [< MockState $id >],
-                }
+                impl<P> OptimizerConfig<P> for [< MockConfig $id >] {
+                    type Err = ();
+                    type State = [< MockState $id >];
+                    type StateErr = ();
 
-                impl<P, C> [< MockRunning $id >]<P, C> {
-                    fn new(config: C) -> Self {
-                        Self {
-                            problem: PhantomData,
-                            config,
-                            state: [< MockState $id >],
-                        }
+                    fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
+                        Ok(())
+                    }
+
+                    fn validate_state(&self, _problem: &P, _state: &Self::State) -> Result<(), Self::StateErr> {
+                        Ok(())
+                    }
+
+                    unsafe fn initial_state(&self, _problem: &P) -> Self::State {
+                        [< MockState $id >]
+                    }
+
+                    unsafe fn step(&self, _problem: &P, _state: Self::State) -> Self::State {
+                        [< MockState $id >]
                     }
                 }
 
-
-                for_fundamental_types! {
-                    impl<P> OptimizerConfig for [< MockConfig $id >]<P>
-                    where
-                        P: Problem,
-                        P::PointElem: Clone + Zero,
-                    {
-                        type Problem = P;
-                        type Optimizer = [< MockRunning $id >]<P, Self>;
-
-                        fn start(self) -> Self::Optimizer {
-                            [< MockRunning $id >]::new(self)
-                        }
-
-                        fn problem(&self) -> &Self::Problem {
-                            &self.0
-                        }
-                    }
-                }
-
-                impl<P, C> RunningOptimizerBase for [< MockRunning $id >]<P, C>
-                where
-                    P: Problem,
-                    P::PointElem: Clone + Zero,
-                    C: Borrow<[< MockConfig $id >]<P>>,
-                {
-                    type Problem = P;
-
-                    fn problem(&self) -> &Self::Problem {
-                        &self.config.borrow().0
-                    }
-
-                    fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1> {
-                        Array::from_elem(1, <Self::Problem as Problem>::PointElem::zero()).into()
-                    }
-
-                    fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue> {
-                        None
-                    }
-                }
-
-                impl<P, C> RunningOptimizerStep for [< MockRunning $id >]<P, C>
-                where
-                    P: Problem,
-                    P::PointElem: Clone + Zero,
-                    C: Borrow<[< MockConfig $id >]<P>>,
-                {
-                    fn step(&mut self) {}
-                }
-
-                impl<P, C> Convergent for [< MockRunning $id >]<P, C>
-                where
-                    P: Problem,
-                    P::PointElem: Clone + Zero,
-                    C: Borrow<[< MockConfig $id >]<P>>,
-                {
-                    fn is_done(&self) -> bool {
+                impl<P> Convergent<P> for [< MockConfig $id >] {
+                    fn is_done(&self, _state: &Self::State) -> bool {
                         true
+                    }
+                }
+
+                impl<P> OptimizerState<P> for [< MockState $id >]
+                where
+                    P: Problem,
+                    P::PointElem: Clone + Zero,
+                {
+                    fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
+                        Array::from_elem(1, P::PointElem::zero()).into()
+                    }
+
+                    fn stored_best_point_value(&self) -> Option<&P::PointValue> {
+                        None
                     }
                 }
             }
@@ -215,28 +174,47 @@ mod tests {
 
     #[test]
     fn optimizers_should_be_easily_comparable() {
-        fn best_optimizer<P, I>(problem: P, optimizers: I) -> usize
+        fn best_optimizer<P, I>(optimizers: I) -> usize
         where
             P: Problem,
             P::PointValue: Ord,
-            I: IntoIterator<Item = Box<dyn Optimizer<P>>>,
+            I: IntoIterator<Item = Box<dyn OptimizerConfigless<P>>>,
         {
             optimizers
                 .into_iter()
                 .enumerate()
-                .map(|(i, o)| (problem.evaluate(o.argmin().into()), i))
+                .map(|(i, o)| (o.problem().evaluate(o.argmin().into()), i))
                 .min()
                 .expect("`optimizers` should be non-empty")
                 .1
         }
 
-        best_optimizer(
-            MockProblem,
-            [
-                Box::new(MockConfigA(MockProblem)) as Box<dyn Optimizer<MockProblem>>,
-                Box::new(MockConfigB(MockProblem)) as Box<dyn Optimizer<MockProblem>>,
-            ],
-        );
+        best_optimizer([
+            Box::new(Optimizer::new(MockProblem, MockConfigA).unwrap())
+                as Box<dyn OptimizerConfigless<MockProblem>>,
+            Box::new(Optimizer::new(MockProblem, MockConfigB).unwrap()),
+        ]);
+    }
+
+    #[test]
+    fn parallel_optimization_runs_should_be_easy() {
+        use std::{sync::Arc, thread::spawn};
+
+        fn parallel<P, C>(optimizer: Arc<Optimizer<P, C>>)
+        where
+            P: Problem + Send + Sync + 'static,
+            P::PointElem: Clone + Send,
+            C: OptimizerConfig<P> + Convergent<P> + Send + Sync + 'static,
+            C::State: OptimizerState<P>,
+        {
+            let optimizer2 = Arc::clone(&optimizer);
+            let handler1 = spawn(move || optimizer2.argmin());
+            let handler2 = spawn(move || optimizer.argmin());
+            handler1.join().unwrap();
+            handler2.join().unwrap();
+        }
+
+        parallel(Arc::new(Optimizer::new(MockProblem, MockConfigA).unwrap()));
     }
 
     #[test]
@@ -246,153 +224,104 @@ mod tests {
         // missing best point tracking
         // and a `Convergent` implementation.
 
-        struct RestarterConfig<P, IC> {
-            problem: PhantomData<P>,
-            inner: IC,
+        use std::marker::PhantomData;
+
+        #[derive(Clone, Debug)]
+        struct RestarterConfig<C> {
+            inner: C,
             _max_restarts: usize,
         }
 
-        struct RunningRestarter<P, C, IC>
-        where
-            P: Problem,
-            IC: OptimizerConfig,
-        {
-            problem: PhantomData<P>,
-            config: C,
-            inner_config: PhantomData<IC>,
-            state: RestarterState<P, IC::Optimizer>,
-        }
-
-        struct RestarterState<P, O>
+        #[derive(Clone, Debug)]
+        struct RestarterState<P, S>
         where
             P: Problem,
         {
-            problem: PhantomData<P>,
-            inner: O,
+            inner: S,
             restarts: usize,
+            problem: PhantomData<P>,
             _best_point: Option<Array1<P::PointElem>>,
             _best_point_value: Option<P::PointValue>,
         }
 
-        impl<P, C> RestarterConfig<P, C> {
+        impl<C> RestarterConfig<C> {
             fn new(inner: C, max_restarts: usize) -> Self {
                 Self {
-                    problem: PhantomData,
                     inner,
                     _max_restarts: max_restarts,
                 }
             }
         }
 
-        macro_rules! impl_optimizer_config_for_config {
-            ( $( $type:ty ),* ) => {
-                $(
-                    impl<P, IC> OptimizerConfig for $type
-                    where
-                        P: Problem,
-                        IC: Clone + OptimizerConfig<Problem = P>,
-                        IC::Optimizer: Convergent,
-                    {
-                        type Problem = P;
-                        type Optimizer = RunningRestarter<P, Self, IC>;
-
-                        fn start(self) -> Self::Optimizer {
-                            RunningRestarter::new(self)
-                        }
-
-                        fn problem(&self) -> &Self::Problem {
-                            self.inner.problem()
-                        }
-                    }
-                )*
-            };
-        }
-
-        impl_optimizer_config_for_config![
-            RestarterConfig<P, IC>,
-            &RestarterConfig<P, IC>,
-            Rc<RestarterConfig<P, IC>>,
-            Arc<RestarterConfig<P, IC>>,
-            Box<RestarterConfig<P, IC>>
-        ];
-
-        impl<P, C, IC> RunningRestarter<P, C, IC>
+        impl<P, C> OptimizerConfig<P> for RestarterConfig<C>
         where
             P: Problem,
-            C: Borrow<RestarterConfig<P, IC>>,
-            IC: Clone + OptimizerConfig,
+            C: OptimizerConfig<P> + Convergent<P>,
         {
-            fn new(config: C) -> Self {
-                Self {
+            type Err = C::Err;
+            type State = RestarterState<P, C::State>;
+            type StateErr = C::StateErr;
+
+            fn validate(&self, problem: &P) -> Result<(), Self::Err> {
+                self.inner.validate(problem)
+            }
+
+            fn validate_state(
+                &self,
+                problem: &P,
+                state: &Self::State,
+            ) -> Result<(), Self::StateErr> {
+                // Note: should also check and report if restarts is greater than max restarts.
+                self.inner.validate_state(problem, &state.inner)
+            }
+
+            unsafe fn initial_state(&self, problem: &P) -> Self::State {
+                RestarterState {
+                    inner: self.inner.initial_state(problem),
+                    restarts: 0,
                     problem: PhantomData,
-                    inner_config: PhantomData,
-                    state: RestarterState {
-                        problem: PhantomData,
-                        inner: config.borrow().inner.clone().start(),
-                        restarts: 0,
-                        _best_point: None,
-                        _best_point_value: None,
-                    },
-                    config,
+                    _best_point: None,
+                    _best_point_value: None,
                 }
             }
-        }
 
-        impl<P, C, IC> RunningOptimizerBase for RunningRestarter<P, C, IC>
-        where
-            P: Problem,
-            IC: OptimizerConfig,
-            IC::Optimizer: RunningOptimizerBase<Problem = P>,
-        {
-            type Problem = P;
-
-            fn problem(&self) -> &Self::Problem {
-                self.state.inner.problem()
-            }
-
-            fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1> {
-                unimplemented!()
-            }
-
-            fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue> {
-                unimplemented!()
-            }
-        }
-
-        impl<P, C, IC> RunningOptimizerStep for RunningRestarter<P, C, IC>
-        where
-            P: Problem,
-            C: Borrow<RestarterConfig<P, IC>>,
-            IC: Clone + OptimizerConfig<Problem = P>,
-            IC::Optimizer: RunningOptimizer + Convergent,
-        {
-            fn step(&mut self) {
-                if self.state.inner.is_done() {
-                    self.state.restarts += 1;
-                    self.state.inner = self.config.borrow().inner.clone().start()
+            unsafe fn step(&self, problem: &P, mut state: Self::State) -> Self::State {
+                if self.inner.is_done(&state.inner) {
+                    state.restarts += 1;
+                    // This operation is safe if this method is safe,
+                    // because `self.inner` was validated
+                    // when `self` was validated.
+                    state.inner = unsafe { self.inner.initial_state(problem) };
                 } else {
-                    self.state.inner.step()
+                    // This operation is safe if this method is safe,
+                    // because `state.inner` was validated
+                    // when `state` was validated
+                    // and `self.inner` was validated
+                    // when `self` was validated.
+                    state.inner = unsafe { self.inner.step(problem, state.inner) };
                 }
+                state
             }
         }
 
-        let mut o = RestarterConfig::new(MockConfigA(MockProblem), 10).start();
-        o.step();
-    }
+        impl<P, S> OptimizerState<P> for RestarterState<P, S>
+        where
+            P: Problem,
+            S: OptimizerState<P>,
+        {
+            fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
+                unimplemented!()
+            }
 
-    #[test]
-    fn parallel_optimization_runs_should_be_easy() {
-        use std::{sync::Arc, thread::spawn};
-
-        fn parallel(config: Arc<dyn Optimizer<MockProblem> + Send + Sync>) {
-            let config1 = Arc::clone(&config);
-            let handler1 = spawn(move || config1.argmin());
-            let handler2 = spawn(move || config.argmin());
-            handler1.join().unwrap();
-            handler2.join().unwrap();
+            fn stored_best_point_value(&self) -> Option<&P::PointValue> {
+                unimplemented!()
+            }
         }
 
-        parallel(Arc::new(MockConfigA(MockProblem)));
+        let mut o = Optimizer::new(MockProblem, RestarterConfig::new(MockConfigA, 10))
+            .unwrap()
+            .start();
+        o.next();
     }
 
     // Applications may need to select an optimizer at runtime,
@@ -401,10 +330,18 @@ mod tests {
     // and resume it later.
     #[test]
     fn dynamic_optimizers_should_be_partially_runable() {
+        use std::hint::unreachable_unchecked;
+
         #[derive(Clone, Debug, Serialize, Deserialize)]
         enum MockConfig {
-            A(MockConfigA<MockProblem>),
-            B(MockConfigB<MockProblem>),
+            A(MockConfigA),
+            B(MockConfigB),
+        }
+
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        enum MockError<P> {
+            A(<MockConfigA as OptimizerConfig<P>>::Err),
+            B(<MockConfigB as OptimizerConfig<P>>::Err),
         }
 
         #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -414,69 +351,100 @@ mod tests {
         }
 
         #[derive(Clone, Debug, Serialize, Deserialize)]
-        enum MockRunning {
-            A(MockRunningA<MockProblem, MockConfigA<MockProblem>>),
-            B(MockRunningB<MockProblem, MockConfigB<MockProblem>>),
+        enum MockStateError<P> {
+            WrongState,
+            A(<MockConfigA as OptimizerConfig<P>>::StateErr),
+            B(<MockConfigB as OptimizerConfig<P>>::StateErr),
         }
 
-        impl OptimizerConfig for MockConfig {
-            type Problem = MockProblem;
-            type Optimizer = MockRunning;
+        impl<P> OptimizerConfig<P> for MockConfig {
+            type Err = MockError<P>;
+            type State = MockState;
+            type StateErr = MockStateError<P>;
 
-            fn start(self) -> Self::Optimizer {
+            fn validate(&self, problem: &P) -> Result<(), Self::Err> {
                 match self {
-                    Self::A(x) => MockRunning::A(x.start()),
-                    Self::B(x) => MockRunning::B(x.start()),
+                    Self::A(c) => c.validate(problem).map_err(MockError::A),
+                    Self::B(c) => c.validate(problem).map_err(MockError::B),
                 }
             }
 
-            fn problem(&self) -> &Self::Problem {
+            fn validate_state(
+                &self,
+                problem: &P,
+                state: &Self::State,
+            ) -> Result<(), Self::StateErr> {
                 match self {
-                    Self::A(x) => x.problem(),
-                    Self::B(x) => x.problem(),
+                    Self::A(c) => match state {
+                        MockState::A(s) => c.validate_state(problem, s).map_err(MockStateError::A),
+                        _ => Err(MockStateError::WrongState),
+                    },
+                    Self::B(c) => match state {
+                        MockState::B(s) => c.validate_state(problem, s).map_err(MockStateError::B),
+                        _ => Err(MockStateError::WrongState),
+                    },
+                }
+            }
+
+            unsafe fn initial_state(&self, problem: &P) -> Self::State {
+                // `initial_state` is safe if this method is safe,
+                // because the inner config was validated
+                // when `self` was validated.
+                match self {
+                    Self::A(c) => MockState::A(unsafe { c.initial_state(problem) }),
+                    Self::B(c) => MockState::B(unsafe { c.initial_state(problem) }),
+                }
+            }
+
+            unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
+                // `step` is safe if this method is safe,
+                // because the inner config was validated
+                // when `self` was validated
+                // and inner state was validated
+                // when `state` was validated.
+                // `unreachable_unchecked` is safe if this method is safe
+                // because state is verified to match `self`
+                // in `validate_state`.
+                match self {
+                    Self::A(c) => match state {
+                        MockState::A(s) => MockState::A(unsafe { c.step(problem, s) }),
+                        _ => unsafe { unreachable_unchecked() },
+                    },
+                    Self::B(c) => match state {
+                        MockState::B(s) => MockState::B(unsafe { c.step(problem, s) }),
+                        _ => unsafe { unreachable_unchecked() },
+                    },
                 }
             }
         }
 
-        impl RunningOptimizerBase for MockRunning {
-            type Problem = MockProblem;
-
-            fn problem(&self) -> &Self::Problem {
+        impl<P> OptimizerState<P> for MockState
+        where
+            P: Problem,
+            P::PointElem: Clone + Zero,
+        {
+            fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
                 match self {
-                    Self::A(x) => x.problem(),
-                    Self::B(x) => x.problem(),
+                    Self::A(x) => <MockStateA as OptimizerState<P>>::best_point(x),
+                    Self::B(x) => <MockStateB as OptimizerState<P>>::best_point(x),
                 }
             }
 
-            fn best_point(&self) -> CowArray<<Self::Problem as Problem>::PointElem, Ix1> {
+            fn stored_best_point_value(&self) -> Option<&P::PointValue> {
                 match self {
-                    Self::A(x) => x.best_point(),
-                    Self::B(x) => x.best_point(),
-                }
-            }
-
-            fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue> {
-                match self {
-                    Self::A(x) => x.stored_best_point_value(),
-                    Self::B(x) => x.stored_best_point_value(),
+                    Self::A(x) => <MockStateA as OptimizerState<P>>::stored_best_point_value(x),
+                    Self::B(x) => <MockStateB as OptimizerState<P>>::stored_best_point_value(x),
                 }
             }
         }
 
-        impl RunningOptimizerStep for MockRunning {
-            fn step(&mut self) {
-                match self {
-                    Self::A(x) => x.step(),
-                    Self::B(x) => x.step(),
-                }
-            }
-        }
-
-        let mut o = MockConfig::A(MockConfigA(MockProblem)).start();
-        o.step();
+        let mut o = Optimizer::new(MockProblem, MockConfig::A(MockConfigA))
+            .unwrap()
+            .start();
+        o.next();
         let store = serde_json::to_string(&o).unwrap();
         o = serde_json::from_str(&store).unwrap();
-        o.step();
+        o.next();
         o.best_point_value();
     }
 }

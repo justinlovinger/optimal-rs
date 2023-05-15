@@ -10,7 +10,7 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let point = pbil::DoneWhenConvergedConfig::default(Count).argmin();
+//!     let point = pbil::PbilDoneWhenConverged::default_for(Count).argmin();
 //!     let point_value = Count.evaluate(point.view().into());
 //!     println!("f({}) = {}", point, point_value);
 //! }
@@ -36,186 +36,105 @@
 mod states;
 mod types;
 
+use std::fmt::Debug;
+
 use lazy_static::lazy_static;
 use ndarray::{prelude::*, Data};
 use rand::prelude::*;
 use rand_xoshiro::SplitMix64;
-use replace_with::replace_with_or_abort;
-use std::{borrow::Borrow, fmt::Debug, marker::PhantomData};
 
-use crate::{for_fundamental_types::for_fundamental_types, prelude::*};
+use crate::{optimizer::MismatchedLengthError, prelude::*};
 
 pub use self::{states::*, types::*};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// PBIL with check for converged probabilities.
+pub type PbilDoneWhenConverged<P> = Optimizer<P, DoneWhenConvergedConfig>;
+
 /// PBIL configuration parameters
 /// with check for converged probabilities.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DoneWhenConvergedConfig<P> {
+pub struct DoneWhenConvergedConfig {
     /// Probability convergence parameter.
     pub converged_threshold: ConvergedThreshold,
     /// Regular PBIL configuration.
-    pub inner: Config<P>,
+    pub inner: Config,
 }
 
-/// Running PBIL optimizer with check for converged probabilities.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct RunningDoneWhenConverged<P, C> {
-    problem: PhantomData<P>,
-    /// PBIL configuration parameters
-    /// with check for converged probabilities.
-    pub config: C,
-    /// PBIL state.
-    pub state: State,
+impl<P> OptimizerConfig<P> for DoneWhenConvergedConfig
+where
+    P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
+{
+    type Err = <Config as OptimizerConfig<P>>::Err;
+
+    type State = <Config as OptimizerConfig<P>>::State;
+
+    type StateErr = <Config as OptimizerConfig<P>>::StateErr;
+
+    fn validate(&self, problem: &P) -> Result<(), Self::Err> {
+        self.inner.validate(problem)
+    }
+
+    fn validate_state(&self, problem: &P, state: &Self::State) -> Result<(), Self::StateErr> {
+        self.inner.validate_state(problem, state)
+    }
+
+    unsafe fn initial_state(&self, problem: &P) -> Self::State {
+        self.inner.initial_state(problem)
+    }
+
+    unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
+        self.inner.step(problem, state)
+    }
 }
 
-impl<P> DoneWhenConvergedConfig<P> {
-    /// Convenience function
-    /// to populate every field
-    /// with their default.
-    pub fn default(problem: P) -> Self
+impl<P> DefaultFor<&P> for DoneWhenConvergedConfig
+where
+    P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
+{
+    fn default_for(problem: &P) -> Self
     where
         P: FixedLength,
     {
         Self {
             converged_threshold: ConvergedThreshold::default(),
-            inner: Config::default(problem),
+            inner: Config::default_for(problem),
         }
     }
 }
 
-for_fundamental_types! {
-    impl<P> OptimizerConfig for DoneWhenConvergedConfig<P>
-    where
-        P: Problem<PointElem = bool> + FixedLength,
-        P::PointValue: Debug + PartialOrd,
-    {
-        type Problem = P;
-        type Optimizer = RunningDoneWhenConverged<P, Self>;
-
-        fn start(self) -> Self::Optimizer {
-            let state = State::initial(self.inner.problem.len());
-            RunningDoneWhenConverged {
-                problem: PhantomData,
-                config: self,
-                state,
-            }
-        }
-
-        fn problem(&self) -> &P {
-            &self.inner.problem
-        }
-    }
-}
-
-for_fundamental_types! {
-    impl<P> StochasticOptimizerConfig<SplitMix64> for DoneWhenConvergedConfig<P>
-    where
-        P: Problem<PointElem = bool> + FixedLength,
-        P::PointValue: Debug + PartialOrd,
-    {
-        fn start_using(self, rng: &mut SplitMix64) -> Self::Optimizer {
-            let state = State::initial_using(self.inner.problem.len(), rng);
-            RunningDoneWhenConverged {
-                problem: PhantomData,
-                config: self,
-                state,
-            }
-        }
-    }
-}
-
-impl<P, C> RunningDoneWhenConverged<P, C> {
-    /// Return optimizer configuration.
-    pub fn config(&self) -> &C {
-        &self.config
-    }
-
-    /// Return state of optimizer.
-    pub fn state(&self) -> &State {
-        &self.state
-    }
-
-    /// Stop optimization run,
-    /// returning configuration and state.
-    pub fn into_inner(self) -> (C, State) {
-        (self.config, self.state)
-    }
-}
-
-impl<P, C> RunningOptimizerBase for RunningDoneWhenConverged<P, C>
+impl<P> StochasticOptimizerConfig<P, SplitMix64> for DoneWhenConvergedConfig
 where
-    P: Problem<PointElem = bool>,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
+    P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
 {
-    type Problem = P;
-
-    fn problem(&self) -> &Self::Problem {
-        &self.config.borrow().inner.problem
-    }
-
-    fn best_point(&self) -> CowArray<bool, Ix1> {
-        self.state.best_point()
-    }
-
-    fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue> {
-        None
+    unsafe fn initial_state_using(&self, problem: &P, rng: &mut SplitMix64) -> Self::State {
+        self.inner.initial_state_using(problem, rng)
     }
 }
 
-impl<P, C> RunningOptimizerStep for RunningDoneWhenConverged<P, C>
+impl<P> Convergent<P> for DoneWhenConvergedConfig
 where
-    P: Problem<PointElem = bool>,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
-    <Self::Problem as Problem>::PointValue: Debug + PartialOrd,
+    P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
 {
-    fn step(&mut self) {
-        replace_with_or_abort(&mut self.state, |state| {
-            self.config.borrow().inner.step_from_evaluated(
-                self.config
-                    .borrow()
-                    .inner
-                    .problem
-                    .evaluate_population(state.points().into()),
-                state,
-            )
-        })
+    fn is_done(&self, state: &Self::State) -> bool {
+        converged(&self.converged_threshold, state.probabilities())
     }
 }
 
-impl<P, C> Convergent for RunningDoneWhenConverged<P, C>
-where
-    P: Problem<PointElem = bool>,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
-{
-    fn is_done(&self) -> bool {
-        converged(
-            &self.config.borrow().converged_threshold,
-            self.state.probabilities(),
-        )
-    }
-}
-
-impl<P, C> PopulationBased for RunningDoneWhenConverged<P, C>
-where
-    P: Problem<PointElem = bool>,
-    C: Borrow<DoneWhenConvergedConfig<P>>,
-{
-    fn points(&self) -> ArrayView2<bool> {
-        self.state.points()
-    }
-}
+/// PBIL optimizer.
+pub type Pbil<P> = Optimizer<P, Config>;
 
 /// PBIL configuration parameters.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config<P> {
-    /// An optimization problem.
-    pub problem: P,
+pub struct Config {
     /// Number of samples generated
     /// during steps.
     pub num_samples: NumSamples,
@@ -228,17 +147,6 @@ pub struct Config<P> {
     /// Degree to adjust probability towards random value
     /// when mutating.
     pub mutation_adjust_rate: MutationAdjustRate,
-}
-
-/// Running PBIL optimizer.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Running<P, C> {
-    problem: PhantomData<P>,
-    /// PBIL configuration parameters.
-    pub config: C,
-    /// PBIL state.
-    pub state: State,
 }
 
 /// PBIL state.
@@ -255,42 +163,24 @@ pub enum State {
     Mutating(Mutating),
 }
 
-impl<P> Config<P> {
+impl Config {
     /// Return a new PBIL configuration.
     pub fn new(
-        problem: P,
         num_samples: NumSamples,
         adjust_rate: AdjustRate,
         mutation_chance: MutationChance,
         mutation_adjust_rate: MutationAdjustRate,
     ) -> Self {
         Self {
-            problem,
             num_samples,
             adjust_rate,
             mutation_chance,
             mutation_adjust_rate,
         }
     }
-
-    /// Convenience function
-    /// to populate every field
-    /// with their default.
-    pub fn default(problem: P) -> Self
-    where
-        P: FixedLength,
-    {
-        Self {
-            num_samples: Default::default(),
-            adjust_rate: Default::default(),
-            mutation_chance: MutationChance::default(problem.len()),
-            mutation_adjust_rate: Default::default(),
-            problem,
-        }
-    }
 }
 
-impl<P> Config<P> {
+impl Config {
     /// Return the next state,
     /// given point values.
     fn step_from_evaluated<B, S>(&self, point_values: ArrayBase<S, Ix1>, state: State) -> State
@@ -308,111 +198,83 @@ impl<P> Config<P> {
     }
 }
 
-for_fundamental_types! {
-    impl<P> OptimizerConfig for Config<P>
+impl<P> OptimizerConfig<P> for Config
+where
+    P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
+{
+    type Err = ();
+
+    type State = State;
+
+    type StateErr = MismatchedLengthError;
+
+    fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
+        Ok(())
+    }
+
+    fn validate_state(&self, problem: &P, state: &Self::State) -> Result<(), Self::StateErr> {
+        // If `Sampling::samples` could be changed independent of `probabilities`,
+        // it would need to be validated.
+        if state.probabilities().len() == problem.len() {
+            Ok(())
+        } else {
+            Err(MismatchedLengthError)
+        }
+    }
+
+    unsafe fn initial_state(&self, problem: &P) -> Self::State {
+        State::initial(problem.len())
+    }
+
+    unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
+        self.step_from_evaluated(problem.evaluate_population(state.points().into()), state)
+    }
+}
+
+impl<P> DefaultFor<&P> for Config
+where
+    P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
+{
+    fn default_for(problem: &P) -> Self
     where
-        P: Problem<PointElem = bool> + FixedLength,
-        P::PointValue: Debug + PartialOrd,
+        P: FixedLength,
     {
-        type Problem = P;
-        type Optimizer = Running<P, Self>;
-
-        fn start(self) -> Self::Optimizer {
-            let state = State::initial(self.problem.len());
-            Running {
-                problem: PhantomData,
-                config: self,
-                state,
-            }
-        }
-
-        fn problem(&self) -> &P {
-            &self.problem
+        Self {
+            num_samples: NumSamples::default(),
+            adjust_rate: AdjustRate::default(),
+            mutation_chance: MutationChance::default_for(problem),
+            mutation_adjust_rate: MutationAdjustRate::default(),
         }
     }
 }
 
-for_fundamental_types! {
-    impl<P> StochasticOptimizerConfig<SplitMix64> for Config<P>
-    where
-        P: Problem<PointElem = bool> + FixedLength,
-        P::PointValue: Debug + PartialOrd,
-    {
-        fn start_using(self, rng: &mut SplitMix64) -> Self::Optimizer {
-            let state = State::initial_using(self.problem.len(), rng);
-            Running {
-                problem: PhantomData,
-                config: self,
-                state,
-            }
-        }
+impl<P> StochasticOptimizerConfig<P, SplitMix64> for Config
+where
+    P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
+{
+    unsafe fn initial_state_using(&self, problem: &P, rng: &mut SplitMix64) -> Self::State {
+        State::initial_using(problem.len(), rng)
     }
 }
 
-impl<P, C> Running<P, C> {
-    /// Return optimizer configuration.
-    pub fn config(&self) -> &C {
-        &self.config
-    }
-
-    /// Return state of optimizer.
-    pub fn state(&self) -> &State {
-        &self.state
-    }
-
-    /// Stop optimization run,
-    /// returning configuration and state.
-    pub fn into_inner(self) -> (C, State) {
-        (self.config, self.state)
-    }
-}
-
-impl<P, C> RunningOptimizerBase for Running<P, C>
+impl<P> OptimizerState<P> for State
 where
     P: Problem<PointElem = bool>,
-    C: Borrow<Config<P>>,
 {
-    type Problem = P;
-
-    fn problem(&self) -> &Self::Problem {
-        &self.config.borrow().problem
-    }
-
-    fn best_point(&self) -> CowArray<bool, Ix1> {
-        self.state.best_point()
-    }
-
-    fn stored_best_point_value(&self) -> Option<&<Self::Problem as Problem>::PointValue> {
-        None
+    fn best_point(&self) -> CowArray<<P as Problem>::PointElem, Ix1> {
+        self.best_point()
     }
 }
 
-impl<P, C> RunningOptimizerStep for Running<P, C>
+impl<P> PopulationBased<P> for State
 where
     P: Problem<PointElem = bool>,
-    C: Borrow<Config<P>>,
-    <Self::Problem as Problem>::PointValue: Debug + PartialOrd,
 {
-    fn step(&mut self) {
-        replace_with_or_abort(&mut self.state, |state| {
-            self.config.borrow().step_from_evaluated(
-                self.config
-                    .borrow()
-                    .problem
-                    .evaluate_population(state.points().into()),
-                state,
-            )
-        })
-    }
-}
-
-impl<P, C> PopulationBased for Running<P, C>
-where
-    P: Problem<PointElem = bool>,
-    C: Borrow<Config<P>>,
-{
-    fn points(&self) -> ArrayView2<bool> {
-        self.state.points()
+    fn points(&self) -> ArrayView2<P::PointElem> {
+        self.points()
     }
 }
 
