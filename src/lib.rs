@@ -226,6 +226,52 @@ mod tests {
     }
 
     #[test]
+    fn examining_points_and_corresponding_evaluations_should_be_easy() {
+        // TODO: what about examining state
+        // alongside corresponding evaluations?
+
+        // Ideally,
+        // this would be simpler,
+        // something like:
+        // ```
+        // MockOptimizerA::default_for(MockProblem)
+        //     .start()
+        //     .inspect(|o| println!("f({:?}) = {:?}", o.state().points(), o.evaluations()))
+        //     .find(|o| o.is_done());
+        // ```
+
+        struct TracingProblem<P>(P);
+
+        impl<P> Problem for TracingProblem<P>
+        where
+            P: Problem,
+            P::PointElem: std::fmt::Debug,
+            P::PointValue: std::fmt::Debug,
+        {
+            type PointElem = P::PointElem;
+
+            type PointValue = P::PointValue;
+
+            fn evaluate_population(
+                &self,
+                points: CowArray<Self::PointElem, Ix2>,
+            ) -> Array1<Self::PointValue> {
+                let values = self.0.evaluate_population(points.view().into());
+                println!("f({points:?}) = {values:?}");
+                values
+            }
+
+            fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
+                let value = self.0.evaluate(point.view().into());
+                println!("f({point:?}) = {value:?}");
+                value
+            }
+        }
+
+        MockOptimizerA::default_for(TracingProblem(MockProblem)).argmin();
+    }
+
+    #[test]
     fn optimizers_should_be_able_to_restart_automatically() {
         // This is a partial implementation
         // of a restart mixin,
