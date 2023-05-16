@@ -118,6 +118,8 @@ mod tests {
     macro_rules! mock_optimizer {
         ( $id:ident ) => {
             paste::paste! {
+                type [< MockOptimizer $id >]<P> = Optimizer<P, [< MockConfig $id >]>;
+
                 #[derive(Clone, Debug, Serialize, Deserialize)]
                 struct [< MockConfig $id >];
 
@@ -143,6 +145,12 @@ mod tests {
 
                     unsafe fn step(&self, _problem: &P, _state: Self::State) -> Self::State {
                         [< MockState $id >]
+                    }
+                }
+
+                impl<P> DefaultFor<&P> for [< MockConfig $id >] {
+                    fn default_for(_problem: &P) -> Self {
+                        Self
                     }
                 }
 
@@ -190,9 +198,9 @@ mod tests {
         }
 
         best_optimizer([
-            Box::new(Optimizer::new(MockProblem, MockConfigA).unwrap())
+            Box::new(MockOptimizerA::default_for(MockProblem))
                 as Box<dyn OptimizerConfigless<MockProblem>>,
-            Box::new(Optimizer::new(MockProblem, MockConfigB).unwrap()),
+            Box::new(MockOptimizerB::default_for(MockProblem)),
         ]);
     }
 
@@ -214,7 +222,7 @@ mod tests {
             handler2.join().unwrap();
         }
 
-        parallel(Arc::new(Optimizer::new(MockProblem, MockConfigA).unwrap()));
+        parallel(Arc::new(MockOptimizerA::default_for(MockProblem)));
     }
 
     #[test]
