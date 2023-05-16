@@ -427,7 +427,6 @@ where
     P: Problem,
     C: OptimizerConfig<P>,
     O: Borrow<Optimizer<P, C>>,
-    C::State: OptimizerState<P>,
 {
     /// Perform an optimization step.
     fn step(&mut self) {
@@ -478,7 +477,6 @@ where
     P: Problem,
     C: OptimizerConfig<P>,
     O: Borrow<Optimizer<P, C>>,
-    C::State: OptimizerState<P>,
 {
     type Item = Self;
 
