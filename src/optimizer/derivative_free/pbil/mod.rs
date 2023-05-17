@@ -38,8 +38,7 @@ mod types;
 
 use std::fmt::Debug;
 
-use lazy_static::lazy_static;
-use ndarray::{prelude::*, Data};
+use ndarray::prelude::*;
 use rand_xoshiro::SplitMix64;
 
 use crate::{optimizer::MismatchedLengthError, prelude::*};
@@ -179,29 +178,10 @@ impl Config {
     }
 }
 
-impl Config {
-    /// Return the next state,
-    /// given point values.
-    fn step_from_evaluated<B, S>(&self, point_values: ArrayBase<S, Ix1>, state: State) -> State
-    where
-        B: Debug + PartialOrd,
-        S: Data<Elem = B>,
-    {
-        match state {
-            State::Ready(s) => State::Sampling(s.to_sampling(self.num_samples)),
-            State::Sampling(s) => State::Mutating(s.to_mutating(self.adjust_rate, point_values)),
-            State::Mutating(s) => {
-                State::Ready(s.to_ready(self.mutation_chance, self.mutation_adjust_rate))
-            }
-        }
-    }
-}
-
 impl<P> OptimizerConfig<P> for Config
 where
     P: Problem<PointElem = bool> + FixedLength,
     P::PointValue: Debug + PartialOrd,
-    State: OptimizerState<P, Evaluatee = Array2<bool>>,
 {
     type Err = ();
 
@@ -228,7 +208,16 @@ where
     }
 
     unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
-        self.step_from_evaluated(problem.evaluate_population(state.evaluatee().into()), state)
+        match state {
+            State::Ready(s) => State::Sampling(s.to_sampling(self.num_samples)),
+            State::Sampling(s) => {
+                let values = problem.evaluate_population(s.samples().into());
+                State::Mutating(s.to_mutating(self.adjust_rate, values))
+            }
+            State::Mutating(s) => {
+                State::Ready(s.to_ready(self.mutation_chance, self.mutation_adjust_rate))
+            }
+        }
     }
 }
 
@@ -264,16 +253,13 @@ impl<P> OptimizerState<P> for State
 where
     P: Problem<PointElem = bool>,
 {
-    type Evaluatee = Array2<P::PointElem>;
+    type Evaluatee<'a> = Option<ArrayView2<'a, P::PointElem>>;
 
-    fn evaluatee(&self) -> &Self::Evaluatee {
-        lazy_static! {
-            static ref EMPTY: Array2<bool> = Array::from_elem((0, 0), false);
-        }
+    fn evaluatee(&self) -> Self::Evaluatee<'_> {
         match self {
-            State::Ready(_) => &EMPTY,
-            State::Sampling(s) => s.samples(),
-            State::Mutating(_) => &EMPTY,
+            State::Ready(_) => None,
+            State::Sampling(s) => Some(s.samples().into()),
+            State::Mutating(_) => None,
         }
     }
 

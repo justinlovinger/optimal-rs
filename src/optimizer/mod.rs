@@ -110,17 +110,20 @@ pub trait Convergent<P>: OptimizerConfig<P> {
 }
 
 /// An optimizer state.
-// TODO: use `blanket` when <https://github.com/althonos/blanket/issues/8> is fixed:
+// TODO: use `blanket` when <https://github.com/althonos/blanket/issues/8> is fixed
+// and can support associated type generics:
 // #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait OptimizerState<P>
 where
     P: Problem,
 {
     /// Type of data to be evaluated.
-    type Evaluatee;
+    type Evaluatee<'a>
+    where
+        Self: 'a;
 
     /// Return data to be evaluated.
-    fn evaluatee(&self) -> &Self::Evaluatee;
+    fn evaluatee(&self) -> Self::Evaluatee<'_>;
 
     /// Return the best point discovered.
     fn best_point(&self) -> CowArray<P::PointElem, Ix1>;
@@ -493,7 +496,6 @@ mod tests {
     assert_obj_safe!(OptimizerConfig<(), Err = (), State = (), StateErr = ()>);
     assert_obj_safe!(StochasticOptimizerConfig<(), (), Err = (), State = (), StateErr = ()>);
     assert_obj_safe!(Convergent<(), Err = (), State = (), StateErr = ()>);
-    assert_obj_safe!(OptimizerState<(), Evaluatee = ()>);
 
     #[test]
     fn running_optimizer_streaming_iterator_emits_initial_state() {

@@ -234,13 +234,14 @@ impl<A, P> OptimizerState<P> for State<A>
 where
     P: Problem<PointElem = A, PointValue = A>,
 {
-    type Evaluatee = Array1<P::PointElem>;
+    type Evaluatee<'a> = ArrayView1<'a, P::PointElem> where A: 'a;
 
-    fn evaluatee(&self) -> &Self::Evaluatee {
-        match self {
+    fn evaluatee(&self) -> Self::Evaluatee<'_> {
+        (match self {
             State::Ready(x) => x.point(),
             State::Searching(x) => x.point(),
-        }
+        })
+        .into()
     }
 
     fn best_point(&self) -> CowArray<P::PointElem, Ix1> {

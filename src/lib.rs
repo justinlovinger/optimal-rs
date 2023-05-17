@@ -165,11 +165,9 @@ mod tests {
                     P: Problem,
                     P::PointElem: Clone + Zero,
                 {
-                    type Evaluatee = ();
+                    type Evaluatee<'a> = ();
 
-                    fn evaluatee(&self) -> &Self::Evaluatee {
-                        &()
-                    }
+                    fn evaluatee(&self) -> Self::Evaluatee<'_> {}
 
                     fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
                         Array::from_elem(1, P::PointElem::zero()).into()
@@ -407,9 +405,12 @@ mod tests {
             P: Problem,
             S: OptimizerState<P>,
         {
-            type Evaluatee = S::Evaluatee;
+            type Evaluatee<'a> = S::Evaluatee<'a>
+            where
+                P: 'a,
+                S: 'a;
 
-            fn evaluatee(&self) -> &Self::Evaluatee {
+            fn evaluatee(&self) -> Self::Evaluatee<'_> {
                 self.inner.evaluatee()
             }
 
@@ -526,12 +527,12 @@ mod tests {
         where
             P: Problem,
             P::PointElem: Clone + Zero,
-            MockStateA: OptimizerState<P, Evaluatee = ()>,
-            MockStateB: OptimizerState<P, Evaluatee = ()>,
+            for<'a> MockStateA: OptimizerState<P, Evaluatee<'a> = ()>,
+            for<'a> MockStateB: OptimizerState<P, Evaluatee<'a> = ()>,
         {
-            type Evaluatee = ();
+            type Evaluatee<'a> = ();
 
-            fn evaluatee(&self) -> &Self::Evaluatee {
+            fn evaluatee(&self) -> Self::Evaluatee<'_> {
                 match self {
                     Self::A(x) => x.evaluatee(),
                     Self::B(x) => x.evaluatee(),
