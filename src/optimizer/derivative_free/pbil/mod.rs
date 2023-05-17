@@ -40,7 +40,6 @@ use std::fmt::Debug;
 
 use lazy_static::lazy_static;
 use ndarray::{prelude::*, Data};
-use rand::prelude::*;
 use rand_xoshiro::SplitMix64;
 
 use crate::{optimizer::MismatchedLengthError, prelude::*};
@@ -202,6 +201,7 @@ impl<P> OptimizerConfig<P> for Config
 where
     P: Problem<PointElem = bool> + FixedLength,
     P::PointValue: Debug + PartialOrd,
+    State: OptimizerState<P, Evaluatee = Array2<bool>>,
 {
     type Err = ();
 
@@ -224,11 +224,11 @@ where
     }
 
     unsafe fn initial_state(&self, problem: &P) -> Self::State {
-        State::initial(problem.len())
+        State::Ready(Ready::initial(problem.len()))
     }
 
     unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
-        self.step_from_evaluated(problem.evaluate_population(state.points().into()), state)
+        self.step_from_evaluated(problem.evaluate_population(state.evaluatee().into()), state)
     }
 }
 
@@ -256,7 +256,7 @@ where
     P::PointValue: Debug + PartialOrd,
 {
     unsafe fn initial_state_using(&self, problem: &P, rng: &mut SplitMix64) -> Self::State {
-        State::initial_using(problem.len(), rng)
+        State::Ready(Ready::initial_using(problem.len(), rng))
     }
 }
 
@@ -267,36 +267,6 @@ where
     type Evaluatee = Array2<P::PointElem>;
 
     fn evaluatee(&self) -> &Self::Evaluatee {
-        self.points()
-    }
-
-    fn best_point(&self) -> CowArray<<P as Problem>::PointElem, Ix1> {
-        self.best_point()
-    }
-}
-
-impl State {
-    fn initial(num_bits: usize) -> Self {
-        Self::Ready(Ready::initial(num_bits))
-    }
-
-    fn initial_using<R>(num_bits: usize, rng: &mut R) -> Self
-    where
-        R: Rng,
-    {
-        Self::Ready(Ready::initial_using(num_bits, rng))
-    }
-
-    /// Return PBIL probabilities.
-    pub fn probabilities(&self) -> &Array1<Probability> {
-        match &self {
-            State::Ready(s) => s.probabilities(),
-            State::Sampling(s) => s.probabilities(),
-            State::Mutating(s) => s.probabilities(),
-        }
-    }
-
-    fn points(&self) -> &Array2<bool> {
         lazy_static! {
             static ref EMPTY: Array2<bool> = Array::from_elem((0, 0), false);
         }
@@ -307,7 +277,18 @@ impl State {
         }
     }
 
-    fn best_point(&self) -> CowArray<bool, Ix1> {
+    fn best_point(&self) -> CowArray<<P as Problem>::PointElem, Ix1> {
         finalize(self.probabilities()).into()
+    }
+}
+
+impl State {
+    /// Return PBIL probabilities.
+    pub fn probabilities(&self) -> &Array1<Probability> {
+        match &self {
+            State::Ready(s) => s.probabilities(),
+            State::Sampling(s) => s.probabilities(),
+            State::Mutating(s) => s.probabilities(),
+        }
     }
 }

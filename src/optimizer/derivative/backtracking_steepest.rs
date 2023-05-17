@@ -237,11 +237,18 @@ where
     type Evaluatee = Array1<P::PointElem>;
 
     fn evaluatee(&self) -> &Self::Evaluatee {
-        self.point()
+        match self {
+            State::Ready(x) => x.point(),
+            State::Searching(x) => x.point(),
+        }
     }
 
     fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
-        self.best_point()
+        (match self {
+            State::Ready(x) => x.best_point(),
+            State::Searching(x) => x.best_point(),
+        })
+        .into()
     }
 
     fn stored_best_point_value(&self) -> Option<&P::PointValue> {
@@ -259,21 +266,6 @@ impl<A> State<A> {
             point,
             last_step_size: initial_step_size.0,
         })
-    }
-
-    fn point(&self) -> &Array1<A> {
-        match self {
-            State::Ready(x) => x.point(),
-            State::Searching(x) => x.point(),
-        }
-    }
-
-    fn best_point(&self) -> CowArray<A, Ix1> {
-        (match self {
-            State::Ready(x) => x.best_point(),
-            State::Searching(x) => x.best_point(),
-        })
-        .into()
     }
 }
 

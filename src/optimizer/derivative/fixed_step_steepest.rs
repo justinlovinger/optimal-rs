@@ -155,7 +155,7 @@ where
     type Evaluatee = Array1<P::PointElem>;
 
     fn evaluatee(&self) -> &Self::Evaluatee {
-        &self
+        self
     }
 
     fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
