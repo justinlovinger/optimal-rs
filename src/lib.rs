@@ -226,10 +226,7 @@ mod tests {
     }
 
     #[test]
-    fn examining_points_and_corresponding_evaluations_should_be_easy() {
-        // TODO: what about examining state
-        // alongside corresponding evaluations?
-
+    fn examining_state_and_corresponding_evaluations_should_be_easy() {
         // Ideally,
         // this would be simpler,
         // something like:
@@ -240,13 +237,43 @@ mod tests {
         //     .find(|o| o.is_done());
         // ```
 
-        struct TracingProblem<P>(P);
+        // Note,
+        // this does not fully work.
+        // It assumes the optimizer evaluates points
+        // every step,
+        // an assumption that may not be true.
+
+        use std::sync::{Mutex, MutexGuard};
+
+        #[derive(Debug)]
+        struct TracingProblem<P>
+        where
+            P: Problem,
+        {
+            inner: P,
+            values: Mutex<Array1<P::PointValue>>,
+        }
+
+        impl<P> TracingProblem<P>
+        where
+            P: Problem,
+        {
+            fn new(problem: P) -> Self {
+                Self {
+                    inner: problem,
+                    values: Mutex::new(Array::from_vec(Vec::new())),
+                }
+            }
+
+            fn values(&self) -> MutexGuard<Array1<P::PointValue>> {
+                self.values.lock().unwrap()
+            }
+        }
 
         impl<P> Problem for TracingProblem<P>
         where
             P: Problem,
-            P::PointElem: std::fmt::Debug,
-            P::PointValue: std::fmt::Debug,
+            P::PointValue: Clone,
         {
             type PointElem = P::PointElem;
 
@@ -256,19 +283,30 @@ mod tests {
                 &self,
                 points: CowArray<Self::PointElem, Ix2>,
             ) -> Array1<Self::PointValue> {
-                let values = self.0.evaluate_population(points.view().into());
-                println!("f({points:?}) = {values:?}");
+                let values = self.inner.evaluate_population(points.view().into());
+                *self.values.lock().unwrap() = values.clone();
                 values
             }
 
             fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
-                let value = self.0.evaluate(point.view().into());
-                println!("f({point:?}) = {value:?}");
+                let value = self.inner.evaluate(point.view().into());
+                *self.values.lock().unwrap() = Array::from_elem(1, value.clone());
                 value
             }
         }
 
-        MockOptimizerA::default_for(TracingProblem(MockProblem)).argmin();
+        let problem = TracingProblem::new(MockProblem);
+        let mut prev_state = None;
+        MockOptimizerA::default_for(&problem)
+            .start()
+            .inspect(|o| {
+                if let Some(s) = &prev_state {
+                    println!("state: {:?}, values: {:?}", s, problem.values())
+                }
+                prev_state = Some(o.state().clone());
+            })
+            .find(|o| o.is_done())
+            .unwrap();
     }
 
     #[test]
