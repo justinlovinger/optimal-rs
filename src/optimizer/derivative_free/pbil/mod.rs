@@ -264,17 +264,14 @@ impl<P> OptimizerState<P> for State
 where
     P: Problem<PointElem = bool>,
 {
+    type Evaluatee = Array2<P::PointElem>;
+
+    fn evaluatee(&self) -> &Self::Evaluatee {
+        self.points()
+    }
+
     fn best_point(&self) -> CowArray<<P as Problem>::PointElem, Ix1> {
         self.best_point()
-    }
-}
-
-impl<P> PopulationBased<P> for State
-where
-    P: Problem<PointElem = bool>,
-{
-    fn points(&self) -> ArrayView2<P::PointElem> {
-        self.points()
     }
 }
 
@@ -299,14 +296,14 @@ impl State {
         }
     }
 
-    fn points(&self) -> ArrayView2<bool> {
+    fn points(&self) -> &Array2<bool> {
         lazy_static! {
             static ref EMPTY: Array2<bool> = Array::from_elem((0, 0), false);
         }
         match self {
-            State::Ready(_) => EMPTY.view(),
-            State::Sampling(s) => s.samples().view(),
-            State::Mutating(_) => EMPTY.view(),
+            State::Ready(_) => &EMPTY,
+            State::Sampling(s) => s.samples(),
+            State::Mutating(_) => &EMPTY,
         }
     }
 

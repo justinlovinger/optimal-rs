@@ -234,6 +234,12 @@ impl<A, P> OptimizerState<P> for State<A>
 where
     P: Problem<PointElem = A, PointValue = A>,
 {
+    type Evaluatee = Array1<P::PointElem>;
+
+    fn evaluatee(&self) -> &Self::Evaluatee {
+        self.point()
+    }
+
     fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
         self.best_point()
     }
@@ -246,15 +252,6 @@ where
     }
 }
 
-impl<A, P> PointBased<P> for State<A>
-where
-    P: Problem<PointElem = A>,
-{
-    fn point(&self) -> Option<ArrayView1<P::PointElem>> {
-        self.point()
-    }
-}
-
 impl<A> State<A> {
     /// Return an initial state.
     pub fn new(point: Point<A>, initial_step_size: StepSize<A>) -> Self {
@@ -264,14 +261,11 @@ impl<A> State<A> {
         })
     }
 
-    fn point(&self) -> Option<ArrayView1<A>> {
-        Some(
-            (match self {
-                State::Ready(x) => x.point(),
-                State::Searching(x) => x.point(),
-            })
-            .into(),
-        )
+    fn point(&self) -> &Array1<A> {
+        match self {
+            State::Ready(x) => x.point(),
+            State::Searching(x) => x.point(),
+        }
     }
 
     fn best_point(&self) -> CowArray<A, Ix1> {

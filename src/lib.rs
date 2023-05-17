@@ -165,6 +165,12 @@ mod tests {
                     P: Problem,
                     P::PointElem: Clone + Zero,
                 {
+                    type Evaluatee = ();
+
+                    fn evaluatee(&self) -> &Self::Evaluatee {
+                        &()
+                    }
+
                     fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
                         Array::from_elem(1, P::PointElem::zero()).into()
                     }
@@ -401,6 +407,12 @@ mod tests {
             P: Problem,
             S: OptimizerState<P>,
         {
+            type Evaluatee = S::Evaluatee;
+
+            fn evaluatee(&self) -> &Self::Evaluatee {
+                self.inner.evaluatee()
+            }
+
             fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
                 unimplemented!()
             }
@@ -514,18 +526,29 @@ mod tests {
         where
             P: Problem,
             P::PointElem: Clone + Zero,
+            MockStateA: OptimizerState<P, Evaluatee = ()>,
+            MockStateB: OptimizerState<P, Evaluatee = ()>,
         {
+            type Evaluatee = ();
+
+            fn evaluatee(&self) -> &Self::Evaluatee {
+                match self {
+                    Self::A(x) => x.evaluatee(),
+                    Self::B(x) => x.evaluatee(),
+                }
+            }
+
             fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
                 match self {
-                    Self::A(x) => <MockStateA as OptimizerState<P>>::best_point(x),
-                    Self::B(x) => <MockStateB as OptimizerState<P>>::best_point(x),
+                    Self::A(x) => x.best_point(),
+                    Self::B(x) => x.best_point(),
                 }
             }
 
             fn stored_best_point_value(&self) -> Option<&P::PointValue> {
                 match self {
-                    Self::A(x) => <MockStateA as OptimizerState<P>>::stored_best_point_value(x),
-                    Self::B(x) => <MockStateB as OptimizerState<P>>::stored_best_point_value(x),
+                    Self::A(x) => x.stored_best_point_value(),
+                    Self::B(x) => x.stored_best_point_value(),
                 }
             }
         }

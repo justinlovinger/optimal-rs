@@ -110,11 +110,18 @@ pub trait Convergent<P>: OptimizerConfig<P> {
 }
 
 /// An optimizer state.
-#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
+// TODO: use `blanket` when <https://github.com/althonos/blanket/issues/8> is fixed:
+// #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait OptimizerState<P>
 where
     P: Problem,
 {
+    /// Type of data to be evaluated.
+    type Evaluatee;
+
+    /// Return data to be evaluated.
+    fn evaluatee(&self) -> &Self::Evaluatee;
+
     /// Return the best point discovered.
     fn best_point(&self) -> CowArray<P::PointElem, Ix1>;
 
@@ -130,30 +137,6 @@ where
     fn stored_best_point_value(&self) -> Option<&P::PointValue> {
         None
     }
-}
-
-/// A type able to efficiently provide a view
-/// of a point to be evaluated.
-/// For optimizers evaluating at most one point per step.
-#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait PointBased<P>
-where
-    P: Problem,
-{
-    /// Return point to be evaluated.
-    fn point(&self) -> Option<ArrayView1<P::PointElem>>;
-}
-
-/// A type able to efficiently provide a view
-/// of points to be evaluated.
-/// For optimizers evaluating more than one point per step.
-#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait PopulationBased<P>
-where
-    P: Problem,
-{
-    /// Return points to be evaluated.
-    fn points(&self) -> ArrayView2<P::PointElem>;
 }
 
 // TODO: maybe add a `start`-like method
@@ -510,9 +493,7 @@ mod tests {
     assert_obj_safe!(OptimizerConfig<(), Err = (), State = (), StateErr = ()>);
     assert_obj_safe!(StochasticOptimizerConfig<(), (), Err = (), State = (), StateErr = ()>);
     assert_obj_safe!(Convergent<(), Err = (), State = (), StateErr = ()>);
-    assert_obj_safe!(OptimizerState<()>);
-    assert_obj_safe!(PointBased<()>);
-    assert_obj_safe!(PopulationBased<()>);
+    assert_obj_safe!(OptimizerState<(), Evaluatee = ()>);
 
     #[test]
     fn running_optimizer_streaming_iterator_emits_initial_state() {

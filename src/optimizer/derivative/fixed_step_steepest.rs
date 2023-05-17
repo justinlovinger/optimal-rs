@@ -152,16 +152,13 @@ impl<A, P> OptimizerState<P> for Point<A>
 where
     P: Problem<PointElem = A>,
 {
+    type Evaluatee = Array1<P::PointElem>;
+
+    fn evaluatee(&self) -> &Self::Evaluatee {
+        &self
+    }
+
     fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
         self.into()
-    }
-}
-
-impl<A, P> PointBased<P> for Point<A>
-where
-    P: Problem<PointElem = A>,
-{
-    fn point(&self) -> Option<ArrayView1<P::PointElem>> {
-        Some(self.view())
     }
 }

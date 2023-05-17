@@ -5,8 +5,8 @@ pub use streaming_iterator::StreamingIterator;
 pub use crate::{
     optimizer::{
         derivative::StepSize, Convergent, Optimizer, OptimizerArgmin, OptimizerConfig,
-        OptimizerConfigless, OptimizerProblem, OptimizerState, PointBased, PopulationBased,
-        RunningOptimizer, RunningOptimizerConfigless, StochasticOptimizerConfig,
+        OptimizerConfigless, OptimizerProblem, OptimizerState, RunningOptimizer,
+        RunningOptimizerConfigless, StochasticOptimizerConfig,
     },
     problem::*,
     traits::DefaultFor,
