@@ -54,7 +54,7 @@
 
 use std::ops::{Mul, SubAssign};
 
-use ndarray::{prelude::*, Data};
+use ndarray::prelude::*;
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
     prelude::*,
@@ -87,27 +87,6 @@ impl<A> Config<A> {
     }
 }
 
-impl<A> Config<A>
-where
-    A: Clone + SubAssign + Mul<Output = A>,
-{
-    /// step from one state to another
-    /// given point derivatives.
-    fn step_from_evaluated<S>(
-        &self,
-        point_derivatives: ArrayBase<S, Ix1>,
-        mut state: Point<A>,
-    ) -> Point<A>
-    where
-        S: Data<Elem = A>,
-    {
-        state.zip_mut_with(&point_derivatives, |x, d| {
-            *x -= self.step_size.clone() * d.clone()
-        });
-        state
-    }
-}
-
 impl<A, P> OptimizerConfig<P> for Config<A>
 where
     A: Clone + SubAssign + Mul<Output = A> + SampleUniform,
@@ -118,6 +97,8 @@ where
     type State = Point<A>;
 
     type StateErr = MismatchedLengthError;
+
+    type Evaluation = Array1<P::PointElem>;
 
     fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
         Ok(())
@@ -143,8 +124,17 @@ where
             .collect()
     }
 
-    unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
-        self.step_from_evaluated(problem.differentiate(state.view().into()), state)
+    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
+        problem.differentiate(state.view().into())
+    }
+
+    unsafe fn step_from_evaluated(
+        &self,
+        evaluation: Self::Evaluation,
+        mut state: Self::State,
+    ) -> Self::State {
+        state.zip_mut_with(&evaluation, |x, d| *x -= self.step_size.clone() * d.clone());
+        state
     }
 }
 

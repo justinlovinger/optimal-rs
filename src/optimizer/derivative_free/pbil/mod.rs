@@ -66,12 +66,15 @@ impl<P> OptimizerConfig<P> for DoneWhenConvergedConfig
 where
     P: Problem<PointElem = bool> + FixedLength,
     P::PointValue: Debug + PartialOrd,
+    Config: OptimizerConfig<P>,
 {
     type Err = <Config as OptimizerConfig<P>>::Err;
 
     type State = <Config as OptimizerConfig<P>>::State;
 
     type StateErr = <Config as OptimizerConfig<P>>::StateErr;
+
+    type Evaluation = <Config as OptimizerConfig<P>>::Evaluation;
 
     fn validate(&self, problem: &P) -> Result<(), Self::Err> {
         self.inner.validate(problem)
@@ -85,8 +88,16 @@ where
         self.inner.initial_state(problem)
     }
 
-    unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
-        self.inner.step(problem, state)
+    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
+        self.inner.evaluate(problem, state)
+    }
+
+    unsafe fn step_from_evaluated(
+        &self,
+        evaluation: Self::Evaluation,
+        state: Self::State,
+    ) -> Self::State {
+        self.inner.step_from_evaluated(evaluation, state)
     }
 }
 
@@ -189,6 +200,8 @@ where
 
     type StateErr = MismatchedLengthError;
 
+    type Evaluation = Option<Array1<P::PointValue>>;
+
     fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
         Ok(())
     }
@@ -207,12 +220,28 @@ where
         State::Ready(Ready::initial(problem.len()))
     }
 
-    unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
+    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
+        match state {
+            State::Ready(_) => None,
+            State::Sampling(s) => Some(problem.evaluate_population(s.samples().into())),
+            State::Mutating(_) => None,
+        }
+    }
+
+    unsafe fn step_from_evaluated(
+        &self,
+        evaluation: Self::Evaluation,
+        state: Self::State,
+    ) -> Self::State {
         match state {
             State::Ready(s) => State::Sampling(s.to_sampling(self.num_samples)),
             State::Sampling(s) => {
-                let values = problem.evaluate_population(s.samples().into());
-                State::Mutating(s.to_mutating(self.adjust_rate, values))
+                // `unwrap_unchecked` is safe if this method is safe,
+                // because `evaluate` always returns `Some`
+                // for `State::Sampling`.
+                State::Mutating(
+                    s.to_mutating(self.adjust_rate, unsafe { evaluation.unwrap_unchecked() }),
+                )
             }
             State::Mutating(s) => {
                 State::Ready(s.to_ready(self.mutation_chance, self.mutation_adjust_rate))

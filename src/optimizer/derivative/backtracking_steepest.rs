@@ -66,6 +66,7 @@
 
 use std::{
     fmt::Debug,
+    hint::unreachable_unchecked,
     ops::{Add, Div, Mul, Neg, Sub},
 };
 
@@ -142,6 +143,16 @@ pub struct Searching<A> {
     point_at_step: Point<A>,
 }
 
+/// A backtracking steepest descent evaluation.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Evaluation<A> {
+    /// An objective value.
+    Value(A),
+    /// An objective value and point derivatives.
+    ValueAndDerivatives((A, Array1<A>)),
+}
+
 impl<A> Config<A> {
     /// Return a new 'Config'.
     pub fn new(
@@ -168,6 +179,8 @@ where
     type State = State<A>;
 
     type StateErr = MismatchedLengthError;
+
+    type Evaluation = Evaluation<A>;
 
     fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
         Ok(())
@@ -215,15 +228,39 @@ where
         )
     }
 
-    unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
+    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
         match state {
             State::Ready(x) => {
-                let (point_value, point_derivatives) =
-                    problem.evaluate_differentiate(x.point().into());
+                Evaluation::ValueAndDerivatives(problem.evaluate_differentiate(x.point().into()))
+            }
+            State::Searching(x) => Evaluation::Value(problem.evaluate(x.point().into())),
+        }
+    }
+
+    unsafe fn step_from_evaluated(
+        &self,
+        evaluation: Self::Evaluation,
+        state: Self::State,
+    ) -> Self::State {
+        match state {
+            State::Ready(x) => {
+                let (point_value, point_derivatives) = match evaluation {
+                    Evaluation::ValueAndDerivatives(x) => x,
+                    // `unreachable_unchecked` is safe if this method is safe,
+                    // because `evaluate` always returns `ValueAndDerivatives`
+                    // for `State::Ready`.
+                    _ => unsafe { unreachable_unchecked() },
+                };
                 x.step_from_evaluated(self, point_value, point_derivatives)
             }
             State::Searching(x) => {
-                let point_value = problem.evaluate(x.point().into());
+                let point_value = match evaluation {
+                    Evaluation::Value(x) => x,
+                    // `unreachable_unchecked` is safe if this method is safe,
+                    // because `evaluate` always returns `Value`
+                    // for `State::Searching`.
+                    _ => unsafe { unreachable_unchecked() },
+                };
                 x.step_from_evaluated(self, point_value)
             }
         }

@@ -130,6 +130,7 @@ mod tests {
                     type Err = ();
                     type State = [< MockState $id >];
                     type StateErr = ();
+                    type Evaluation = ();
 
                     fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
                         Ok(())
@@ -143,7 +144,9 @@ mod tests {
                         [< MockState $id >]
                     }
 
-                    unsafe fn step(&self, _problem: &P, _state: Self::State) -> Self::State {
+                    unsafe fn evaluate(&self, _problem: &P, _state: &Self::State) -> Self::Evaluation {}
+
+                    unsafe fn step_from_evaluated(&self, _evaluation: Self::Evaluation, _state: Self::State) -> Self::State {
                         [< MockState $id >]
                     }
                 }
@@ -340,6 +343,11 @@ mod tests {
             _best_point_value: Option<P::PointValue>,
         }
 
+        enum RestarterEvaluation<S, E> {
+            InitialState(S),
+            InnerEvaluation(E),
+        }
+
         impl<C> RestarterConfig<C> {
             fn new(inner: C, max_restarts: usize) -> Self {
                 Self {
@@ -357,6 +365,7 @@ mod tests {
             type Err = C::Err;
             type State = RestarterState<P, C::State>;
             type StateErr = C::StateErr;
+            type Evaluation = RestarterEvaluation<C::State, C::Evaluation>;
 
             fn validate(&self, problem: &P) -> Result<(), Self::Err> {
                 self.inner.validate(problem)
@@ -381,20 +390,38 @@ mod tests {
                 }
             }
 
-            unsafe fn step(&self, problem: &P, mut state: Self::State) -> Self::State {
+            unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
+                // `initial_state` and `evaluate` are safe if this method is safe,
+                // because `self.inner` was validated
+                // when `self` was validated
+                // and `state.inner` was validated
+                // when `state` was validated.
                 if self.inner.is_done(&state.inner) {
-                    state.restarts += 1;
-                    // This operation is safe if this method is safe,
-                    // because `self.inner` was validated
-                    // when `self` was validated.
-                    state.inner = unsafe { self.inner.initial_state(problem) };
+                    RestarterEvaluation::InitialState(unsafe { self.inner.initial_state(problem) })
                 } else {
-                    // This operation is safe if this method is safe,
-                    // because `state.inner` was validated
-                    // when `state` was validated
-                    // and `self.inner` was validated
-                    // when `self` was validated.
-                    state.inner = unsafe { self.inner.step(problem, state.inner) };
+                    RestarterEvaluation::InnerEvaluation(unsafe {
+                        self.inner.evaluate(problem, &state.inner)
+                    })
+                }
+            }
+
+            unsafe fn step_from_evaluated(
+                &self,
+                evaluation: Self::Evaluation,
+                mut state: Self::State,
+            ) -> Self::State {
+                match evaluation {
+                    RestarterEvaluation::InitialState(s) => {
+                        state.restarts += 1;
+                        state.inner = s;
+                    }
+                    RestarterEvaluation::InnerEvaluation(e) => {
+                        // This operation is safe if this method is safe,
+                        // because `state.inner` was validated
+                        // when `state` was validated
+                        // and `evaluation` came from `state.inner`.
+                        state.inner = unsafe { self.inner.step_from_evaluated(e, state.inner) };
+                    }
                 }
                 state
             }
@@ -462,10 +489,17 @@ mod tests {
             B(<MockConfigB as OptimizerConfig<P>>::StateErr),
         }
 
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        enum MockEvaluation<P> {
+            A(<MockConfigA as OptimizerConfig<P>>::Evaluation),
+            B(<MockConfigB as OptimizerConfig<P>>::Evaluation),
+        }
+
         impl<P> OptimizerConfig<P> for MockConfig {
             type Err = MockError<P>;
             type State = MockState;
             type StateErr = MockStateError<P>;
+            type Evaluation = MockEvaluation<P>;
 
             fn validate(&self, problem: &P) -> Result<(), Self::Err> {
                 match self {
@@ -501,22 +535,54 @@ mod tests {
                 }
             }
 
-            unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State {
-                // `step` is safe if this method is safe,
+            unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
+                // `evaluate` is safe if this method is safe,
                 // because the inner config was validated
                 // when `self` was validated
                 // and inner state was validated
                 // when `state` was validated.
                 // `unreachable_unchecked` is safe if this method is safe
-                // because state is verified to match `self`
+                // because state was verified to match `self`
                 // in `validate_state`.
                 match self {
                     Self::A(c) => match state {
-                        MockState::A(s) => MockState::A(unsafe { c.step(problem, s) }),
+                        #[allow(clippy::unit_arg)]
+                        MockState::A(s) => MockEvaluation::A(unsafe { c.evaluate(problem, s) }),
                         _ => unsafe { unreachable_unchecked() },
                     },
                     Self::B(c) => match state {
-                        MockState::B(s) => MockState::B(unsafe { c.step(problem, s) }),
+                        #[allow(clippy::unit_arg)]
+                        MockState::B(s) => MockEvaluation::B(unsafe { c.evaluate(problem, s) }),
+                        _ => unsafe { unreachable_unchecked() },
+                    },
+                }
+            }
+
+            unsafe fn step_from_evaluated(
+                &self,
+                evaluation: Self::Evaluation,
+                state: Self::State,
+            ) -> Self::State {
+                // `step_from_evaluated` is safe if this method is safe,
+                // because the inner config was validated
+                // when `self` was validated,
+                // `evaluation` came from `state.inner`,
+                // and inner state was validated
+                // when `state` was validated.
+                // `unreachable_unchecked` is safe if this method is safe
+                // because `state` was verified to match `self`
+                // in `validate_state`
+                match self {
+                    Self::A(c) => match (evaluation, state) {
+                        (MockEvaluation::A(e), MockState::A(s)) => MockState::A(unsafe {
+                            <MockConfigA as OptimizerConfig<P>>::step_from_evaluated(c, e, s)
+                        }),
+                        _ => unsafe { unreachable_unchecked() },
+                    },
+                    Self::B(c) => match (evaluation, state) {
+                        (MockEvaluation::B(e), MockState::B(s)) => MockState::B(unsafe {
+                            <MockConfigB as OptimizerConfig<P>>::step_from_evaluated(c, e, s)
+                        }),
                         _ => unsafe { unreachable_unchecked() },
                     },
                 }

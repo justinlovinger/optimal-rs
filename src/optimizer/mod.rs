@@ -41,6 +41,9 @@ pub trait OptimizerConfig<P> {
     /// Error returned when a state fails to validate.
     type StateErr;
 
+    /// Result of evaluation.
+    type Evaluation;
+
     // TODO: this method may be unnecessary.
     // Configuration parameters can be validated when bulding a config.
     // This method is only necessary
@@ -71,7 +74,8 @@ pub trait OptimizerConfig<P> {
     /// for the given `problem`.
     unsafe fn initial_state(&self, problem: &P) -> Self::State;
 
-    /// Perform an optimization step.
+    /// Evaluate the given state
+    /// with the given problem.
     ///
     /// # Safety
     ///
@@ -80,7 +84,24 @@ pub trait OptimizerConfig<P> {
     /// and `state` must be valid
     /// for `self`
     /// and the given `problem`.
-    unsafe fn step(&self, problem: &P, state: Self::State) -> Self::State;
+    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation;
+
+    /// Finish an optimization step
+    /// given an evaluation of the current state.
+    ///
+    /// # Safety
+    ///
+    /// `self` must be valid
+    /// for the given `problem`,
+    /// `state` must be valid
+    /// for `self`,
+    /// and `evaluation` must be from `self`
+    /// and the given `state`.
+    unsafe fn step_from_evaluated(
+        &self,
+        evaluation: Self::Evaluation,
+        state: Self::State,
+    ) -> Self::State;
 }
 
 /// An optimizer configuration
@@ -117,7 +138,7 @@ pub trait OptimizerState<P>
 where
     P: Problem,
 {
-    /// Type of data to be evaluated.
+    /// Data to be evaluated.
     type Evaluatee<'a>
     where
         Self: 'a;
@@ -423,10 +444,13 @@ where
             // and `self.config` was validated
             // when constructing the optimizer `self` from.
             unsafe {
-                self.optimizer
-                    .borrow()
-                    .config
-                    .step(&self.optimizer.borrow().problem, state)
+                self.optimizer.borrow().config.step_from_evaluated(
+                    self.optimizer
+                        .borrow()
+                        .config
+                        .evaluate(&self.optimizer.borrow().problem, &state),
+                    state,
+                )
             }
         });
     }
@@ -493,9 +517,9 @@ mod tests {
 
     assert_obj_safe!(OptimizerConfigless<()>);
     assert_obj_safe!(RunningOptimizerConfigless<()>);
-    assert_obj_safe!(OptimizerConfig<(), Err = (), State = (), StateErr = ()>);
-    assert_obj_safe!(StochasticOptimizerConfig<(), (), Err = (), State = (), StateErr = ()>);
-    assert_obj_safe!(Convergent<(), Err = (), State = (), StateErr = ()>);
+    assert_obj_safe!(OptimizerConfig<(), Err = (), State = (), StateErr = (), Evaluation = ()>);
+    assert_obj_safe!(StochasticOptimizerConfig<(), (), Err = (), State = (), StateErr = (), Evaluation = ()>);
+    assert_obj_safe!(Convergent<(), Err = (), State = (), StateErr = (), Evaluation = ()>);
 
     #[test]
     fn running_optimizer_streaming_iterator_emits_initial_state() {
