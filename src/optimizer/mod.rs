@@ -15,6 +15,7 @@ use std::{
 
 use blanket::blanket;
 use ndarray::prelude::*;
+use once_cell::sync::OnceCell;
 use streaming_iterator::StreamingIterator;
 
 use crate::prelude::*;
@@ -261,6 +262,8 @@ where
     optimizer: O,
     state: C::State,
     skipped_first_step: bool,
+    #[cfg_attr(any(test, feature = "serde"), serde(skip))]
+    evaluation_cache: OnceCell<C::Evaluation>,
 }
 
 impl<P, C> Optimizer<P, C> {
@@ -393,6 +396,7 @@ where
             optimizer,
             state,
             skipped_first_step: false,
+            evaluation_cache: OnceCell::new(),
         }
     }
 
@@ -435,24 +439,44 @@ where
     C: OptimizerConfig<P>,
     O: Borrow<Optimizer<P, C>>,
 {
+    /// Return evaluation of current state,
+    /// evaluating and caching if necessary.
+    pub fn evaluation(&self) -> &C::Evaluation {
+        self.evaluation_cache.get_or_init(|| self.evaluate())
+    }
+
     /// Perform an optimization step.
     fn step(&mut self) {
+        let evaluation = self
+            .evaluation_cache
+            .take()
+            .unwrap_or_else(|| self.evaluate());
         replace_with::replace_with_or_abort(&mut self.state, |state| {
             // This operation is safe
-            // because `self.state` was validated
-            // when constructing `self`
+            // because `self.evaluate` returns a valid evaluation of `self.state`
             // and `self.config` was validated
-            // when constructing the optimizer `self` from.
+            // when constructing the optimizer `self` was from.
             unsafe {
-                self.optimizer.borrow().config.step_from_evaluated(
-                    self.optimizer
-                        .borrow()
-                        .config
-                        .evaluate(&self.optimizer.borrow().problem, &state),
-                    state,
-                )
+                self.optimizer
+                    .borrow()
+                    .config
+                    .step_from_evaluated(evaluation, state)
             }
         });
+    }
+
+    fn evaluate(&self) -> C::Evaluation {
+        // This operation is safe
+        // because `self.state` was validated
+        // when constructing `self`
+        // and `self.config` was validated
+        // when constructing the optimizer `self` was from.
+        unsafe {
+            self.optimizer
+                .borrow()
+                .config
+                .evaluate(&self.optimizer.borrow().problem, &self.state)
+        }
     }
 }
 

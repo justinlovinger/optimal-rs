@@ -234,86 +234,10 @@ mod tests {
 
     #[test]
     fn examining_state_and_corresponding_evaluations_should_be_easy() {
-        // Ideally,
-        // this would be simpler,
-        // something like:
-        // ```
-        // MockOptimizerA::default_for(MockProblem)
-        //     .start()
-        //     .inspect(|o| println!("f({:?}) = {:?}", o.state().points(), o.evaluations()))
-        //     .find(|o| o.is_done());
-        // ```
-
-        // Note,
-        // this does not fully work.
-        // It assumes the optimizer evaluates points
-        // every step,
-        // an assumption that may not be true.
-
-        use std::sync::{Mutex, MutexGuard};
-
-        #[derive(Debug)]
-        struct TracingProblem<P>
-        where
-            P: Problem,
-        {
-            inner: P,
-            values: Mutex<Array1<P::PointValue>>,
-        }
-
-        impl<P> TracingProblem<P>
-        where
-            P: Problem,
-        {
-            fn new(problem: P) -> Self {
-                Self {
-                    inner: problem,
-                    values: Mutex::new(Array::from_vec(Vec::new())),
-                }
-            }
-
-            fn values(&self) -> MutexGuard<Array1<P::PointValue>> {
-                self.values.lock().unwrap()
-            }
-        }
-
-        impl<P> Problem for TracingProblem<P>
-        where
-            P: Problem,
-            P::PointValue: Clone,
-        {
-            type PointElem = P::PointElem;
-
-            type PointValue = P::PointValue;
-
-            fn evaluate_population(
-                &self,
-                points: CowArray<Self::PointElem, Ix2>,
-            ) -> Array1<Self::PointValue> {
-                let values = self.inner.evaluate_population(points.view().into());
-                *self.values.lock().unwrap() = values.clone();
-                values
-            }
-
-            fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
-                let value = self.inner.evaluate(point.view().into());
-                *self.values.lock().unwrap() = Array::from_elem(1, value.clone());
-                value
-            }
-        }
-
-        let problem = TracingProblem::new(MockProblem);
-        let mut prev_state = None;
-        MockOptimizerA::default_for(&problem)
+        MockOptimizerA::default_for(MockProblem)
             .start()
-            .inspect(|o| {
-                if let Some(s) = &prev_state {
-                    println!("state: {:?}, values: {:?}", s, problem.values())
-                }
-                prev_state = Some(o.state().clone());
-            })
-            .find(|o| o.is_done())
-            .unwrap();
+            .inspect(|o| println!("state: {:?}, evaluation: {:?}", o.state(), o.evaluation()))
+            .find(|o| o.is_done());
     }
 
     #[test]
