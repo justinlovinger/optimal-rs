@@ -110,8 +110,8 @@ mod tests {
     impl Problem for MockProblem {
         type PointElem = usize;
         type PointValue = usize;
-        fn evaluate(&self, _point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
-            0
+        fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
+            point.sum()
         }
     }
 
@@ -124,13 +124,16 @@ mod tests {
                 struct [< MockConfig $id >];
 
                 #[derive(Clone, Debug, Serialize, Deserialize)]
-                struct [< MockState $id >];
+                struct [< MockState $id >](usize);
 
-                impl<P> OptimizerConfig<P> for [< MockConfig $id >] {
+                impl<P> OptimizerConfig<P> for [< MockConfig $id >]
+                where
+                    P: Problem<PointElem = usize, PointValue = usize>,
+                {
                     type Err = ();
                     type State = [< MockState $id >];
                     type StateErr = ();
-                    type Evaluation = ();
+                    type Evaluation = P::PointValue;
 
                     fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
                         Ok(())
@@ -141,13 +144,16 @@ mod tests {
                     }
 
                     unsafe fn initial_state(&self, _problem: &P) -> Self::State {
-                        [< MockState $id >]
+                        [< MockState $id >](1)
                     }
 
-                    unsafe fn evaluate(&self, _problem: &P, _state: &Self::State) -> Self::Evaluation {}
+                    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
+                        problem.evaluate(Array::from_elem(1, state.0).into())
+                    }
 
-                    unsafe fn step_from_evaluated(&self, _evaluation: Self::Evaluation, _state: Self::State) -> Self::State {
-                        [< MockState $id >]
+                    unsafe fn step_from_evaluated(&self, evaluation: Self::Evaluation, mut state: Self::State) -> Self::State {
+                        state.0 += evaluation;
+                        state
                     }
                 }
 
@@ -157,9 +163,12 @@ mod tests {
                     }
                 }
 
-                impl<P> Convergent<P> for [< MockConfig $id >] {
-                    fn is_done(&self, _state: &Self::State) -> bool {
-                        true
+                impl<P> Convergent<P> for [< MockConfig $id >]
+                where
+                    P: Problem<PointElem = usize, PointValue = usize>,
+                {
+                    fn is_done(&self, state: &Self::State) -> bool {
+                        state.0 >= 10
                     }
                 }
 
@@ -395,7 +404,10 @@ mod tests {
         }
 
         #[derive(Clone, Debug, Serialize, Deserialize)]
-        enum MockError<P> {
+        enum MockError<P>
+        where
+            P: Problem<PointElem = usize, PointValue = usize>,
+        {
             A(<MockConfigA as OptimizerConfig<P>>::Err),
             B(<MockConfigB as OptimizerConfig<P>>::Err),
         }
@@ -407,19 +419,27 @@ mod tests {
         }
 
         #[derive(Clone, Debug, Serialize, Deserialize)]
-        enum MockStateError<P> {
+        enum MockStateError<P>
+        where
+            P: Problem<PointElem = usize, PointValue = usize>,
+        {
             WrongState,
             A(<MockConfigA as OptimizerConfig<P>>::StateErr),
             B(<MockConfigB as OptimizerConfig<P>>::StateErr),
         }
 
-        #[derive(Clone, Debug, Serialize, Deserialize)]
-        enum MockEvaluation<P> {
+        enum MockEvaluation<P>
+        where
+            P: Problem<PointElem = usize, PointValue = usize>,
+        {
             A(<MockConfigA as OptimizerConfig<P>>::Evaluation),
             B(<MockConfigB as OptimizerConfig<P>>::Evaluation),
         }
 
-        impl<P> OptimizerConfig<P> for MockConfig {
+        impl<P> OptimizerConfig<P> for MockConfig
+        where
+            P: Problem<PointElem = usize, PointValue = usize>,
+        {
             type Err = MockError<P>;
             type State = MockState;
             type StateErr = MockStateError<P>;
