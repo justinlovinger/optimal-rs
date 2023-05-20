@@ -128,7 +128,12 @@ pub trait StochasticOptimizerConfig<P, R>: OptimizerConfig<P> {
 // #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait Convergent<P>: OptimizerConfig<P> {
     /// Return if optimizer is done.
-    fn is_done(&self, state: &Self::State) -> bool;
+    ///
+    /// # Safety
+    ///
+    /// `state` must be valid
+    /// for `self`.
+    unsafe fn is_done(&self, state: &Self::State) -> bool;
 }
 
 /// An optimizer state.
@@ -429,7 +434,10 @@ where
     where
         C: Convergent<P>,
     {
-        self.optimizer.borrow().config.is_done(&self.state)
+        // This operation is safe
+        // because `self.state` was validated
+        // when constructing `self`.
+        unsafe { self.optimizer.borrow().config.is_done(&self.state) }
     }
 }
 

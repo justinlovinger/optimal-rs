@@ -132,7 +132,7 @@ where
     P: Problem<PointElem = bool> + FixedLength,
     P::PointValue: Debug + PartialOrd,
 {
-    fn is_done(&self, state: &Self::State) -> bool {
+    unsafe fn is_done(&self, state: &Self::State) -> bool {
         converged(&self.converged_threshold, state.probabilities())
     }
 }

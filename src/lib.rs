@@ -167,7 +167,7 @@ mod tests {
                 where
                     P: Problem<PointElem = usize, PointValue = usize>,
                 {
-                    fn is_done(&self, state: &Self::State) -> bool {
+                    unsafe fn is_done(&self, state: &Self::State) -> bool {
                         state.0 >= 10
                     }
                 }
