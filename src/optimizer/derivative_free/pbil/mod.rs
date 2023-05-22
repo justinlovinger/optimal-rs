@@ -62,12 +62,12 @@ pub struct DoneWhenConvergedConfig {
     pub inner: Config,
 }
 
-impl<P> DefaultFor<&P> for DoneWhenConvergedConfig
+impl<P> DefaultFor<P> for DoneWhenConvergedConfig
 where
     P: Problem<PointElem = bool> + FixedLength,
     P::PointValue: Debug + PartialOrd,
 {
-    fn default_for(problem: &P) -> Self
+    fn default_for(problem: P) -> Self
     where
         P: FixedLength,
     {
@@ -189,12 +189,12 @@ impl Config {
     }
 }
 
-impl<P> DefaultFor<&P> for Config
+impl<P> DefaultFor<P> for Config
 where
     P: Problem<PointElem = bool> + FixedLength,
     P::PointValue: Debug + PartialOrd,
 {
-    fn default_for(problem: &P) -> Self
+    fn default_for(problem: P) -> Self
     where
         P: FixedLength,
     {

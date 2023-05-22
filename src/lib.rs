@@ -157,8 +157,8 @@ mod tests {
                     }
                 }
 
-                impl<P> DefaultFor<&P> for [< MockConfig $id >] {
-                    fn default_for(_problem: &P) -> Self {
+                impl<P> DefaultFor<P> for [< MockConfig $id >] {
+                    fn default_for(_problem: P) -> Self {
                         Self
                     }
                 }
