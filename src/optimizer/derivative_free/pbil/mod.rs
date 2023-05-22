@@ -62,6 +62,22 @@ pub struct DoneWhenConvergedConfig {
     pub inner: Config,
 }
 
+impl<P> DefaultFor<&P> for DoneWhenConvergedConfig
+where
+    P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
+{
+    fn default_for(problem: &P) -> Self
+    where
+        P: FixedLength,
+    {
+        Self {
+            converged_threshold: ConvergedThreshold::default(),
+            inner: Config::default_for(problem),
+        }
+    }
+}
+
 impl<P> OptimizerConfig<P> for DoneWhenConvergedConfig
 where
     P: Problem<PointElem = bool> + FixedLength,
@@ -98,22 +114,6 @@ where
         state: Self::State,
     ) -> Self::State {
         self.inner.step_from_evaluated(evaluation, state)
-    }
-}
-
-impl<P> DefaultFor<&P> for DoneWhenConvergedConfig
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
-{
-    fn default_for(problem: &P) -> Self
-    where
-        P: FixedLength,
-    {
-        Self {
-            converged_threshold: ConvergedThreshold::default(),
-            inner: Config::default_for(problem),
-        }
     }
 }
 
@@ -189,6 +189,24 @@ impl Config {
     }
 }
 
+impl<P> DefaultFor<&P> for Config
+where
+    P: Problem<PointElem = bool> + FixedLength,
+    P::PointValue: Debug + PartialOrd,
+{
+    fn default_for(problem: &P) -> Self
+    where
+        P: FixedLength,
+    {
+        Self {
+            num_samples: NumSamples::default(),
+            adjust_rate: AdjustRate::default(),
+            mutation_chance: MutationChance::default_for(problem),
+            mutation_adjust_rate: MutationAdjustRate::default(),
+        }
+    }
+}
+
 impl<P> OptimizerConfig<P> for Config
 where
     P: Problem<PointElem = bool> + FixedLength,
@@ -246,24 +264,6 @@ where
             State::Mutating(s) => {
                 State::Ready(s.to_ready(self.mutation_chance, self.mutation_adjust_rate))
             }
-        }
-    }
-}
-
-impl<P> DefaultFor<&P> for Config
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
-{
-    fn default_for(problem: &P) -> Self
-    where
-        P: FixedLength,
-    {
-        Self {
-            num_samples: NumSamples::default(),
-            adjust_rate: AdjustRate::default(),
-            mutation_chance: MutationChance::default_for(problem),
-            mutation_adjust_rate: MutationAdjustRate::default(),
         }
     }
 }
