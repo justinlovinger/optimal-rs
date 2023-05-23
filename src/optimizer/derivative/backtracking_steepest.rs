@@ -101,7 +101,7 @@ use serde::{Deserialize, Serialize};
 pub type BacktrackingSteepest<A, P> = Optimizer<P, Config<A>>;
 
 /// Backtracking steepest descent configuration parameters.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config<A> {
     /// The sufficient decrease parameter,

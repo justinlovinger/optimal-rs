@@ -71,7 +71,7 @@ use serde::{Deserialize, Serialize};
 pub type FixedStepSteepest<A, P> = Optimizer<P, Config<A>>;
 
 /// Fixed step size steepest descent configuration parameters.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config<A> {
     /// Length of each step.

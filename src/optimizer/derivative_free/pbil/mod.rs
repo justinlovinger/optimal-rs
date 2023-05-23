@@ -53,7 +53,7 @@ pub type PbilDoneWhenConverged<P> = Optimizer<P, DoneWhenConvergedConfig>;
 
 /// PBIL configuration parameters
 /// with check for converged probabilities.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DoneWhenConvergedConfig {
     /// Probability convergence parameter.
@@ -141,7 +141,7 @@ where
 pub type Pbil<P> = Optimizer<P, Config>;
 
 /// PBIL configuration parameters.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config {
     /// Number of samples generated
