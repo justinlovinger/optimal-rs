@@ -289,6 +289,11 @@ impl<P, C> Optimizer<P, C> {
     pub fn config(&self) -> &C {
         &self.config
     }
+
+    /// Return problem and configuration.
+    pub fn into_inner(self) -> (P, C) {
+        (self.problem, self.config)
+    }
 }
 
 impl<P, C> DefaultFor<P> for Optimizer<P, C>
