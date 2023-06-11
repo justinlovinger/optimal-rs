@@ -19,6 +19,7 @@ use crate::{
 /// during steps.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, Into)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(into = "usize"))]
 #[cfg_attr(feature = "serde", serde(try_from = "usize"))]
 pub struct NumSamples(usize);
 
@@ -43,6 +44,7 @@ derive_from_str_from_try_into!(NumSamples(usize));
 /// during steps.
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Into)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(into = "f64"))]
 #[cfg_attr(feature = "serde", serde(try_from = "f64"))]
 pub struct AdjustRate(f64);
 
@@ -73,6 +75,7 @@ derive_from_str_from_try_into!(AdjustRate(f64));
 /// independently.
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Into)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(into = "f64"))]
 #[cfg_attr(feature = "serde", serde(try_from = "f64"))]
 pub struct MutationChance(f64);
 
@@ -118,6 +121,7 @@ derive_from_str_from_try_into!(MutationChance(f64));
 /// when mutating.
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Into)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(into = "f64"))]
 #[cfg_attr(feature = "serde", serde(try_from = "f64"))]
 pub struct MutationAdjustRate(f64);
 
@@ -147,6 +151,7 @@ derive_from_str_from_try_into!(MutationAdjustRate(f64));
 /// Probability for a sampled bit to be true.
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Into)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(into = "f64"))]
 #[cfg_attr(feature = "serde", serde(try_from = "f64"))]
 pub struct Probability(f64);
 
