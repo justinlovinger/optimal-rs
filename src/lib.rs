@@ -82,6 +82,7 @@
 #![warn(missing_docs)]
 
 mod derive;
+mod optimization;
 pub mod optimizer;
 pub mod prelude;
 mod problem;

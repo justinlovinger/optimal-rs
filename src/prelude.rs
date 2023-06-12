@@ -3,11 +3,12 @@
 pub use streaming_iterator::StreamingIterator;
 
 pub use crate::{
-    optimizer::{
-        derivative::StepSize, Convergent, Optimizer, OptimizerArgmin, OptimizerConfig,
-        OptimizerConfigless, OptimizerProblem, OptimizerState, RunningOptimizer,
-        RunningOptimizerConfigless, StochasticOptimizerConfig,
+    optimization::{
+        Convergent, Optimizer, OptimizerArgmin, OptimizerConfig, OptimizerConfigless,
+        OptimizerProblem, OptimizerState, RunningOptimizer, RunningOptimizerConfigless,
+        StochasticOptimizerConfig,
     },
+    optimizer::derivative::StepSize,
     problem::*,
     traits::DefaultFor,
 };
