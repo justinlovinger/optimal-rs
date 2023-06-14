@@ -69,8 +69,7 @@
 //! #     }
 //! # }
 //! #
-//! let mut o = pbil::PbilDoneWhenConverged::default_for(Count)
-//!     .start()
+//! let mut o = pbil::DoneWhenConvergedConfig::start_default_for(Count)
 //!     .inspect(|o| println!("{:?}", o.state()));
 //! let last = o
 //!     .find(|o| o.is_done())

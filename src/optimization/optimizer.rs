@@ -197,13 +197,10 @@ where
     pub fn start_from(
         self,
         state: C::State,
-    ) -> Result<RunningOptimizer<P, C, Optimizer<P, C>>, (Self, C::StateErr)>
-    where
-        C::State: OptimizerState<P>,
-    {
+    ) -> Result<RunningOptimizer<P, C, Optimizer<P, C>>, (Self, C::State, C::StateErr)> {
         match self.config.validate_state(&self.problem, &state) {
             Ok(_) => Ok(RunningOptimizer::new(state, self)),
-            Err(e) => Err((self, e)),
+            Err(e) => Err((self, state, e)),
         }
     }
 }

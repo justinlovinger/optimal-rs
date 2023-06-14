@@ -2,6 +2,12 @@ use ndarray::prelude::*;
 
 use crate::prelude::*;
 
+#[derive(Clone, Debug, thiserror::Error, PartialEq)]
+pub enum StartFromError<P, S> {
+    ProblemError(P),
+    StateError(S),
+}
+
 /// An optimizer configuration.
 // TODO: use `blanket` when <https://github.com/althonos/blanket/issues/8> is fixed:
 // #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
@@ -76,6 +82,62 @@ pub trait OptimizerConfig<P> {
         evaluation: Self::Evaluation,
         state: Self::State,
     ) -> Self::State;
+
+    /// Return this optimizer
+    /// running on the given problem.
+    ///
+    /// This may be nondeterministic.
+    #[allow(clippy::type_complexity)]
+    fn start(
+        self,
+        problem: P,
+    ) -> Result<RunningOptimizer<P, Self, Optimizer<P, Self>>, (P, Self, Self::Err)>
+    where
+        P: Problem,
+        Self: Sized,
+    {
+        Optimizer::new(problem, self).map(|x| x.start())
+    }
+
+    /// Return this optimizer
+    /// running on the given problem.
+    /// if the given `state` is valid.
+    #[allow(clippy::type_complexity)]
+    fn start_from(
+        self,
+        problem: P,
+        state: Self::State,
+    ) -> Result<
+        RunningOptimizer<P, Self, Optimizer<P, Self>>,
+        (
+            P,
+            Self,
+            Self::State,
+            StartFromError<Self::Err, Self::StateErr>,
+        ),
+    >
+    where
+        P: Problem,
+        Self: Sized,
+    {
+        match Optimizer::new(problem, self) {
+            Ok(x) => x.start_from(state).map_err(|(o, s, e)| {
+                let (p, c) = o.into_inner();
+                (p, c, s, StartFromError::StateError(e))
+            }),
+            Err((p, c, e)) => Err((p, c, state, StartFromError::ProblemError(e))),
+        }
+    }
+
+    /// Return this optimizer default
+    /// running on the given problem.
+    fn start_default_for(problem: P) -> RunningOptimizer<P, Self, Optimizer<P, Self>>
+    where
+        P: Problem,
+        for<'a> Self: Sized + DefaultFor<&'a P>,
+    {
+        Optimizer::default_for(problem).start()
+    }
 }
 
 /// An optimizer configuration
@@ -92,6 +154,22 @@ pub trait StochasticOptimizerConfig<P, R>: OptimizerConfig<P> {
     /// `self` must be valid
     /// for the given `problem`.
     unsafe fn initial_state_using(&self, problem: &P, rng: &mut R) -> Self::State;
+
+    /// Return this optimizer
+    /// running on the given problem
+    /// initialized using `rng`.
+    #[allow(clippy::type_complexity)]
+    fn start_using(
+        self,
+        problem: P,
+        rng: &mut R,
+    ) -> Result<RunningOptimizer<P, Self, Optimizer<P, Self>>, (P, Self, Self::Err)>
+    where
+        P: Problem,
+        Self: Sized,
+    {
+        Optimizer::new(problem, self).map(|x| x.start_using(rng))
+    }
 }
 
 /// A config for an optimizer that may be done.
