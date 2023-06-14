@@ -3,13 +3,7 @@
 pub use streaming_iterator::StreamingIterator;
 
 pub use crate::{
-    optimization::{
-        config::{Convergent, OptimizerConfig, OptimizerState, StochasticOptimizerConfig},
-        optimizer::{
-            Optimizer, OptimizerArgmin, OptimizerConfigless, OptimizerProblem, RunningOptimizer,
-            RunningOptimizerConfigless,
-        },
-    },
+    optimization::{config::*, optimizer::*},
     optimizer::derivative::StepSize,
     problem::*,
     traits::DefaultFor,
