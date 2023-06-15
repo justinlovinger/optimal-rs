@@ -223,3 +223,13 @@ mod extensions {
 
     impl<P, R, T> StochasticOptimizerConfigExt<P, R> for T where T: StochasticOptimizerConfig<P, R> {}
 }
+
+#[cfg(test)]
+mod tests {
+    use static_assertions::assert_obj_safe;
+
+    use super::*;
+
+    assert_obj_safe!(OptimizerConfig<(), Err = (), State = (), StateErr = (), Evaluation = ()>);
+    assert_obj_safe!(StochasticOptimizerConfig<(), (), Err = (), State = (), StateErr = (), Evaluation = ()>);
+}

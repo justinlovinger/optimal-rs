@@ -385,8 +385,6 @@ mod tests {
 
     assert_obj_safe!(OptimizerConfigless<()>);
     assert_obj_safe!(RunningOptimizerConfigless<()>);
-    assert_obj_safe!(OptimizerConfig<(), Err = (), State = (), StateErr = (), Evaluation = ()>);
-    assert_obj_safe!(StochasticOptimizerConfig<(), (), Err = (), State = (), StateErr = (), Evaluation = ()>);
 
     #[test]
     fn running_optimizer_streaming_iterator_emits_initial_state() {
