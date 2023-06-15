@@ -96,21 +96,6 @@ pub trait StochasticOptimizerConfig<P, R>: OptimizerConfig<P> {
     unsafe fn initial_state_using(&self, problem: &P, rng: &mut R) -> Self::State;
 }
 
-/// A config for an optimizer that may be done.
-/// This does *not* guarantee the optimizer *will* converge,
-/// only that it *may*.
-// TODO: use `blanket` when <https://github.com/althonos/blanket/issues/8> is fixed:
-// #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait Convergent<P>: OptimizerConfig<P> {
-    /// Return if optimizer is done.
-    ///
-    /// # Safety
-    ///
-    /// `state` must be valid
-    /// for `self`.
-    unsafe fn is_done(&self, state: &Self::State) -> bool;
-}
-
 /// An optimizer state.
 // TODO: use `blanket` when <https://github.com/althonos/blanket/issues/8> is fixed
 // and can support associated type generics:

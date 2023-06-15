@@ -10,7 +10,7 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let point = pbil::PbilDoneWhenConverged::default_for(Count).argmin();
+//!     let point = pbil::UntilConvergedConfig::default().argmin(pbil::Config::start_default_for(Count));
 //!     let point_value = Count.evaluate(point.view().into());
 //!     println!("f({}) = {}", point, point_value);
 //! }
@@ -48,92 +48,25 @@ pub use self::{states::*, types::*};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// PBIL with check for converged probabilities.
-pub type PbilDoneWhenConverged<P> = Optimizer<P, DoneWhenConvergedConfig>;
-
-/// PBIL configuration parameters
-/// with check for converged probabilities.
-#[derive(Clone, Debug, PartialEq)]
+/// PBIL runner
+/// to check for converged probabilities.
+#[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DoneWhenConvergedConfig {
+pub struct UntilConvergedConfig {
     /// Probability convergence parameter.
     pub converged_threshold: ConvergedThreshold,
-    /// Regular PBIL configuration.
-    pub inner: Config,
 }
 
-impl<P> DefaultFor<P> for DoneWhenConvergedConfig
+impl<P, O> RunnerConfig<RunningOptimizer<P, Config, O>> for UntilConvergedConfig
 where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
+    Config: OptimizerConfig<P, State = State>,
 {
-    fn default_for(problem: P) -> Self
-    where
-        P: FixedLength,
-    {
-        Self {
-            converged_threshold: ConvergedThreshold::default(),
-            inner: Config::default_for(problem),
-        }
-    }
-}
+    type State = ();
 
-impl<P> OptimizerConfig<P> for DoneWhenConvergedConfig
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
-    Config: OptimizerConfig<P>,
-{
-    type Err = <Config as OptimizerConfig<P>>::Err;
+    fn initial_state(&self) -> Self::State {}
 
-    type State = <Config as OptimizerConfig<P>>::State;
-
-    type StateErr = <Config as OptimizerConfig<P>>::StateErr;
-
-    type Evaluation = <Config as OptimizerConfig<P>>::Evaluation;
-
-    fn validate(&self, problem: &P) -> Result<(), Self::Err> {
-        self.inner.validate(problem)
-    }
-
-    fn validate_state(&self, problem: &P, state: &Self::State) -> Result<(), Self::StateErr> {
-        self.inner.validate_state(problem, state)
-    }
-
-    unsafe fn initial_state(&self, problem: &P) -> Self::State {
-        self.inner.initial_state(problem)
-    }
-
-    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
-        self.inner.evaluate(problem, state)
-    }
-
-    unsafe fn step_from_evaluated(
-        &self,
-        evaluation: Self::Evaluation,
-        state: Self::State,
-    ) -> Self::State {
-        self.inner.step_from_evaluated(evaluation, state)
-    }
-}
-
-impl<P> StochasticOptimizerConfig<P, SplitMix64> for DoneWhenConvergedConfig
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
-{
-    unsafe fn initial_state_using(&self, problem: &P, rng: &mut SplitMix64) -> Self::State {
-        self.inner.initial_state_using(problem, rng)
-    }
-}
-
-impl<P> Convergent<P> for DoneWhenConvergedConfig
-where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
-{
-    unsafe fn is_done(&self, state: &Self::State) -> bool {
-        converged(&self.converged_threshold, state.probabilities())
+    fn is_done(&self, it: &RunningOptimizer<P, Config, O>, _: &Self::State) -> bool {
+        converged(&self.converged_threshold, it.state().probabilities())
     }
 }
 

@@ -22,7 +22,7 @@ use serde::{Deserialize, Serialize};
 /// It should not be implemented
 /// outside the package defining it.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait OptimizerConfigless<P>: OptimizerProblem<P> + OptimizerArgmin<P>
+pub trait OptimizerConfigless<P>: OptimizerProblem<P>
 where
     P: Problem,
 {
@@ -38,24 +38,6 @@ where
 pub trait OptimizerProblem<P> {
     /// Return problem to optimize.
     fn problem(&self) -> &P;
-}
-
-/// Optimizer `argmin`,
-/// independent of configuration.
-///
-/// Consider this trait sealed.
-/// It should not be implemented
-/// outside the package defining it.
-#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait OptimizerArgmin<P>
-where
-    P: Problem,
-{
-    /// Return point that attempts to minimize the given problem.
-    ///
-    /// How well the point minimizes the problem
-    /// depends on the optimizer.
-    fn argmin(&self) -> Array1<P::PointElem>;
 }
 
 /// Running optimizer methods
@@ -164,6 +146,13 @@ where
         RunningOptimizer::new(self.initial_state(), self)
     }
 
+    /// Return a running optimizer without consuming self.
+    ///
+    /// This may be nondeterministic.
+    pub fn start_ref(&self) -> RunningOptimizer<P, C, &Optimizer<P, C>> {
+        RunningOptimizer::new(self.initial_state(), self)
+    }
+
     fn initial_state(&self) -> C::State {
         // This operation is safe
         // because `self.config` was validated
@@ -174,6 +163,16 @@ where
     /// Return a running optimizer
     /// initialized using `rng`.
     pub fn start_using<R>(self, rng: &mut R) -> RunningOptimizer<P, C, Optimizer<P, C>>
+    where
+        C: StochasticOptimizerConfig<P, R>,
+    {
+        RunningOptimizer::new(self.initial_state_using(rng), self)
+    }
+
+    /// Return a running optimizer
+    /// initialized using `rng`
+    /// without consuming self.
+    pub fn start_ref_using<R>(&self, rng: &mut R) -> RunningOptimizer<P, C, &Optimizer<P, C>>
     where
         C: StochasticOptimizerConfig<P, R>,
     {
@@ -203,13 +202,31 @@ where
             Err(e) => Err((self, state, e)),
         }
     }
+
+    /// Return a running optimizer
+    /// without consuming self
+    /// if the given `state` is valid
+    /// for this optimizer.
+    #[allow(clippy::type_complexity)]
+    pub fn start_ref_from(
+        &self,
+        state: C::State,
+    ) -> Result<RunningOptimizer<P, C, &Optimizer<P, C>>, C::StateErr>
+    where
+        C::State: OptimizerState<P>,
+    {
+        match self.config.validate_state(&self.problem, &state) {
+            Ok(_) => Ok(RunningOptimizer::new(state, self)),
+            Err(e) => Err(e),
+        }
+    }
 }
 
 impl<P, C> OptimizerConfigless<P> for Optimizer<P, C>
 where
     P: Problem,
     P::PointElem: Clone,
-    C: OptimizerConfig<P> + Convergent<P>,
+    C: OptimizerConfig<P>,
     C::State: OptimizerState<P>,
 {
 }
@@ -217,22 +234,6 @@ where
 impl<P, C> OptimizerProblem<P> for Optimizer<P, C> {
     fn problem(&self) -> &P {
         &self.problem
-    }
-}
-
-impl<P, C> OptimizerArgmin<P> for Optimizer<P, C>
-where
-    P: Problem,
-    P::PointElem: Clone,
-    C: OptimizerConfig<P> + Convergent<P>,
-    C::State: OptimizerState<P>,
-{
-    fn argmin(&self) -> Array1<P::PointElem> {
-        RunningOptimizer::new(self.initial_state(), self)
-            .find(|o| o.is_done())
-            .expect("should converge")
-            .best_point()
-            .to_owned()
     }
 }
 
@@ -273,17 +274,6 @@ where
     /// Return optimizer configuration.
     pub fn config(&self) -> &C {
         &self.optimizer.borrow().config
-    }
-
-    /// Return if optimizer is done.
-    pub fn is_done(&self) -> bool
-    where
-        C: Convergent<P>,
-    {
-        // This operation is safe
-        // because `self.state` was validated
-        // when constructing `self`.
-        unsafe { self.optimizer.borrow().config.is_done(&self.state) }
     }
 }
 
@@ -397,7 +387,6 @@ mod tests {
     assert_obj_safe!(RunningOptimizerConfigless<()>);
     assert_obj_safe!(OptimizerConfig<(), Err = (), State = (), StateErr = (), Evaluation = ()>);
     assert_obj_safe!(StochasticOptimizerConfig<(), (), Err = (), State = (), StateErr = (), Evaluation = ()>);
-    assert_obj_safe!(Convergent<(), Err = (), State = (), StateErr = (), Evaluation = ()>);
 
     #[test]
     fn running_optimizer_streaming_iterator_emits_initial_state() {

@@ -20,7 +20,7 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let point = pbil::PbilDoneWhenConverged::default_for(Count).argmin();
+//!     let point = pbil::UntilConvergedConfig::default().argmin(pbil::Config::start_default_for(Count));
 //!     let point_value = Count.evaluate(point.view().into());
 //!     println!("f({}) = {}", point, point_value);
 //! }
@@ -69,12 +69,12 @@
 //! #     }
 //! # }
 //! #
-//! let mut o = pbil::DoneWhenConvergedConfig::start_default_for(Count)
-//!     .inspect(|o| println!("{:?}", o.state()));
-//! let last = o
-//!     .find(|o| o.is_done())
-//!     .expect("should converge");
-//! println!("f({}) = {}", last.best_point(), last.best_point_value());
+//! let mut it = pbil::UntilConvergedConfig::default().start(pbil::Config::start_default_for(Count));
+//! while let Some(o) = it.next() {
+//!     println!("{:?}", o.state());
+//! }
+//! let o = it.into_inner().0;
+//! println!("f({}) = {}", o.best_point(), o.best_point_value());
 //! ```
 
 #![warn(missing_debug_implementations)]
@@ -100,6 +100,7 @@ mod tests {
 
     use ndarray::prelude::*;
     use num_traits::Zero;
+    use replace_with::replace_with_or_abort;
     use serde::{Deserialize, Serialize};
 
     use super::prelude::*;
@@ -118,6 +119,7 @@ mod tests {
     macro_rules! mock_optimizer {
         ( $id:ident ) => {
             paste::paste! {
+                #[allow(dead_code)]
                 type [< MockOptimizer $id >]<P> = Optimizer<P, [< MockConfig $id >]>;
 
                 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -163,15 +165,6 @@ mod tests {
                     }
                 }
 
-                impl<P> Convergent<P> for [< MockConfig $id >]
-                where
-                    P: Problem<PointElem = usize, PointValue = usize>,
-                {
-                    unsafe fn is_done(&self, state: &Self::State) -> bool {
-                        state.0 >= 10
-                    }
-                }
-
                 impl<P> OptimizerState<P> for [< MockState $id >]
                 where
                     P: Problem,
@@ -196,27 +189,58 @@ mod tests {
     mock_optimizer!(A);
     mock_optimizer!(B);
 
+    struct MaxStepsConfig(usize);
+
+    struct MaxStepsState(usize);
+
+    impl<I> RunnerConfig<I> for MaxStepsConfig {
+        type State = MaxStepsState;
+
+        fn initial_state(&self) -> Self::State {
+            MaxStepsState(0)
+        }
+
+        fn is_done(&self, _it: &I, state: &Self::State) -> bool {
+            state.0 >= self.0
+        }
+
+        fn update(&self, _it: &I, state: &mut Self::State) {
+            state.0 += 1;
+        }
+    }
+
     #[test]
     fn optimizers_should_be_easily_comparable() {
+        type BoxedOptimizer<P> =
+            Box<dyn StreamingIterator<Item = dyn RunningOptimizerConfigless<P>>>;
+
         fn best_optimizer<P, I>(optimizers: I) -> usize
         where
             P: Problem,
             P::PointValue: Ord,
-            I: IntoIterator<Item = Box<dyn OptimizerConfigless<P>>>,
+            I: IntoIterator<Item = BoxedOptimizer<P>>,
         {
             optimizers
                 .into_iter()
                 .enumerate()
-                .map(|(i, o)| (o.problem().evaluate(o.argmin().into()), i))
+                .map(|(i, mut o)| {
+                    let o = o.nth(10).unwrap();
+                    (o.problem().evaluate(o.best_point()), i)
+                })
                 .min()
                 .expect("`optimizers` should be non-empty")
                 .1
         }
 
         best_optimizer([
-            Box::new(MockOptimizerA::default_for(MockProblem))
-                as Box<dyn OptimizerConfigless<MockProblem>>,
-            Box::new(MockOptimizerB::default_for(MockProblem)),
+            Box::new(
+                MockConfigA::start_default_for(MockProblem)
+                    .map_ref(|x| x as &dyn RunningOptimizerConfigless<MockProblem>),
+            ) as BoxedOptimizer<MockProblem>,
+            Box::new(
+                MockConfigB::start_default_for(MockProblem)
+                    .map_ref(|x| x as &dyn RunningOptimizerConfigless<MockProblem>),
+            ) as BoxedOptimizer<MockProblem>,
         ]);
     }
 
@@ -228,12 +252,12 @@ mod tests {
         where
             P: Problem + Send + Sync + 'static,
             P::PointElem: Clone + Send,
-            C: OptimizerConfig<P> + Convergent<P> + Send + Sync + 'static,
+            C: OptimizerConfig<P> + Send + Sync + 'static,
             C::State: OptimizerState<P>,
         {
             let optimizer2 = Arc::clone(&optimizer);
-            let handler1 = spawn(move || optimizer2.argmin());
-            let handler2 = spawn(move || optimizer.argmin());
+            let handler1 = spawn(move || MaxStepsConfig(10).argmin(optimizer2.start_ref()));
+            let handler2 = spawn(move || MaxStepsConfig(10).argmin(optimizer.start_ref()));
             handler1.join().unwrap();
             handler2.join().unwrap();
         }
@@ -243,150 +267,84 @@ mod tests {
 
     #[test]
     fn examining_state_and_corresponding_evaluations_should_be_easy() {
-        MockOptimizerA::default_for(MockProblem)
-            .start()
+        MockConfigA::start_default_for(MockProblem)
             .inspect(|o| println!("state: {:?}, evaluation: {:?}", o.state(), o.evaluation()))
-            .find(|o| o.is_done());
+            .nth(10);
     }
 
     #[test]
     fn optimizers_should_be_able_to_restart_automatically() {
         // This is a partial implementation
         // of a restart mixin,
-        // missing best point tracking
-        // and a `Convergent` implementation.
+        // missing best point tracking.
 
-        use std::marker::PhantomData;
-
-        #[derive(Clone, Debug)]
-        struct RestarterConfig<C> {
-            inner: C,
-            _max_restarts: usize,
+        trait Restart {
+            fn restart(&mut self);
         }
 
-        #[derive(Clone, Debug)]
-        struct RestarterState<P, S>
+        impl<P, C> Restart for RunningOptimizer<P, C, Optimizer<P, C>>
         where
             P: Problem,
+            C: OptimizerConfig<P>,
         {
-            inner: S,
+            fn restart(&mut self) {
+                replace_with_or_abort(self, |o| o.into_inner().0.start())
+            }
+        }
+
+        impl<I, C> Restart for Runner<I, C>
+        where
+            I: Restart,
+            C: RunnerConfig<I>,
+        {
+            fn restart(&mut self) {
+                replace_with_or_abort(self, |x| {
+                    let (mut it, c, _) = x.into_inner();
+                    it.restart();
+                    c.start(it)
+                })
+            }
+        }
+
+        struct RestarterConfig {
+            max_restarts: usize,
+        }
+
+        struct RestarterState {
             restarts: usize,
-            problem: PhantomData<P>,
-            _best_point: Option<Array1<P::PointElem>>,
-            _best_point_value: Option<P::PointValue>,
         }
 
-        enum RestarterEvaluation<S, E> {
-            InitialState(S),
-            InnerEvaluation(E),
-        }
-
-        impl<C> RestarterConfig<C> {
-            fn new(inner: C, max_restarts: usize) -> Self {
-                Self {
-                    inner,
-                    _max_restarts: max_restarts,
-                }
-            }
-        }
-
-        impl<P, C> OptimizerConfig<P> for RestarterConfig<C>
+        impl<I, C> RunnerConfig<Runner<I, C>> for RestarterConfig
         where
-            P: Problem,
-            C: OptimizerConfig<P> + Convergent<P>,
+            I: Restart,
+            C: RunnerConfig<I>,
         {
-            type Err = C::Err;
-            type State = RestarterState<P, C::State>;
-            type StateErr = C::StateErr;
-            type Evaluation = RestarterEvaluation<C::State, C::Evaluation>;
+            type State = RestarterState;
 
-            fn validate(&self, problem: &P) -> Result<(), Self::Err> {
-                self.inner.validate(problem)
+            fn initial_state(&self) -> Self::State {
+                RestarterState { restarts: 0 }
             }
 
-            fn validate_state(
-                &self,
-                problem: &P,
-                state: &Self::State,
-            ) -> Result<(), Self::StateErr> {
-                // Note: should also check and report if restarts is greater than max restarts.
-                self.inner.validate_state(problem, &state.inner)
+            fn is_done(&self, _it: &Runner<I, C>, state: &Self::State) -> bool {
+                state.restarts >= self.max_restarts
             }
 
-            unsafe fn initial_state(&self, problem: &P) -> Self::State {
-                RestarterState {
-                    inner: self.inner.initial_state(problem),
-                    restarts: 0,
-                    problem: PhantomData,
-                    _best_point: None,
-                    _best_point_value: None,
-                }
-            }
-
-            unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
-                // `initial_state` and `evaluate` are safe if this method is safe,
-                // because `self.inner` was validated
-                // when `self` was validated
-                // and `state.inner` was validated
-                // when `state` was validated.
-                if self.inner.is_done(&state.inner) {
-                    RestarterEvaluation::InitialState(unsafe { self.inner.initial_state(problem) })
-                } else {
-                    RestarterEvaluation::InnerEvaluation(unsafe {
-                        self.inner.evaluate(problem, &state.inner)
-                    })
-                }
-            }
-
-            unsafe fn step_from_evaluated(
-                &self,
-                evaluation: Self::Evaluation,
-                mut state: Self::State,
-            ) -> Self::State {
-                match evaluation {
-                    RestarterEvaluation::InitialState(s) => {
-                        state.restarts += 1;
-                        state.inner = s;
-                    }
-                    RestarterEvaluation::InnerEvaluation(e) => {
-                        // This operation is safe if this method is safe,
-                        // because `state.inner` was validated
-                        // when `state` was validated
-                        // and `evaluation` came from `state.inner`.
-                        state.inner = unsafe { self.inner.step_from_evaluated(e, state.inner) };
-                    }
-                }
-                state
-            }
-        }
-
-        impl<P, S> OptimizerState<P> for RestarterState<P, S>
-        where
-            P: Problem,
-            S: OptimizerState<P>,
-        {
-            type Evaluatee<'a> = S::Evaluatee<'a>
+            fn advance(&self, it: &mut Runner<I, C>, state: &mut Self::State)
             where
-                P: 'a,
-                S: 'a;
-
-            fn evaluatee(&self) -> Self::Evaluatee<'_> {
-                self.inner.evaluatee()
-            }
-
-            fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
-                unimplemented!()
-            }
-
-            fn stored_best_point_value(&self) -> Option<&P::PointValue> {
-                unimplemented!()
+                Runner<I, C>: StreamingIterator,
+            {
+                if it.is_done() {
+                    state.restarts += 1;
+                    it.restart();
+                } else {
+                    it.advance()
+                }
             }
         }
 
-        let mut o = Optimizer::new(MockProblem, RestarterConfig::new(MockConfigA, 10))
-            .unwrap()
-            .start();
-        o.next();
+        let _ = RestarterConfig { max_restarts: 10 }
+            .start(MaxStepsConfig(10).start(MockConfigA::start_default_for(MockProblem)))
+            .nth(100);
     }
 
     // Applications may need to select an optimizer at runtime,
