@@ -1,3 +1,4 @@
+use blanket::blanket;
 use ndarray::prelude::*;
 
 use crate::prelude::*;
@@ -5,8 +6,7 @@ use crate::prelude::*;
 pub use self::extensions::*;
 
 /// An optimizer configuration.
-// TODO: use `blanket` when <https://github.com/althonos/blanket/issues/8> is fixed:
-// #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait OptimizerConfig<P> {
     /// Error returned when this configuration fails to validate.
     type Err;
@@ -83,8 +83,7 @@ pub trait OptimizerConfig<P> {
 /// An optimizer configuration
 /// for an optimizer
 /// requiring a source of randomness.
-// TODO: use `blanket` when <https://github.com/althonos/blanket/issues/8> is fixed:
-// #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait StochasticOptimizerConfig<P, R>: OptimizerConfig<P> {
     /// Return a valid initial state
     /// initialized using `rng`.
@@ -97,8 +96,7 @@ pub trait StochasticOptimizerConfig<P, R>: OptimizerConfig<P> {
 }
 
 /// An optimizer state.
-// TODO: use `blanket` when <https://github.com/althonos/blanket/issues/8> is fixed
-// and can support associated type generics:
+// TODO: use `blanket` when it can support associated type generics:
 // #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait OptimizerState<P>
 where

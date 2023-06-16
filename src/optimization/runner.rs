@@ -1,3 +1,4 @@
+use blanket::blanket;
 use streaming_iterator::StreamingIterator;
 
 pub use self::extensions::*;
@@ -6,6 +7,7 @@ pub use self::extensions::*;
 ///
 /// A runner can determine when an optimization sequence is done
 /// and run it to completion.
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait RunnerConfig<I> {
     /// Type of this runners state.
     type State;
