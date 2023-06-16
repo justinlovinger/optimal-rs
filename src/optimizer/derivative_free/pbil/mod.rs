@@ -57,7 +57,7 @@ pub struct UntilConvergedConfig {
     pub converged_threshold: ConvergedThreshold,
 }
 
-impl<P, O> RunnerConfig<RunningOptimizer<P, Config, O>> for UntilConvergedConfig
+impl<P> RunnerConfig<RunningOptimizer<P, Config>> for UntilConvergedConfig
 where
     Config: OptimizerConfig<P, State = State>,
 {
@@ -65,7 +65,7 @@ where
 
     fn initial_state(&self) -> Self::State {}
 
-    fn is_done(&self, it: &RunningOptimizer<P, Config, O>, _: &Self::State) -> bool {
+    fn is_done(&self, it: &RunningOptimizer<P, Config>, _: &Self::State) -> bool {
         converged(&self.converged_threshold, it.state().probabilities())
     }
 }

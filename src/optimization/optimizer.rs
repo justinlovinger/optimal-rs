@@ -1,7 +1,4 @@
-use std::{
-    borrow::{Borrow, Cow},
-    marker::PhantomData,
-};
+use std::borrow::Cow;
 
 use blanket::blanket;
 use ndarray::prelude::*;
@@ -84,13 +81,12 @@ pub struct Optimizer<P, C> {
 /// returning the 100th state.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "serde"), derive(Serialize, Deserialize))]
-pub struct RunningOptimizer<P, C, O>
+pub struct RunningOptimizer<P, C>
 where
     C: OptimizerConfig<P>,
 {
-    problem: PhantomData<P>,
-    config: PhantomData<C>,
-    optimizer: O,
+    problem: P,
+    config: C,
     state: C::State,
     skipped_first_step: bool,
     #[cfg_attr(any(test, feature = "serde"), serde(skip))]
@@ -142,15 +138,8 @@ where
     /// Return a running optimizer.
     ///
     /// This may be nondeterministic.
-    pub fn start(self) -> RunningOptimizer<P, C, Optimizer<P, C>> {
-        RunningOptimizer::new(self.initial_state(), self)
-    }
-
-    /// Return a running optimizer without consuming self.
-    ///
-    /// This may be nondeterministic.
-    pub fn start_ref(&self) -> RunningOptimizer<P, C, &Optimizer<P, C>> {
-        RunningOptimizer::new(self.initial_state(), self)
+    pub fn start(self) -> RunningOptimizer<P, C> {
+        RunningOptimizer::new(self.initial_state(), self.problem, self.config)
     }
 
     fn initial_state(&self) -> C::State {
@@ -162,21 +151,11 @@ where
 
     /// Return a running optimizer
     /// initialized using `rng`.
-    pub fn start_using<R>(self, rng: &mut R) -> RunningOptimizer<P, C, Optimizer<P, C>>
+    pub fn start_using<R>(self, rng: &mut R) -> RunningOptimizer<P, C>
     where
         C: StochasticOptimizerConfig<P, R>,
     {
-        RunningOptimizer::new(self.initial_state_using(rng), self)
-    }
-
-    /// Return a running optimizer
-    /// initialized using `rng`
-    /// without consuming self.
-    pub fn start_ref_using<R>(&self, rng: &mut R) -> RunningOptimizer<P, C, &Optimizer<P, C>>
-    where
-        C: StochasticOptimizerConfig<P, R>,
-    {
-        RunningOptimizer::new(self.initial_state_using(rng), self)
+        RunningOptimizer::new(self.initial_state_using(rng), self.problem, self.config)
     }
 
     fn initial_state_using<R>(&self, rng: &mut R) -> C::State
@@ -196,28 +175,10 @@ where
     pub fn start_from(
         self,
         state: C::State,
-    ) -> Result<RunningOptimizer<P, C, Optimizer<P, C>>, (Self, C::State, C::StateErr)> {
+    ) -> Result<RunningOptimizer<P, C>, (Self, C::State, C::StateErr)> {
         match self.config.validate_state(&self.problem, &state) {
-            Ok(_) => Ok(RunningOptimizer::new(state, self)),
+            Ok(_) => Ok(RunningOptimizer::new(state, self.problem, self.config)),
             Err(e) => Err((self, state, e)),
-        }
-    }
-
-    /// Return a running optimizer
-    /// without consuming self
-    /// if the given `state` is valid
-    /// for this optimizer.
-    #[allow(clippy::type_complexity)]
-    pub fn start_ref_from(
-        &self,
-        state: C::State,
-    ) -> Result<RunningOptimizer<P, C, &Optimizer<P, C>>, C::StateErr>
-    where
-        C::State: OptimizerState<P>,
-    {
-        match self.config.validate_state(&self.problem, &state) {
-            Ok(_) => Ok(RunningOptimizer::new(state, self)),
-            Err(e) => Err(e),
         }
     }
 }
@@ -237,15 +198,18 @@ impl<P, C> OptimizerProblem<P> for Optimizer<P, C> {
     }
 }
 
-impl<P, C, O> RunningOptimizer<P, C, O>
+impl<P, C> RunningOptimizer<P, C>
 where
     C: OptimizerConfig<P>,
 {
-    fn new(state: C::State, optimizer: O) -> Self {
+    // This takes `state` first
+    // because `problem` and `config` are used
+    // to get `state`.
+    // Taking `state` first makes it easier to use.
+    fn new(state: C::State, problem: P, config: C) -> Self {
         Self {
-            problem: PhantomData,
-            config: PhantomData,
-            optimizer,
+            problem,
+            config,
             state,
             skipped_first_step: false,
             evaluation_cache: OnceCell::new(),
@@ -256,8 +220,14 @@ where
     /// returning problem,
     /// configuration,
     /// and state.
-    pub fn into_inner(self) -> (O, C::State) {
-        (self.optimizer, self.state)
+    pub fn into_inner(self) -> (Optimizer<P, C>, C::State) {
+        (
+            Optimizer {
+                problem: self.problem,
+                config: self.config,
+            },
+            self.state,
+        )
     }
 
     /// Return state of optimizer.
@@ -266,22 +236,20 @@ where
     }
 }
 
-impl<P, C, O> RunningOptimizer<P, C, O>
+impl<P, C> RunningOptimizer<P, C>
 where
     C: OptimizerConfig<P>,
-    O: Borrow<Optimizer<P, C>>,
 {
     /// Return optimizer configuration.
     pub fn config(&self) -> &C {
-        &self.optimizer.borrow().config
+        &self.config
     }
 }
 
-impl<P, C, O> RunningOptimizer<P, C, O>
+impl<P, C> RunningOptimizer<P, C>
 where
     P: Problem,
     C: OptimizerConfig<P>,
-    O: Borrow<Optimizer<P, C>>,
 {
     /// Return evaluation of current state,
     /// evaluating and caching if necessary.
@@ -300,12 +268,7 @@ where
             // because `self.evaluate` returns a valid evaluation of `self.state`
             // and `self.config` was validated
             // when constructing the optimizer `self` was from.
-            unsafe {
-                self.optimizer
-                    .borrow()
-                    .config
-                    .step_from_evaluated(evaluation, state)
-            }
+            unsafe { self.config.step_from_evaluated(evaluation, state) }
         });
     }
 
@@ -315,24 +278,18 @@ where
         // when constructing `self`
         // and `self.config` was validated
         // when constructing the optimizer `self` was from.
-        unsafe {
-            self.optimizer
-                .borrow()
-                .config
-                .evaluate(&self.optimizer.borrow().problem, &self.state)
-        }
+        unsafe { self.config.evaluate(&self.problem, &self.state) }
     }
 }
 
-impl<P, C, O> RunningOptimizerConfigless<P> for RunningOptimizer<P, C, O>
+impl<P, C> RunningOptimizerConfigless<P> for RunningOptimizer<P, C>
 where
     P: Problem,
     C: OptimizerConfig<P>,
     C::State: OptimizerState<P>,
-    O: Borrow<Optimizer<P, C>>,
 {
     fn problem(&self) -> &P {
-        &self.optimizer.borrow().problem
+        &self.problem
     }
 
     fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
@@ -350,11 +307,10 @@ where
     }
 }
 
-impl<P, C, O> StreamingIterator for RunningOptimizer<P, C, O>
+impl<P, C> StreamingIterator for RunningOptimizer<P, C>
 where
     P: Problem,
     C: OptimizerConfig<P>,
-    O: Borrow<Optimizer<P, C>>,
 {
     type Item = Self;
 

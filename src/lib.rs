@@ -98,6 +98,8 @@ mod tests {
     // is more important
     // than particular values.
 
+    use std::fmt::Debug;
+
     use ndarray::prelude::*;
     use num_traits::Zero;
     use replace_with::replace_with_or_abort;
@@ -119,9 +121,6 @@ mod tests {
     macro_rules! mock_optimizer {
         ( $id:ident ) => {
             paste::paste! {
-                #[allow(dead_code)]
-                type [< MockOptimizer $id >]<P> = Optimizer<P, [< MockConfig $id >]>;
-
                 #[derive(Clone, Debug, Serialize, Deserialize)]
                 struct [< MockConfig $id >];
 
@@ -248,21 +247,27 @@ mod tests {
     fn parallel_optimization_runs_should_be_easy() {
         use std::{sync::Arc, thread::spawn};
 
-        fn parallel<P, C>(optimizer: Arc<Optimizer<P, C>>)
+        fn parallel<P, C>(problem: Arc<P>, config: Arc<C>)
         where
-            P: Problem + Send + Sync + 'static,
+            P: Problem + Debug + Send + Sync + 'static,
             P::PointElem: Clone + Send,
-            C: OptimizerConfig<P> + Send + Sync + 'static,
-            C::State: OptimizerState<P>,
+            C: OptimizerConfig<Arc<P>> + Debug + Send + Sync + 'static,
+            C::Err: Debug,
+            C::State: OptimizerState<Arc<P>>,
         {
-            let optimizer2 = Arc::clone(&optimizer);
-            let handler1 = spawn(move || MaxStepsConfig(10).argmin(optimizer2.start_ref()));
-            let handler2 = spawn(move || MaxStepsConfig(10).argmin(optimizer.start_ref()));
+            let problem2 = Arc::clone(&problem);
+            let config2 = Arc::clone(&config);
+            let handler1 =
+                spawn(move || MaxStepsConfig(10).argmin(config2.start(problem2).unwrap()));
+            let handler2 = spawn(move || MaxStepsConfig(10).argmin(config.start(problem).unwrap()));
             handler1.join().unwrap();
             handler2.join().unwrap();
         }
 
-        parallel(Arc::new(MockOptimizerA::default_for(MockProblem)));
+        parallel(
+            Arc::new(MockProblem),
+            Arc::new(MockConfigA::default_for(MockProblem)),
+        );
     }
 
     #[test]
@@ -282,7 +287,7 @@ mod tests {
             fn restart(&mut self);
         }
 
-        impl<P, C> Restart for RunningOptimizer<P, C, Optimizer<P, C>>
+        impl<P, C> Restart for RunningOptimizer<P, C>
         where
             P: Problem,
             C: OptimizerConfig<P>,

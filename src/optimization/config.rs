@@ -146,10 +146,7 @@ mod extensions {
         ///
         /// This may be nondeterministic.
         #[allow(clippy::type_complexity)]
-        fn start(
-            self,
-            problem: P,
-        ) -> Result<RunningOptimizer<P, Self, Optimizer<P, Self>>, (P, Self, Self::Err)>
+        fn start(self, problem: P) -> Result<RunningOptimizer<P, Self>, (P, Self, Self::Err)>
         where
             P: Problem,
             Self: Sized,
@@ -166,7 +163,7 @@ mod extensions {
             problem: P,
             state: Self::State,
         ) -> Result<
-            RunningOptimizer<P, Self, Optimizer<P, Self>>,
+            RunningOptimizer<P, Self>,
             (
                 P,
                 Self,
@@ -189,7 +186,7 @@ mod extensions {
 
         /// Return this optimizer default
         /// running on the given problem.
-        fn start_default_for(problem: P) -> RunningOptimizer<P, Self, Optimizer<P, Self>>
+        fn start_default_for(problem: P) -> RunningOptimizer<P, Self>
         where
             P: Problem,
             for<'a> Self: Sized + DefaultFor<&'a P>,
@@ -210,7 +207,7 @@ mod extensions {
             self,
             problem: P,
             rng: &mut R,
-        ) -> Result<RunningOptimizer<P, Self, Optimizer<P, Self>>, (P, Self, Self::Err)>
+        ) -> Result<RunningOptimizer<P, Self>, (P, Self, Self::Err)>
         where
             P: Problem,
             Self: Sized,
