@@ -96,8 +96,7 @@ pub trait StochasticOptimizerConfig<P, R>: OptimizerConfig<P> {
 }
 
 /// An optimizer state.
-// TODO: use `blanket` when it can support associated type generics:
-// #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait OptimizerState<P>
 where
     P: Problem,
