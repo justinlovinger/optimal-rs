@@ -18,9 +18,6 @@ pub trait RunnerConfig<I> {
     /// Return if optimization is done.
     fn is_done(&self, it: &I, state: &Self::State) -> bool;
 
-    /// Update the state of this runner.
-    fn update(&self, _it: &I, _state: &mut Self::State) {}
-
     /// Advance the optimization sequence,
     /// updating the state of this runner
     /// if necessary.
@@ -30,6 +27,10 @@ pub trait RunnerConfig<I> {
     {
         it.advance()
     }
+
+    /// Update state of this runner
+    /// after optimization sequence advanced.
+    fn update(&self, _it: &I, _state: &mut Self::State) {}
 }
 
 mod extensions {
@@ -120,8 +121,8 @@ mod extensions {
         type Item = I::Item;
 
         fn advance(&mut self) {
-            self.config.update(&self.inner, &mut self.state);
             self.config.advance(&mut self.inner, &mut self.state);
+            self.config.update(&self.inner, &mut self.state);
         }
 
         fn get(&self) -> Option<&Self::Item> {
