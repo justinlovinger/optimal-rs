@@ -104,6 +104,21 @@ mod extensions {
     where
         C: RunnerConfig<I>,
     {
+        /// Return inner iterator.
+        pub fn inner(&self) -> &I {
+            &self.inner
+        }
+
+        /// Return runner configuration.
+        pub fn config(&self) -> &C {
+            &self.config
+        }
+
+        /// Return runner state.
+        pub fn state(&self) -> &C::State {
+            &self.state
+        }
+
         /// Stop optimization run,
         /// returning inner optimization sequence,
         /// runner configuration,
