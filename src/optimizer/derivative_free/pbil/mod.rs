@@ -48,6 +48,26 @@ pub use self::{states::*, types::*};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+trait Probabilities {
+    fn probabilities(&self) -> &Array1<Probability>;
+}
+
+impl<P, C> Probabilities for RunningOptimizer<P, C>
+where
+    C: OptimizerConfig<P>,
+    C::State: Probabilities,
+{
+    fn probabilities(&self) -> &Array1<Probability> {
+        self.state().probabilities()
+    }
+}
+
+impl Probabilities for State {
+    fn probabilities(&self) -> &Array1<Probability> {
+        self.probabilities()
+    }
+}
+
 /// PBIL runner
 /// to check for converged probabilities.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -57,16 +77,16 @@ pub struct UntilConvergedConfig {
     pub converged_threshold: ConvergedThreshold,
 }
 
-impl<P> RunnerConfig<RunningOptimizer<P, Config>> for UntilConvergedConfig
+impl<I> RunnerConfig<I> for UntilConvergedConfig
 where
-    Config: OptimizerConfig<P, State = State>,
+    I: Probabilities,
 {
     type State = ();
 
     fn initial_state(&self) -> Self::State {}
 
-    fn is_done(&self, it: &RunningOptimizer<P, Config>, _: &Self::State) -> bool {
-        converged(&self.converged_threshold, it.state().probabilities())
+    fn is_done(&self, it: &I, _: &Self::State) -> bool {
+        converged(&self.converged_threshold, it.probabilities())
     }
 }
 
