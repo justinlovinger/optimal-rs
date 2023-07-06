@@ -37,16 +37,18 @@
 //! struct Sphere;
 //!
 //! impl Problem for Sphere {
-//!     type PointElem = f64;
-//!     type PointValue = f64;
+//!     type Point<'a> = CowArray<'a, f64, Ix1>;
+//!     type Value = f64;
 //!
-//!     fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
+//!     fn evaluate(&self, point: Self::Point<'_>) -> Self::Value {
 //!         point.map(|x| x.powi(2)).sum()
 //!     }
 //! }
 //!
 //! impl Differentiable for Sphere {
-//!     fn differentiate(&self, point: CowArray<Self::PointElem, Ix1>) -> Array1<Self::PointElem> {
+//!     type Derivative = Array1<f64>;
+//!
+//!     fn differentiate(&self, point: Self::Point<'_>) -> Self::Derivative {
 //!         point.map(|x| 2.0 * x)
 //!     }
 //! }
@@ -58,8 +60,10 @@
 //! }
 //!
 //! impl Bounded for Sphere {
-//!     fn bounds(&self) -> Box<dyn Iterator<Item = std::ops::RangeInclusive<Self::PointElem>>> {
-//!         Box::new(std::iter::repeat(-10.0..=10.0).take(self.len()))
+//!     type Bounds = std::iter::Take<std::iter::Repeat<std::ops::RangeInclusive<f64>>>;
+//!
+//!     fn bounds(&self) -> Self::Bounds {
+//!         std::iter::repeat(-10.0..=10.0).take(self.len())
 //!     }
 //! }
 //! ```
@@ -67,7 +71,7 @@
 use std::{
     fmt::Debug,
     hint::unreachable_unchecked,
-    ops::{Add, Div, Mul, Neg, Sub},
+    ops::{Add, Div, Mul, Neg, RangeInclusive, Sub},
 };
 
 use derive_more::Display;
@@ -171,7 +175,11 @@ impl<A> Config<A> {
 impl<A, P> OptimizerConfig<P> for Config<A>
 where
     A: Debug + SampleUniform + Real + 'static,
-    P: Differentiable<PointElem = A, PointValue = A> + FixedLength + Bounded,
+    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Value = A, Derivative = Array1<A>>
+        + FixedLength
+        + Bounded
+        + 'a,
+    P::Bounds: Iterator<Item = RangeInclusive<A>>,
     f64: AsPrimitive<A>,
 {
     type Err = ();
@@ -269,9 +277,9 @@ where
 
 impl<A, P> OptimizerState<P> for State<A>
 where
-    P: Problem<PointElem = A, PointValue = A>,
+    for<'a> P: Problem<Point<'a> = CowArray<'a, A, Ix1>, Value = A> + 'a,
 {
-    type Evaluatee<'a> = ArrayView1<'a, P::PointElem> where A: 'a;
+    type Evaluatee<'a> = ArrayView1<'a, A> where A: 'a;
 
     fn evaluatee(&self) -> Self::Evaluatee<'_> {
         (match self {
@@ -281,7 +289,7 @@ where
         .into()
     }
 
-    fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
+    fn best_point(&self) -> P::Point<'_> {
         (match self {
             State::Ready(x) => x.best_point(),
             State::Searching(x) => x.best_point(),
@@ -289,7 +297,7 @@ where
         .into()
     }
 
-    fn stored_best_point_value(&self) -> Option<&P::PointValue> {
+    fn stored_best_point_value(&self) -> Option<&P::Value> {
         match self {
             State::Ready(_) => None,
             State::Searching(x) => Some(&x.point_value),

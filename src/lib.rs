@@ -36,18 +36,19 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let point = pbil::UntilConvergedConfig::default().argmin(pbil::Config::start_default_for(Count));
+//!     let mut o = pbil::Config::start_default_for(Count);
+//!     let point = pbil::UntilConvergedConfig::default().argmin(&mut o);
 //!     let point_value = Count.evaluate(point.view().into());
-//!     println!("f({}) = {}", point, point_value);
+//!     println!("f({point}) = {point_value}");
 //! }
 //!
 //! struct Count;
 //!
 //! impl Problem for Count {
-//!     type PointElem = bool;
-//!     type PointValue = u64;
+//!     type Point<'a> = CowArray<'a, bool, Ix1>;
+//!     type Value = u64;
 //!
-//!     fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
+//!     fn evaluate(&self, point: Self::Point<'_>) -> Self::Value {
 //!         point.fold(0, |acc, b| acc + *b as u64)
 //!     }
 //! }
@@ -71,10 +72,10 @@
 //! # struct Count;
 //! #
 //! # impl Problem for Count {
-//! #     type PointElem = bool;
-//! #     type PointValue = u64;
+//! #     type Point<'a> = CowArray<'a, bool, Ix1>;
+//! #     type Value = u64;
 //! #
-//! #     fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
+//! #     fn evaluate(&self, point: Self::Point<'_>) -> Self::Value {
 //! #         point.fold(0, |acc, b| acc + *b as u64)
 //! #     }
 //! # }
@@ -116,8 +117,6 @@ mod tests {
 
     use std::fmt::Debug;
 
-    use ndarray::prelude::*;
-    use num_traits::Zero;
     use replace_with::replace_with_or_abort;
     use serde::{Deserialize, Serialize};
 
@@ -127,10 +126,11 @@ mod tests {
     struct MockProblem;
 
     impl Problem for MockProblem {
-        type PointElem = usize;
-        type PointValue = usize;
-        fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
-            point.sum()
+        type Point<'a> = usize;
+        type Value = usize;
+
+        fn evaluate<'a>(&'a self, point: Self::Point<'a>) -> Self::Value {
+            point + 1
         }
     }
 
@@ -145,12 +145,12 @@ mod tests {
 
                 impl<P> OptimizerConfig<P> for [< MockConfig $id >]
                 where
-                    P: Problem<PointElem = usize, PointValue = usize>,
+                    for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
                 {
                     type Err = ();
                     type State = [< MockState $id >];
                     type StateErr = ();
-                    type Evaluation = P::PointValue;
+                    type Evaluation = P::Value;
 
                     fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
                         Ok(())
@@ -165,7 +165,7 @@ mod tests {
                     }
 
                     unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
-                        problem.evaluate(Array::from_elem(1, state.0).into())
+                        problem.evaluate(state.0)
                     }
 
                     unsafe fn step_from_evaluated(&self, evaluation: Self::Evaluation, mut state: Self::State) -> Self::State {
@@ -182,18 +182,17 @@ mod tests {
 
                 impl<P> OptimizerState<P> for [< MockState $id >]
                 where
-                    P: Problem,
-                    P::PointElem: Clone + Zero,
+                    for<'a> P: Problem<Point<'a> = usize> + 'a,
                 {
                     type Evaluatee<'a> = ();
 
                     fn evaluatee(&self) -> Self::Evaluatee<'_> {}
 
-                    fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
-                        Array::from_elem(1, P::PointElem::zero()).into()
+                    fn best_point(&self) -> P::Point<'_> {
+                        self.0
                     }
 
-                    fn stored_best_point_value(&self) -> Option<&P::PointValue> {
+                    fn stored_best_point_value(&self) -> Option<&P::Value> {
                         None
                     }
                 }
@@ -232,7 +231,7 @@ mod tests {
         fn best_optimizer<P, I>(optimizers: I) -> usize
         where
             P: Problem,
-            P::PointValue: Ord,
+            P::Value: Ord,
             I: IntoIterator<Item = BoxedOptimizer<P>>,
         {
             optimizers
@@ -263,19 +262,29 @@ mod tests {
     fn parallel_optimization_runs_should_be_easy() {
         use std::{sync::Arc, thread::spawn};
 
-        fn parallel<P, C>(problem: Arc<P>, config: Arc<C>)
+        fn parallel<P, C, A>(problem: P, config: C)
         where
-            P: Problem + Debug + Send + Sync + 'static,
-            P::PointElem: Clone + Send,
-            C: OptimizerConfig<Arc<P>> + Debug + Send + Sync + 'static,
+            P: Problem + Clone + Debug + Send + Sync + 'static,
+            for<'a> P::Point<'a>: ToOwned<Owned = A>,
+            A: Clone + Send + 'static,
+            C: OptimizerConfig<P> + Clone + Debug + Send + Sync + 'static,
             C::Err: Debug,
-            C::State: OptimizerState<Arc<P>>,
+            C::State: OptimizerState<P>,
         {
-            let problem2 = Arc::clone(&problem);
-            let config2 = Arc::clone(&config);
-            let handler1 =
-                spawn(move || MaxStepsConfig(10).argmin(config2.start(problem2).unwrap()));
-            let handler2 = spawn(move || MaxStepsConfig(10).argmin(config.start(problem).unwrap()));
+            let problem2 = problem.clone();
+            let config2 = config.clone();
+            let handler1 = spawn(move || {
+                #[allow(clippy::redundant_clone)] // False positive.
+                MaxStepsConfig(10)
+                    .argmin(&mut config2.start(problem2).unwrap())
+                    .to_owned()
+            });
+            let handler2 = spawn(move || {
+                #[allow(clippy::redundant_clone)] // False positive.
+                MaxStepsConfig(10)
+                    .argmin(&mut config.start(problem).unwrap())
+                    .to_owned()
+            });
             handler1.join().unwrap();
             handler2.join().unwrap();
         }
@@ -385,7 +394,7 @@ mod tests {
         #[derive(Clone, Debug, Serialize, Deserialize)]
         enum MockError<P>
         where
-            P: Problem<PointElem = usize, PointValue = usize>,
+            for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
         {
             A(<MockConfigA as OptimizerConfig<P>>::Err),
             B(<MockConfigB as OptimizerConfig<P>>::Err),
@@ -400,7 +409,7 @@ mod tests {
         #[derive(Clone, Debug, Serialize, Deserialize)]
         enum MockStateError<P>
         where
-            P: Problem<PointElem = usize, PointValue = usize>,
+            for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
         {
             WrongState,
             A(<MockConfigA as OptimizerConfig<P>>::StateErr),
@@ -409,7 +418,7 @@ mod tests {
 
         enum MockEvaluation<P>
         where
-            P: Problem<PointElem = usize, PointValue = usize>,
+            for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
         {
             A(<MockConfigA as OptimizerConfig<P>>::Evaluation),
             B(<MockConfigB as OptimizerConfig<P>>::Evaluation),
@@ -417,7 +426,7 @@ mod tests {
 
         impl<P> OptimizerConfig<P> for MockConfig
         where
-            P: Problem<PointElem = usize, PointValue = usize>,
+            for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
         {
             type Err = MockError<P>;
             type State = MockState;
@@ -515,7 +524,6 @@ mod tests {
         impl<P> OptimizerState<P> for MockState
         where
             P: Problem,
-            P::PointElem: Clone + Zero,
             for<'a> MockStateA: OptimizerState<P, Evaluatee<'a> = ()>,
             for<'a> MockStateB: OptimizerState<P, Evaluatee<'a> = ()>,
         {
@@ -528,14 +536,14 @@ mod tests {
                 }
             }
 
-            fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
+            fn best_point(&self) -> P::Point<'_> {
                 match self {
                     Self::A(x) => x.best_point(),
                     Self::B(x) => x.best_point(),
                 }
             }
 
-            fn stored_best_point_value(&self) -> Option<&P::PointValue> {
+            fn stored_best_point_value(&self) -> Option<&P::Value> {
                 match self {
                     Self::A(x) => x.stored_best_point_value(),
                     Self::B(x) => x.stored_best_point_value(),

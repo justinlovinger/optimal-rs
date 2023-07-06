@@ -10,18 +10,19 @@
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let point = pbil::UntilConvergedConfig::default().argmin(pbil::Config::start_default_for(Count));
+//!     let mut o = pbil::Config::start_default_for(Count);
+//!     let point = pbil::UntilConvergedConfig::default().argmin(&mut o);
 //!     let point_value = Count.evaluate(point.view().into());
-//!     println!("f({}) = {}", point, point_value);
+//!     println!("f({point}) = {point_value}");
 //! }
 //!
 //! struct Count;
 //!
 //! impl Problem for Count {
-//!     type PointElem = bool;
-//!     type PointValue = u64;
+//!     type Point<'a> = CowArray<'a, bool, Ix1>;
+//!     type Value = u64;
 //!
-//!     fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
+//!     fn evaluate(&self, point: Self::Point<'_>) -> Self::Value {
 //!         point.fold(0, |acc, b| acc + *b as u64)
 //!     }
 //! }
@@ -144,13 +145,9 @@ impl Config {
 
 impl<P> DefaultFor<P> for Config
 where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
+    P: FixedLength,
 {
-    fn default_for(problem: P) -> Self
-    where
-        P: FixedLength,
-    {
+    fn default_for(problem: P) -> Self {
         Self {
             num_samples: NumSamples::default(),
             adjust_rate: AdjustRate::default(),
@@ -162,8 +159,8 @@ where
 
 impl<P> OptimizerConfig<P> for Config
 where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
+    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + FixedLength + 'a,
+    P::Value: Debug + PartialOrd,
 {
     type Err = ();
 
@@ -171,7 +168,7 @@ where
 
     type StateErr = MismatchedLengthError;
 
-    type Evaluation = Option<Array1<P::PointValue>>;
+    type Evaluation = Option<Array1<P::Value>>;
 
     fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
         Ok(())
@@ -223,8 +220,8 @@ where
 
 impl<P> StochasticOptimizerConfig<P, SplitMix64> for Config
 where
-    P: Problem<PointElem = bool> + FixedLength,
-    P::PointValue: Debug + PartialOrd,
+    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + FixedLength + 'a,
+    P::Value: Debug + PartialOrd,
 {
     unsafe fn initial_state_using(&self, problem: &P, rng: &mut SplitMix64) -> Self::State {
         State::Ready(Ready::initial_using(problem.len(), rng))
@@ -233,9 +230,9 @@ where
 
 impl<P> OptimizerState<P> for State
 where
-    P: Problem<PointElem = bool>,
+    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + 'a,
 {
-    type Evaluatee<'a> = Option<ArrayView2<'a, P::PointElem>>;
+    type Evaluatee<'a> = Option<ArrayView2<'a, bool>>;
 
     fn evaluatee(&self) -> Self::Evaluatee<'_> {
         match self {
@@ -245,7 +242,7 @@ where
         }
     }
 
-    fn best_point(&self) -> CowArray<<P as Problem>::PointElem, Ix1> {
+    fn best_point(&self) -> P::Point<'_> {
         finalize(self.probabilities()).into()
     }
 }

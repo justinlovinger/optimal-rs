@@ -1,5 +1,4 @@
 use blanket::blanket;
-use ndarray::prelude::*;
 
 use crate::prelude::*;
 
@@ -110,7 +109,7 @@ where
     fn evaluatee(&self) -> Self::Evaluatee<'_>;
 
     /// Return the best point discovered.
-    fn best_point(&self) -> CowArray<P::PointElem, Ix1>;
+    fn best_point(&self) -> P::Point<'_>;
 
     /// Return the value of the best point discovered,
     /// if possible
@@ -121,7 +120,7 @@ where
     ///
     /// If an optimizer never stores the best point value,
     /// this will always return `None`.
-    fn stored_best_point_value(&self) -> Option<&P::PointValue> {
+    fn stored_best_point_value(&self) -> Option<&P::Value> {
         None
     }
 }

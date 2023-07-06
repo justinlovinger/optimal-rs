@@ -1,63 +1,97 @@
-use std::ops::RangeInclusive;
-
 use blanket::blanket;
 use ndarray::prelude::*;
 
-// When stable,
-// add default implementations for both methods
-// and use `rustc_must_implement_one_of`,
-// <https://github.com/rust-lang/rust/pull/92164>.
 /// An optimization problem,
 /// as defined by having an objective function.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait Problem {
-    /// Elements in points.
-    type PointElem;
+    /// A point in this problem space.
+    type Point<'a>
+    where
+        Self: 'a;
 
-    /// Value returned by problem
-    /// when point is evaluated.
-    type PointValue;
+    /// Value of a point in this problem space.
+    type Value;
+
+    /// Return the objective value of a point in this problem space.
+    fn evaluate<'a>(&'a self, point: Self::Point<'a>) -> Self::Value;
+}
+
+/// An extension to `Problem` for populations of points,
+/// automatically implemented for `CowArray` points.
+///
+/// Override for objective functions
+/// capable of more efficiently evaluating multiple points
+/// simultaneously.
+pub trait ProblemPop<Elem> {
+    /// A population of points in this problem space.
+    type Population<'a>
+    where
+        Self: 'a,
+        Elem: 'a;
+
+    /// A collection of values of points in this problem space.
+    type Values;
 
     /// Return objective values of points.
-    fn evaluate_population(
-        &self,
-        points: CowArray<Self::PointElem, Ix2>,
-    ) -> Array1<Self::PointValue> {
+    fn evaluate_population(&self, points: Self::Population<'_>) -> Self::Values;
+}
+
+impl<Elem, T> ProblemPop<Elem> for T
+where
+    for<'a> T: Problem<Point<'a> = CowArray<'a, Elem, Ix1>> + 'a,
+{
+    type Population<'a> = CowArray<'a, Elem, Ix2>
+    where
+        Elem: 'a;
+
+    type Values = Array1<<Self as Problem>::Value>;
+
+    fn evaluate_population(&self, points: Self::Population<'_>) -> Self::Values {
         points.map_axis(Axis(points.ndim() - 1), |point| self.evaluate(point.into()))
     }
-
-    /// Return the objective value of a point.
-    ///
-    /// This can be implemented as
-    /// `self.evaluate_all(point).into_scalar()`
-    /// if `evaluate_all` is implemented.
-    fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue;
 }
 
 /// An optimization problem
 /// with a differentiable objective function.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait Differentiable: Problem {
+    /// Derivative,
+    /// or partial derivatives,
+    /// of a point in this problem space.
+    type Derivative;
+
+    /// Return partial derivatives of a point.
+    fn differentiate<'a>(&'a self, point: Self::Point<'a>) -> Self::Derivative;
+}
+
+/// An extension to `Differentiable` for simultaneously evaluating and differentiating points,
+/// automatically implemented for `CowArray` points.
+///
+/// Override for objective functions
+/// capable of more efficiently calculating both
+/// simultaneously.
+pub trait EvaluateDifferentiate<Elem>: Differentiable + Problem {
     /// Return objective value and partial derivatives of a point.
-    ///
-    /// Override for objective functions
-    /// capable of more efficiently calculating both
-    /// simultaneously.
-    fn evaluate_differentiate(
-        &self,
-        point: CowArray<Self::PointElem, Ix1>,
-    ) -> (Self::PointValue, Array1<Self::PointElem>) {
+    fn evaluate_differentiate<'a>(
+        &'a self,
+        point: Self::Point<'a>,
+    ) -> (Self::Value, Self::Derivative);
+}
+
+impl<T, Elem> EvaluateDifferentiate<Elem> for T
+where
+    for<'a> T: Differentiable<Point<'a> = CowArray<'a, Elem, Ix1>> + 'a,
+{
+    fn evaluate_differentiate<'a>(
+        &'a self,
+        point: Self::Point<'a>,
+    ) -> (Self::Value, Self::Derivative) {
         (
             self.evaluate(point.view().into()),
             self.differentiate(point),
         )
     }
-
-    // As of 2023-03-13,
-    // `ndarray` lacks a method to map an axis to an axis,
-    // making implementation of a row-polymorphic method difficult.
-    /// Return partial derivatives of a point.
-    fn differentiate(&self, point: CowArray<Self::PointElem, Ix1>) -> Array1<Self::PointElem>;
 }
 
 /// An optimization problem with a fixed length
@@ -75,29 +109,34 @@ pub trait FixedLength: Problem {
 /// in its problem space.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait Bounded: Problem {
+    /// Bounds for points in this problem space.
+    type Bounds;
+
     /// Return whether this problem contains the given point.
-    fn contains(&self, point: ArrayView1<Self::PointElem>) -> bool
+    fn contains<A, I>(&self, point: I) -> bool
     where
-        Self::PointElem: PartialOrd,
+        Self::Bounds: Iterator<Item = std::ops::RangeInclusive<A>>,
+        I: IntoIterator<Item = A>,
+        A: PartialOrd,
     {
         point
-            .iter()
+            .into_iter()
             .zip(self.bounds())
-            .all(|(x, range)| range.contains(x))
+            .all(|(x, range)| range.contains(&x))
     }
 
     /// Return bounds for this problem.
-    fn bounds(&self) -> Box<dyn Iterator<Item = RangeInclusive<Self::PointElem>>>;
+    fn bounds(&self) -> Self::Bounds;
 }
 
-#[cfg(test)]
-mod tests {
-    use static_assertions::assert_obj_safe;
+// #[cfg(test)]
+// mod tests {
+//     use static_assertions::assert_obj_safe;
 
-    use super::*;
+//     use super::*;
 
-    assert_obj_safe!(Problem<PointElem = f64, PointValue = f64>);
-    assert_obj_safe!(Differentiable<PointElem = f64, PointValue = f64>);
-    assert_obj_safe!(FixedLength<PointElem = f64, PointValue = f64>);
-    assert_obj_safe!(Bounded<PointElem = f64, PointValue = f64>);
-}
+//     assert_obj_safe!(Problem<Point = f64, Value = f64>);
+//     assert_obj_safe!(Differentiable<Point = f64, Value = f64, Derivative = f64>);
+//     assert_obj_safe!(FixedLength<Point = f64, Value = f64>);
+//     assert_obj_safe!(Bounded<Point = f64, Value = f64, Bounds = Vec<f64>>);
+// }

@@ -1,7 +1,6 @@
 use std::borrow::Cow;
 
 use blanket::blanket;
-use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
 use streaming_iterator::StreamingIterator;
 
@@ -53,14 +52,14 @@ where
     fn problem(&self) -> &P;
 
     /// Return the best point discovered.
-    fn best_point(&self) -> CowArray<P::PointElem, Ix1>;
+    fn best_point(&self) -> P::Point<'_>;
 
     /// Return the value of the best point discovered,
     /// evaluating the best point
     /// if necessary.
-    fn best_point_value(&self) -> Cow<P::PointValue>
+    fn best_point_value(&self) -> Cow<P::Value>
     where
-        P::PointValue: Clone;
+        P::Value: Clone;
 }
 
 /// An optimizer
@@ -186,7 +185,6 @@ where
 impl<P, C> OptimizerConfigless<P> for Optimizer<P, C>
 where
     P: Problem,
-    P::PointElem: Clone,
     C: OptimizerConfig<P>,
     C::State: OptimizerState<P>,
 {
@@ -292,13 +290,13 @@ where
         &self.problem
     }
 
-    fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
+    fn best_point(&self) -> P::Point<'_> {
         self.state.best_point()
     }
 
-    fn best_point_value(&self) -> Cow<P::PointValue>
+    fn best_point_value(&self) -> Cow<P::Value>
     where
-        P::PointValue: Clone,
+        P::Value: Clone,
     {
         self.state.stored_best_point_value().map_or_else(
             || Cow::Owned(self.problem().evaluate(self.best_point())),
@@ -384,10 +382,10 @@ mod tests {
     struct Count;
 
     impl Problem for Count {
-        type PointElem = bool;
-        type PointValue = u64;
+        type Point<'a> = CowArray<'a, bool, Ix1>;
+        type Value = u64;
 
-        fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
+        fn evaluate<'a>(&'a self, point: Self::Point<'a>) -> Self::Value {
             point.fold(0, |acc, b| acc + *b as u64)
         }
     }

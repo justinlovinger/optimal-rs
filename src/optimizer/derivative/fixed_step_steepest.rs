@@ -25,16 +25,18 @@
 //! struct Sphere;
 //!
 //! impl Problem for Sphere {
-//!     type PointElem = f64;
-//!     type PointValue = f64;
+//!     type Point<'a> = CowArray<'a, f64, Ix1>;
+//!     type Value = f64;
 //!
-//!     fn evaluate(&self, point: CowArray<Self::PointElem, Ix1>) -> Self::PointValue {
+//!     fn evaluate(&self, point: Self::Point<'_>) -> Self::Value {
 //!         point.map(|x| x.powi(2)).sum()
 //!     }
 //! }
 //!
 //! impl Differentiable for Sphere {
-//!     fn differentiate(&self, point: CowArray<Self::PointElem, Ix1>) -> Array1<Self::PointElem> {
+//!     type Derivative = Array1<f64>;
+//!
+//!     fn differentiate(&self, point: Self::Point<'_>) -> Self::Derivative {
 //!         point.map(|x| 2.0 * x)
 //!     }
 //! }
@@ -46,13 +48,15 @@
 //! }
 //!
 //! impl Bounded for Sphere {
-//!     fn bounds(&self) -> Box<dyn Iterator<Item = std::ops::RangeInclusive<Self::PointElem>>> {
-//!         Box::new(std::iter::repeat(-10.0..=10.0).take(self.len()))
+//!     type Bounds = std::iter::Take<std::iter::Repeat<std::ops::RangeInclusive<f64>>>;
+//!
+//!     fn bounds(&self) -> Self::Bounds {
+//!         std::iter::repeat(-10.0..=10.0).take(self.len())
 //!     }
 //! }
 //! ```
 
-use std::ops::{Mul, SubAssign};
+use std::ops::{Mul, RangeInclusive, SubAssign};
 
 use ndarray::prelude::*;
 use rand::{
@@ -90,7 +94,11 @@ impl<A> Config<A> {
 impl<A, P> OptimizerConfig<P> for Config<A>
 where
     A: Clone + SubAssign + Mul<Output = A> + SampleUniform,
-    P: Differentiable<PointElem = A> + FixedLength + Bounded,
+    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Derivative = Array1<A>>
+        + FixedLength
+        + Bounded
+        + 'a,
+    P::Bounds: Iterator<Item = RangeInclusive<A>>,
 {
     type Err = ();
 
@@ -98,7 +106,7 @@ where
 
     type StateErr = MismatchedLengthError;
 
-    type Evaluation = Array1<P::PointElem>;
+    type Evaluation = P::Derivative;
 
     fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
         Ok(())
@@ -140,15 +148,15 @@ where
 
 impl<A, P> OptimizerState<P> for Point<A>
 where
-    P: Problem<PointElem = A>,
+    for<'a> P: Problem<Point<'a> = CowArray<'a, A, Ix1>> + 'a,
 {
-    type Evaluatee<'a> = ArrayView1<'a, P::PointElem> where A: 'a;
+    type Evaluatee<'a> = ArrayView1<'a, A> where A: 'a;
 
     fn evaluatee(&self) -> Self::Evaluatee<'_> {
         self.into()
     }
 
-    fn best_point(&self) -> CowArray<P::PointElem, Ix1> {
+    fn best_point(&self) -> P::Point<'_> {
         self.into()
     }
 }

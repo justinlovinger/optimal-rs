@@ -34,7 +34,7 @@ pub trait RunnerConfig<I> {
 }
 
 mod extensions {
-    use ndarray::prelude::*;
+    use replace_with::replace_with_or_abort;
 
     use crate::prelude::*;
 
@@ -57,14 +57,17 @@ mod extensions {
         }
 
         /// Run the given sequence to completion.
-        fn run(self, it: I) -> I
+        fn run(self, it: &mut I) -> &mut I
         where
             Self: Sized,
             I: StreamingIterator,
         {
-            let mut it = self.start(it);
-            while it.next().is_some() {}
-            it.into_inner().0
+            replace_with_or_abort(it, |it| {
+                let mut it = self.start(it);
+                while it.next().is_some() {}
+                it.into_inner().0
+            });
+            it
         }
 
         /// Return point that attempts to minimize a problem
@@ -72,14 +75,13 @@ mod extensions {
         ///
         /// How well the point minimizes the problem
         /// depends on the optimizer.
-        fn argmin<P>(self, it: I) -> Array1<P::PointElem>
+        fn argmin<P>(self, it: &mut I) -> P::Point<'_>
         where
             Self: Sized,
             P: Problem,
-            P::PointElem: Clone,
             I: StreamingIterator + RunningOptimizerConfigless<P>,
         {
-            self.run(it).best_point().to_owned()
+            (*self.run(it)).best_point()
         }
     }
 
