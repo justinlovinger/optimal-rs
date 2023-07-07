@@ -147,20 +147,15 @@ mod tests {
                 where
                     for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
                 {
-                    type Err = ();
                     type State = [< MockState $id >];
                     type StateErr = ();
                     type Evaluation = P::Value;
-
-                    fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
-                        Ok(())
-                    }
 
                     fn validate_state(&self, _problem: &P, _state: &Self::State) -> Result<(), Self::StateErr> {
                         Ok(())
                     }
 
-                    unsafe fn initial_state(&self, _problem: &P) -> Self::State {
+                    fn initial_state(&self, _problem: &P) -> Self::State {
                         [< MockState $id >](1)
                     }
 
@@ -268,7 +263,6 @@ mod tests {
             for<'a> P::Point<'a>: ToOwned<Owned = A>,
             A: Clone + Send + 'static,
             C: OptimizerConfig<P> + Clone + Debug + Send + Sync + 'static,
-            C::Err: Debug,
             C::State: OptimizerState<P>,
         {
             let problem2 = problem.clone();
@@ -276,13 +270,13 @@ mod tests {
             let handler1 = spawn(move || {
                 #[allow(clippy::redundant_clone)] // False positive.
                 MaxStepsConfig(10)
-                    .argmin(&mut config2.start(problem2).unwrap())
+                    .argmin(&mut config2.start(problem2))
                     .to_owned()
             });
             let handler2 = spawn(move || {
                 #[allow(clippy::redundant_clone)] // False positive.
                 MaxStepsConfig(10)
-                    .argmin(&mut config.start(problem).unwrap())
+                    .argmin(&mut config.start(problem))
                     .to_owned()
             });
             handler1.join().unwrap();
@@ -392,15 +386,6 @@ mod tests {
         }
 
         #[derive(Clone, Debug, Serialize, Deserialize)]
-        enum MockError<P>
-        where
-            for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
-        {
-            A(<MockConfigA as OptimizerConfig<P>>::Err),
-            B(<MockConfigB as OptimizerConfig<P>>::Err),
-        }
-
-        #[derive(Clone, Debug, Serialize, Deserialize)]
         enum MockState {
             A(MockStateA),
             B(MockStateB),
@@ -428,17 +413,9 @@ mod tests {
         where
             for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
         {
-            type Err = MockError<P>;
             type State = MockState;
             type StateErr = MockStateError<P>;
             type Evaluation = MockEvaluation<P>;
-
-            fn validate(&self, problem: &P) -> Result<(), Self::Err> {
-                match self {
-                    Self::A(c) => c.validate(problem).map_err(MockError::A),
-                    Self::B(c) => c.validate(problem).map_err(MockError::B),
-                }
-            }
 
             fn validate_state(
                 &self,
@@ -457,13 +434,13 @@ mod tests {
                 }
             }
 
-            unsafe fn initial_state(&self, problem: &P) -> Self::State {
+            fn initial_state(&self, problem: &P) -> Self::State {
                 // `initial_state` is safe if this method is safe,
                 // because the inner config was validated
                 // when `self` was validated.
                 match self {
-                    Self::A(c) => MockState::A(unsafe { c.initial_state(problem) }),
-                    Self::B(c) => MockState::B(unsafe { c.initial_state(problem) }),
+                    Self::A(c) => MockState::A(c.initial_state(problem)),
+                    Self::B(c) => MockState::B(c.initial_state(problem)),
                 }
             }
 
@@ -551,9 +528,7 @@ mod tests {
             }
         }
 
-        let mut o = Optimizer::new(MockProblem, MockConfig::A(MockConfigA))
-            .unwrap()
-            .start();
+        let mut o = Optimizer::new(MockProblem, MockConfig::A(MockConfigA)).start();
         o.next();
         let store = serde_json::to_string(&o).unwrap();
         o = serde_json::from_str(&store).unwrap();

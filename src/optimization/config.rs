@@ -7,9 +7,6 @@ pub use self::extensions::*;
 /// An optimizer configuration.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
 pub trait OptimizerConfig<P> {
-    /// Error returned when this configuration fails to validate.
-    type Err;
-
     /// State this config can initialize.
     type State;
 
@@ -18,14 +15,6 @@ pub trait OptimizerConfig<P> {
 
     /// Result of evaluation.
     type Evaluation;
-
-    // TODO: this method may be unnecessary.
-    // Configuration parameters can be validated when bulding a config.
-    // This method is only necessary
-    // if config parameters depend on problem.
-    /// Return whether `self` is valid
-    /// for the given `problem`.
-    fn validate(&self, problem: &P) -> Result<(), Self::Err>;
 
     // TODO: we may be able to remove this method
     // and replace it with something like
@@ -42,21 +31,14 @@ pub trait OptimizerConfig<P> {
     /// Return a valid initial state.
     ///
     /// This may be nondeterministic.
-    ///
-    /// # Safety
-    ///
-    /// `self` must be valid
-    /// for the given `problem`.
-    unsafe fn initial_state(&self, problem: &P) -> Self::State;
+    fn initial_state(&self, problem: &P) -> Self::State;
 
     /// Evaluate the given state
     /// with the given problem.
     ///
     /// # Safety
     ///
-    /// `self` must be valid
-    /// for the given `problem`,
-    /// and `state` must be valid
+    /// `state` must be valid
     /// for `self`
     /// and the given `problem`.
     unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation;
@@ -66,8 +48,6 @@ pub trait OptimizerConfig<P> {
     ///
     /// # Safety
     ///
-    /// `self` must be valid
-    /// for the given `problem`,
     /// `state` must be valid
     /// for `self`,
     /// and `evaluation` must be from `self`
@@ -88,10 +68,7 @@ pub trait StochasticOptimizerConfig<P, R>: OptimizerConfig<P> {
     /// initialized using `rng`.
     ///
     /// # Safety
-    ///
-    /// `self` must be valid
-    /// for the given `problem`.
-    unsafe fn initial_state_using(&self, problem: &P, rng: &mut R) -> Self::State;
+    fn initial_state_using(&self, problem: &P, rng: &mut R) -> Self::State;
 }
 
 /// An optimizer state.
@@ -128,28 +105,18 @@ where
 mod extensions {
     use super::*;
 
-    /// Error returned when `start_from` is given an invalid problem or state.
-    #[derive(Clone, Debug, thiserror::Error, PartialEq)]
-    pub enum StartFromError<P, S> {
-        /// Error returned when `start_from` is given an invalid problem.
-        ProblemError(P),
-        /// Error returned when `start_from` is given an invalid state.
-        StateError(S),
-    }
-
     /// Automatically implemented extensions to `OptimizerConfig`.
     pub trait OptimizerConfigExt<P>: OptimizerConfig<P> {
         /// Return this optimizer
         /// running on the given problem.
         ///
         /// This may be nondeterministic.
-        #[allow(clippy::type_complexity)]
-        fn start(self, problem: P) -> Result<RunningOptimizer<P, Self>, (P, Self, Self::Err)>
+        fn start(self, problem: P) -> RunningOptimizer<P, Self>
         where
             P: Problem,
             Self: Sized,
         {
-            Optimizer::new(problem, self).map(|x| x.start())
+            Optimizer::new(problem, self).start()
         }
 
         /// Return this optimizer
@@ -160,26 +127,17 @@ mod extensions {
             self,
             problem: P,
             state: Self::State,
-        ) -> Result<
-            RunningOptimizer<P, Self>,
-            (
-                P,
-                Self,
-                Self::State,
-                StartFromError<Self::Err, Self::StateErr>,
-            ),
-        >
+        ) -> Result<RunningOptimizer<P, Self>, (P, Self, Self::State, Self::StateErr)>
         where
             P: Problem,
             Self: Sized,
         {
-            match Optimizer::new(problem, self) {
-                Ok(x) => x.start_from(state).map_err(|(o, s, e)| {
+            Optimizer::new(problem, self)
+                .start_from(state)
+                .map_err(|(o, s, e)| {
                     let (p, c) = o.into_inner();
-                    (p, c, s, StartFromError::StateError(e))
-                }),
-                Err((p, c, e)) => Err((p, c, state, StartFromError::ProblemError(e))),
-            }
+                    (p, c, s, e)
+                })
         }
 
         /// Return this optimizer default
@@ -200,17 +158,12 @@ mod extensions {
         /// Return this optimizer
         /// running on the given problem
         /// initialized using `rng`.
-        #[allow(clippy::type_complexity)]
-        fn start_using(
-            self,
-            problem: P,
-            rng: &mut R,
-        ) -> Result<RunningOptimizer<P, Self>, (P, Self, Self::Err)>
+        fn start_using(self, problem: P, rng: &mut R) -> RunningOptimizer<P, Self>
         where
             P: Problem,
             Self: Sized,
         {
-            Optimizer::new(problem, self).map(|x| x.start_using(rng))
+            Optimizer::new(problem, self).start_using(rng)
         }
     }
 
@@ -223,6 +176,6 @@ mod tests {
 
     use super::*;
 
-    assert_obj_safe!(OptimizerConfig<(), Err = (), State = (), StateErr = (), Evaluation = ()>);
-    assert_obj_safe!(StochasticOptimizerConfig<(), (), Err = (), State = (), StateErr = (), Evaluation = ()>);
+    assert_obj_safe!(OptimizerConfig<(), State = (), StateErr = (), Evaluation = ()>);
+    assert_obj_safe!(StochasticOptimizerConfig<(), (), State = (), StateErr = (), Evaluation = ()>);
 }

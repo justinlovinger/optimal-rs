@@ -96,14 +96,11 @@ impl<P, C> Optimizer<P, C> {
     /// Return a new optimizer
     /// if given `config` is valid
     /// for the given `problem`.
-    pub fn new(problem: P, config: C) -> Result<Self, (P, C, C::Err)>
+    pub fn new(problem: P, config: C) -> Self
     where
         C: OptimizerConfig<P>,
     {
-        match config.validate(&problem) {
-            Ok(_) => Ok(Self { problem, config }),
-            Err(e) => Err((problem, config, e)),
-        }
+        Self { problem, config }
     }
 
     /// Return optimizer configuration.
@@ -138,14 +135,11 @@ where
     ///
     /// This may be nondeterministic.
     pub fn start(self) -> RunningOptimizer<P, C> {
-        RunningOptimizer::new(self.initial_state(), self.problem, self.config)
-    }
-
-    fn initial_state(&self) -> C::State {
-        // This operation is safe
-        // because `self.config` was validated
-        // when `self` was constructed.
-        unsafe { self.config.initial_state(&self.problem) }
+        RunningOptimizer::new(
+            self.config.initial_state(&self.problem),
+            self.problem,
+            self.config,
+        )
     }
 
     /// Return a running optimizer
@@ -154,17 +148,11 @@ where
     where
         C: StochasticOptimizerConfig<P, R>,
     {
-        RunningOptimizer::new(self.initial_state_using(rng), self.problem, self.config)
-    }
-
-    fn initial_state_using<R>(&self, rng: &mut R) -> C::State
-    where
-        C: StochasticOptimizerConfig<P, R>,
-    {
-        // This operation is safe
-        // because `self.config` was validated
-        // when `self` was constructed.
-        unsafe { self.config.initial_state_using(&self.problem, rng) }
+        RunningOptimizer::new(
+            self.config.initial_state_using(&self.problem, rng),
+            self.problem,
+            self.config,
+        )
     }
 
     /// Return a running optimizer

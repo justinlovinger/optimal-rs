@@ -162,17 +162,11 @@ where
     for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + FixedLength + 'a,
     P::Value: Debug + PartialOrd,
 {
-    type Err = ();
-
     type State = State;
 
     type StateErr = MismatchedLengthError;
 
     type Evaluation = Option<Array1<P::Value>>;
-
-    fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
-        Ok(())
-    }
 
     fn validate_state(&self, problem: &P, state: &Self::State) -> Result<(), Self::StateErr> {
         // If `Sampling::samples` could be changed independent of `probabilities`,
@@ -184,7 +178,7 @@ where
         }
     }
 
-    unsafe fn initial_state(&self, problem: &P) -> Self::State {
+    fn initial_state(&self, problem: &P) -> Self::State {
         State::Ready(Ready::initial(problem.len()))
     }
 
@@ -223,7 +217,7 @@ where
     for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + FixedLength + 'a,
     P::Value: Debug + PartialOrd,
 {
-    unsafe fn initial_state_using(&self, problem: &P, rng: &mut SplitMix64) -> Self::State {
+    fn initial_state_using(&self, problem: &P, rng: &mut SplitMix64) -> Self::State {
         State::Ready(Ready::initial_using(problem.len(), rng))
     }
 }

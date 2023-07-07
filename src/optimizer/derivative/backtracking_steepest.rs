@@ -25,7 +25,6 @@
 //!                 IncrRate::from_backtracking_rate(backtracking_rate),
 //!             ),
 //!         )
-//!         .expect("should never fail")
 //!         .start()
 //!         .nth(100)
 //!         .unwrap()
@@ -182,17 +181,11 @@ where
     P::Bounds: Iterator<Item = RangeInclusive<A>>,
     f64: AsPrimitive<A>,
 {
-    type Err = ();
-
     type State = State<A>;
 
     type StateErr = MismatchedLengthError;
 
     type Evaluation = Evaluation<A>;
-
-    fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
-        Ok(())
-    }
 
     fn validate_state(&self, problem: &P, state: &Self::State) -> Result<(), Self::StateErr> {
         // Note,
@@ -221,7 +214,7 @@ where
         }
     }
 
-    unsafe fn initial_state(&self, problem: &P) -> Self::State {
+    fn initial_state(&self, problem: &P) -> Self::State {
         let mut rng = thread_rng();
         State::new(
             problem

@@ -13,7 +13,6 @@
 //!     println!(
 //!         "{}",
 //!         FixedStepSteepest::new(Sphere, Config::new(StepSize::new(0.5).unwrap()))
-//!             .expect("should never fail")
 //!             .start()
 //!             .nth(100)
 //!             .unwrap()
@@ -100,17 +99,11 @@ where
         + 'a,
     P::Bounds: Iterator<Item = RangeInclusive<A>>,
 {
-    type Err = ();
-
     type State = Point<A>;
 
     type StateErr = MismatchedLengthError;
 
     type Evaluation = P::Derivative;
-
-    fn validate(&self, _problem: &P) -> Result<(), Self::Err> {
-        Ok(())
-    }
 
     fn validate_state(&self, problem: &P, state: &Self::State) -> Result<(), Self::StateErr> {
         if state.len() == problem.len() {
@@ -120,7 +113,7 @@ where
         }
     }
 
-    unsafe fn initial_state(&self, problem: &P) -> Self::State {
+    fn initial_state(&self, problem: &P) -> Self::State {
         let mut rng = thread_rng();
         problem
             .bounds()
