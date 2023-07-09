@@ -312,7 +312,10 @@ mod tests {
             C: OptimizerConfig<P>,
         {
             fn restart(&mut self) {
-                replace_with_or_abort(self, |o| o.into_inner().0.start())
+                replace_with_or_abort(self, |o| {
+                    let (p, c, _) = o.into_inner();
+                    c.start(p)
+                })
             }
         }
 
@@ -528,7 +531,7 @@ mod tests {
             }
         }
 
-        let mut o = Optimizer::new(MockProblem, MockConfig::A(MockConfigA)).start();
+        let mut o = MockConfig::A(MockConfigA).start(MockProblem);
         o.next();
         let store = serde_json::to_string(&o).unwrap();
         o = serde_json::from_str(&store).unwrap();

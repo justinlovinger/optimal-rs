@@ -92,7 +92,7 @@ where
 }
 
 /// PBIL optimizer.
-pub type Pbil<P> = Optimizer<P, Config>;
+pub type Pbil<P> = RunningOptimizer<P, Config>;
 
 /// PBIL configuration parameters.
 #[derive(Clone, Debug, PartialEq)]

@@ -17,15 +17,12 @@
 //!     let backtracking_rate = BacktrackingRate::default();
 //!     println!(
 //!         "{}",
-//!         BacktrackingSteepest::new(
-//!             Sphere,
-//!             Config::new(
-//!                 SufficientDecreaseParameter::default(),
-//!                 backtracking_rate,
-//!                 IncrRate::from_backtracking_rate(backtracking_rate),
-//!             ),
+//!         Config::new(
+//!             SufficientDecreaseParameter::default(),
+//!             backtracking_rate,
+//!             IncrRate::from_backtracking_rate(backtracking_rate),
 //!         )
-//!         .start()
+//!         .start(Sphere)
 //!         .nth(100)
 //!         .unwrap()
 //!         .best_point()
@@ -101,7 +98,7 @@ use serde::{Deserialize, Serialize};
 
 /// Running backtracking line search steepest descent optimizer
 /// with initial line search step size chosen by incrementing previous step size.
-pub type BacktrackingSteepest<A, P> = Optimizer<P, Config<A>>;
+pub type BacktrackingSteepest<A, P> = RunningOptimizer<P, Config<A>>;
 
 /// Backtracking steepest descent configuration parameters.
 #[derive(Clone, Debug, PartialEq)]

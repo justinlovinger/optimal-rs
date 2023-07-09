@@ -12,8 +12,7 @@
 //! fn main() {
 //!     println!(
 //!         "{}",
-//!         FixedStepSteepest::new(Sphere, Config::new(StepSize::new(0.5).unwrap()))
-//!             .start()
+//!         Config::new(StepSize::new(0.5).unwrap()).start(Sphere)
 //!             .nth(100)
 //!             .unwrap()
 //!             .best_point()
@@ -71,7 +70,7 @@ use super::StepSize;
 use serde::{Deserialize, Serialize};
 
 /// Fixed step size steepest descent optimizer.
-pub type FixedStepSteepest<A, P> = Optimizer<P, Config<A>>;
+pub type FixedStepSteepest<A, P> = RunningOptimizer<P, Config<A>>;
 
 /// Fixed step size steepest descent configuration parameters.
 #[derive(Clone, Debug, PartialEq)]

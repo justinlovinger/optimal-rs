@@ -9,33 +9,6 @@ use crate::prelude::*;
 #[cfg(any(test, feature = "serde"))]
 use serde::{Deserialize, Serialize};
 
-// TODO: maybe add a `start`-like method
-// to return a `Box<dyn RunningOptimizerMethod>`.
-/// Optimizer methods
-/// independent of configuration.
-///
-/// Consider this trait sealed.
-/// It should not be implemented
-/// outside the package defining it.
-#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait OptimizerConfigless<P>: OptimizerProblem<P>
-where
-    P: Problem,
-{
-}
-
-/// Optimizer `problem`,
-/// independent of configuration.
-///
-/// Consider this trait sealed.
-/// It should not be implemented
-/// outside the package defining it.
-#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait OptimizerProblem<P> {
-    /// Return problem to optimize.
-    fn problem(&self) -> &P;
-}
-
 /// Running optimizer methods
 /// independent of configuration
 /// and state.
@@ -62,15 +35,6 @@ where
         P::Value: Clone;
 }
 
-/// An optimizer
-/// capable of solving a given optimization problem.
-#[derive(Clone, Debug)]
-#[cfg_attr(any(test, feature = "serde"), derive(Serialize, Deserialize))]
-pub struct Optimizer<P, C> {
-    problem: P,
-    config: C,
-}
-
 /// A running optimizer.
 ///
 /// Initial optimizer state is emitted before stepping,
@@ -92,95 +56,12 @@ where
     evaluation_cache: OnceCell<C::Evaluation>,
 }
 
-impl<P, C> Optimizer<P, C> {
-    /// Return a new optimizer
-    /// if given `config` is valid
-    /// for the given `problem`.
-    pub fn new(problem: P, config: C) -> Self
-    where
-        C: OptimizerConfig<P>,
-    {
-        Self { problem, config }
-    }
-
-    /// Return optimizer configuration.
-    pub fn config(&self) -> &C {
-        &self.config
-    }
-
-    /// Return problem and configuration.
-    pub fn into_inner(self) -> (P, C) {
-        (self.problem, self.config)
-    }
-}
-
-impl<P, C> DefaultFor<P> for Optimizer<P, C>
+impl<P, C> DefaultFor<P> for RunningOptimizer<P, C>
 where
-    for<'a> C: DefaultFor<&'a P>,
+    for<'a> C: OptimizerConfig<P> + DefaultFor<&'a P>,
 {
     fn default_for(x: P) -> Self {
-        Self {
-            config: C::default_for(&x),
-            problem: x,
-        }
-    }
-}
-
-impl<P, C> Optimizer<P, C>
-where
-    P: Problem,
-    C: OptimizerConfig<P>,
-{
-    /// Return a running optimizer.
-    ///
-    /// This may be nondeterministic.
-    pub fn start(self) -> RunningOptimizer<P, C> {
-        RunningOptimizer::new(
-            self.config.initial_state(&self.problem),
-            self.problem,
-            self.config,
-        )
-    }
-
-    /// Return a running optimizer
-    /// initialized using `rng`.
-    pub fn start_using<R>(self, rng: &mut R) -> RunningOptimizer<P, C>
-    where
-        C: StochasticOptimizerConfig<P, R>,
-    {
-        RunningOptimizer::new(
-            self.config.initial_state_using(&self.problem, rng),
-            self.problem,
-            self.config,
-        )
-    }
-
-    /// Return a running optimizer
-    /// if the given `state` is valid
-    /// for this optimizer.
-    #[allow(clippy::type_complexity)]
-    pub fn start_from(
-        self,
-        state: C::State,
-    ) -> Result<RunningOptimizer<P, C>, (Self, C::State, C::StateErr)> {
-        match self.config.validate_state(&self.problem, &state) {
-            Ok(_) => Ok(RunningOptimizer::new(state, self.problem, self.config)),
-            Err(e) => Err((self, state, e)),
-        }
-    }
-}
-
-impl<P, C> OptimizerConfigless<P> for Optimizer<P, C>
-where
-    P: Problem,
-    C: OptimizerConfig<P>,
-    C::State: OptimizerState<P>,
-{
-}
-
-impl<P, C> OptimizerProblem<P> for Optimizer<P, C> {
-    fn problem(&self) -> &P {
-        &self.problem
+        C::default_for(&x).start(x)
     }
 }
 
@@ -188,6 +69,36 @@ impl<P, C> RunningOptimizer<P, C>
 where
     C: OptimizerConfig<P>,
 {
+    /// Return a running optimizer.
+    ///
+    /// This may be nondeterministic.
+    pub fn start(config: C, problem: P) -> Self {
+        RunningOptimizer::new(config.initial_state(&problem), problem, config)
+    }
+
+    /// Return a running optimizer
+    /// initialized using `rng`.
+    pub fn start_using<R>(config: C, problem: P, rng: &mut R) -> Self
+    where
+        C: StochasticOptimizerConfig<P, R>,
+    {
+        RunningOptimizer::new(config.initial_state_using(&problem, rng), problem, config)
+    }
+
+    /// Return a running optimizer
+    /// if the given `state` is valid
+    /// for this optimizer.
+    pub fn start_from(
+        config: C,
+        problem: P,
+        state: C::State,
+    ) -> Result<Self, (P, C, C::State, C::StateErr)> {
+        match config.validate_state(&problem, &state) {
+            Ok(_) => Ok(RunningOptimizer::new(state, problem, config)),
+            Err(e) => Err((problem, config, state, e)),
+        }
+    }
+
     // This takes `state` first
     // because `problem` and `config` are used
     // to get `state`.
@@ -206,29 +117,18 @@ where
     /// returning problem,
     /// configuration,
     /// and state.
-    pub fn into_inner(self) -> (Optimizer<P, C>, C::State) {
-        (
-            Optimizer {
-                problem: self.problem,
-                config: self.config,
-            },
-            self.state,
-        )
+    pub fn into_inner(self) -> (P, C, C::State) {
+        (self.problem, self.config, self.state)
+    }
+
+    /// Return optimizer configuration.
+    pub fn config(&self) -> &C {
+        &self.config
     }
 
     /// Return state of optimizer.
     pub fn state(&self) -> &C::State {
         &self.state
-    }
-}
-
-impl<P, C> RunningOptimizer<P, C>
-where
-    C: OptimizerConfig<P>,
-{
-    /// Return optimizer configuration.
-    pub fn config(&self) -> &C {
-        &self.config
     }
 }
 
@@ -325,22 +225,21 @@ mod tests {
 
     use crate::{optimizer::derivative_free::pbil, prelude::*};
 
-    assert_obj_safe!(OptimizerConfigless<()>);
     assert_obj_safe!(RunningOptimizerConfigless<()>);
 
     #[test]
     fn running_optimizer_streaming_iterator_emits_initial_state() {
         let seed = 0;
-        let config = pbil::Pbil::default_for(Count);
+        let config = pbil::Config::default_for(&Count);
         assert_eq!(
             config
                 .clone()
-                .start_using(&mut SplitMix64::seed_from_u64(seed))
+                .start_using(Count, &mut SplitMix64::seed_from_u64(seed))
                 .next()
                 .unwrap()
                 .state(),
             config
-                .start_using(&mut SplitMix64::seed_from_u64(seed))
+                .start_using(Count, &mut SplitMix64::seed_from_u64(seed))
                 .state()
         );
     }
@@ -349,16 +248,16 @@ mod tests {
     fn running_optimizer_streaming_iterator_runs_for_same_number_of_steps() {
         let seed = 0;
         let steps = 100;
-        let config = pbil::Pbil::default_for(Count);
+        let config = pbil::Config::default_for(&Count);
         let mut o = config
             .clone()
-            .start_using(&mut SplitMix64::seed_from_u64(seed));
+            .start_using(Count, &mut SplitMix64::seed_from_u64(seed));
         for _ in 0..steps {
             o.step();
         }
         assert_eq!(
             config
-                .start_using(&mut SplitMix64::seed_from_u64(seed))
+                .start_using(Count, &mut SplitMix64::seed_from_u64(seed))
                 .nth(steps)
                 .unwrap()
                 .state(),

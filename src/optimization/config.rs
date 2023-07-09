@@ -113,10 +113,9 @@ mod extensions {
         /// This may be nondeterministic.
         fn start(self, problem: P) -> RunningOptimizer<P, Self>
         where
-            P: Problem,
             Self: Sized,
         {
-            Optimizer::new(problem, self).start()
+            RunningOptimizer::start(self, problem)
         }
 
         /// Return this optimizer
@@ -129,25 +128,18 @@ mod extensions {
             state: Self::State,
         ) -> Result<RunningOptimizer<P, Self>, (P, Self, Self::State, Self::StateErr)>
         where
-            P: Problem,
             Self: Sized,
         {
-            Optimizer::new(problem, self)
-                .start_from(state)
-                .map_err(|(o, s, e)| {
-                    let (p, c) = o.into_inner();
-                    (p, c, s, e)
-                })
+            RunningOptimizer::start_from(self, problem, state)
         }
 
         /// Return this optimizer default
         /// running on the given problem.
         fn start_default_for(problem: P) -> RunningOptimizer<P, Self>
         where
-            P: Problem,
             for<'a> Self: Sized + DefaultFor<&'a P>,
         {
-            Optimizer::default_for(problem).start()
+            RunningOptimizer::default_for(problem)
         }
     }
 
@@ -160,10 +152,9 @@ mod extensions {
         /// initialized using `rng`.
         fn start_using(self, problem: P, rng: &mut R) -> RunningOptimizer<P, Self>
         where
-            P: Problem,
             Self: Sized,
         {
-            Optimizer::new(problem, self).start_using(rng)
+            RunningOptimizer::start_using(self, problem, rng)
         }
     }
 
