@@ -313,7 +313,7 @@ mod tests {
         {
             fn restart(&mut self) {
                 replace_with_or_abort(self, |o| {
-                    let (p, c, _) = o.into_inner();
+                    let (c, p, _) = o.into_inner();
                     c.start(p)
                 })
             }

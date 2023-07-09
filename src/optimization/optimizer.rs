@@ -64,7 +64,7 @@ where
     // because `problem` and `config` are used
     // to get `state`.
     // Taking `state` first makes it easier to use.
-    pub(crate) fn new(state: C::State, problem: P, config: C) -> Self {
+    pub(crate) fn new(state: C::State, config: C, problem: P) -> Self {
         Self {
             problem,
             config,
@@ -78,8 +78,8 @@ where
     /// returning problem,
     /// configuration,
     /// and state.
-    pub fn into_inner(self) -> (P, C, C::State) {
-        (self.problem, self.config, self.state)
+    pub fn into_inner(self) -> (C, P, C::State) {
+        (self.config, self.problem, self.state)
     }
 
     /// Return optimizer configuration.
