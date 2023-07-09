@@ -115,7 +115,7 @@ mod extensions {
         where
             Self: Sized,
         {
-            RunningOptimizer::start(self, problem)
+            RunningOptimizer::new(self.initial_state(&problem), problem, self)
         }
 
         /// Return this optimizer
@@ -126,11 +126,14 @@ mod extensions {
             self,
             problem: P,
             state: Self::State,
-        ) -> Result<RunningOptimizer<P, Self>, (P, Self, Self::State, Self::StateErr)>
+        ) -> Result<RunningOptimizer<P, Self>, (Self, P, Self::State, Self::StateErr)>
         where
             Self: Sized,
         {
-            RunningOptimizer::start_from(self, problem, state)
+            match self.validate_state(&problem, &state) {
+                Ok(_) => Ok(RunningOptimizer::new(state, problem, self)),
+                Err(e) => Err((self, problem, state, e)),
+            }
         }
 
         /// Return this optimizer default
@@ -139,7 +142,7 @@ mod extensions {
         where
             for<'a> Self: Sized + DefaultFor<&'a P>,
         {
-            RunningOptimizer::default_for(problem)
+            Self::default_for(&problem).start(problem)
         }
     }
 
@@ -154,7 +157,7 @@ mod extensions {
         where
             Self: Sized,
         {
-            RunningOptimizer::start_using(self, problem, rng)
+            RunningOptimizer::new(self.initial_state_using(&problem, rng), problem, self)
         }
     }
 

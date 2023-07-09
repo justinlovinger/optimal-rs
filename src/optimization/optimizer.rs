@@ -56,54 +56,15 @@ where
     evaluation_cache: OnceCell<C::Evaluation>,
 }
 
-impl<P, C> DefaultFor<P> for RunningOptimizer<P, C>
-where
-    for<'a> C: OptimizerConfig<P> + DefaultFor<&'a P>,
-{
-    fn default_for(x: P) -> Self {
-        C::default_for(&x).start(x)
-    }
-}
-
 impl<P, C> RunningOptimizer<P, C>
 where
     C: OptimizerConfig<P>,
 {
-    /// Return a running optimizer.
-    ///
-    /// This may be nondeterministic.
-    pub fn start(config: C, problem: P) -> Self {
-        RunningOptimizer::new(config.initial_state(&problem), problem, config)
-    }
-
-    /// Return a running optimizer
-    /// initialized using `rng`.
-    pub fn start_using<R>(config: C, problem: P, rng: &mut R) -> Self
-    where
-        C: StochasticOptimizerConfig<P, R>,
-    {
-        RunningOptimizer::new(config.initial_state_using(&problem, rng), problem, config)
-    }
-
-    /// Return a running optimizer
-    /// if the given `state` is valid
-    /// for this optimizer.
-    pub fn start_from(
-        config: C,
-        problem: P,
-        state: C::State,
-    ) -> Result<Self, (P, C, C::State, C::StateErr)> {
-        match config.validate_state(&problem, &state) {
-            Ok(_) => Ok(RunningOptimizer::new(state, problem, config)),
-            Err(e) => Err((problem, config, state, e)),
-        }
-    }
-
-    // This takes `state` first
+    /// Return a running optimizer    // This takes `state` first
     // because `problem` and `config` are used
     // to get `state`.
     // Taking `state` first makes it easier to use.
-    fn new(state: C::State, problem: P, config: C) -> Self {
+    pub(crate) fn new(state: C::State, problem: P, config: C) -> Self {
         Self {
             problem,
             config,
