@@ -49,7 +49,7 @@ impl<C, P> RunningOptimizer<C, P>
 where
     C: OptimizerConfig<P>,
 {
-    /// Return a running optimizer    // This takes `state` first
+    // This takes `state` first
     // because `problem` and `config` are used
     // to get `state`.
     // Taking `state` first makes it easier to use.
