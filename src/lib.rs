@@ -198,8 +198,10 @@ mod tests {
     mock_optimizer!(A);
     mock_optimizer!(B);
 
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     struct MaxStepsConfig(usize);
 
+    #[derive(Clone, Debug, Serialize, Deserialize)]
     struct MaxStepsState(usize);
 
     impl<I> RunnerConfig<I> for MaxStepsConfig {
@@ -379,162 +381,48 @@ mod tests {
     // and resume it later.
     #[test]
     fn dynamic_optimizers_should_be_partially_runable() {
-        use std::hint::unreachable_unchecked;
-
         #[derive(Clone, Debug, Serialize, Deserialize)]
-        enum MockConfig {
-            A(MockConfigA),
-            B(MockConfigB),
+        enum DynOptimizer {
+            A(RunningOptimizer<MockProblem, MockConfigA>),
+            B(RunningOptimizer<MockProblem, MockConfigB>),
         }
 
-        #[derive(Clone, Debug, Serialize, Deserialize)]
-        enum MockState {
-            A(MockStateA),
-            B(MockStateB),
-        }
+        impl StreamingIterator for DynOptimizer {
+            type Item = Self;
 
-        #[derive(Clone, Debug, Serialize, Deserialize)]
-        enum MockStateError<P>
-        where
-            for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
-        {
-            WrongState,
-            A(<MockConfigA as OptimizerConfig<P>>::StateErr),
-            B(<MockConfigB as OptimizerConfig<P>>::StateErr),
-        }
-
-        enum MockEvaluation<P>
-        where
-            for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
-        {
-            A(<MockConfigA as OptimizerConfig<P>>::Evaluation),
-            B(<MockConfigB as OptimizerConfig<P>>::Evaluation),
-        }
-
-        impl<P> OptimizerConfig<P> for MockConfig
-        where
-            for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
-        {
-            type State = MockState;
-            type StateErr = MockStateError<P>;
-            type Evaluation = MockEvaluation<P>;
-
-            fn validate_state(
-                &self,
-                problem: &P,
-                state: &Self::State,
-            ) -> Result<(), Self::StateErr> {
+            fn advance(&mut self) {
                 match self {
-                    Self::A(c) => match state {
-                        MockState::A(s) => c.validate_state(problem, s).map_err(MockStateError::A),
-                        _ => Err(MockStateError::WrongState),
-                    },
-                    Self::B(c) => match state {
-                        MockState::B(s) => c.validate_state(problem, s).map_err(MockStateError::B),
-                        _ => Err(MockStateError::WrongState),
-                    },
+                    DynOptimizer::A(x) => x.advance(),
+                    DynOptimizer::B(x) => x.advance(),
                 }
             }
 
-            fn initial_state(&self, problem: &P) -> Self::State {
-                // `initial_state` is safe if this method is safe,
-                // because the inner config was validated
-                // when `self` was validated.
+            fn get(&self) -> Option<&Self::Item> {
+                Some(self)
+            }
+        }
+
+        impl Optimizer<MockProblem> for DynOptimizer {
+            fn best_point(&self) -> <MockProblem as Problem>::Point<'_> {
                 match self {
-                    Self::A(c) => MockState::A(c.initial_state(problem)),
-                    Self::B(c) => MockState::B(c.initial_state(problem)),
+                    DynOptimizer::A(x) => x.best_point(),
+                    DynOptimizer::B(x) => x.best_point(),
                 }
             }
 
-            unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
-                // `evaluate` is safe if this method is safe,
-                // because the inner config was validated
-                // when `self` was validated
-                // and inner state was validated
-                // when `state` was validated.
-                // `unreachable_unchecked` is safe if this method is safe
-                // because state was verified to match `self`
-                // in `validate_state`.
+            fn best_point_value(&self) -> <MockProblem as Problem>::Value {
                 match self {
-                    Self::A(c) => match state {
-                        #[allow(clippy::unit_arg)]
-                        MockState::A(s) => MockEvaluation::A(unsafe { c.evaluate(problem, s) }),
-                        _ => unsafe { unreachable_unchecked() },
-                    },
-                    Self::B(c) => match state {
-                        #[allow(clippy::unit_arg)]
-                        MockState::B(s) => MockEvaluation::B(unsafe { c.evaluate(problem, s) }),
-                        _ => unsafe { unreachable_unchecked() },
-                    },
-                }
-            }
-
-            unsafe fn step_from_evaluated(
-                &self,
-                evaluation: Self::Evaluation,
-                state: Self::State,
-            ) -> Self::State {
-                // `step_from_evaluated` is safe if this method is safe,
-                // because the inner config was validated
-                // when `self` was validated,
-                // `evaluation` came from `state.inner`,
-                // and inner state was validated
-                // when `state` was validated.
-                // `unreachable_unchecked` is safe if this method is safe
-                // because `state` was verified to match `self`
-                // in `validate_state`
-                match self {
-                    Self::A(c) => match (evaluation, state) {
-                        (MockEvaluation::A(e), MockState::A(s)) => MockState::A(unsafe {
-                            <MockConfigA as OptimizerConfig<P>>::step_from_evaluated(c, e, s)
-                        }),
-                        _ => unsafe { unreachable_unchecked() },
-                    },
-                    Self::B(c) => match (evaluation, state) {
-                        (MockEvaluation::B(e), MockState::B(s)) => MockState::B(unsafe {
-                            <MockConfigB as OptimizerConfig<P>>::step_from_evaluated(c, e, s)
-                        }),
-                        _ => unsafe { unreachable_unchecked() },
-                    },
+                    DynOptimizer::A(x) => x.best_point_value(),
+                    DynOptimizer::B(x) => x.best_point_value(),
                 }
             }
         }
 
-        impl<P> OptimizerState<P> for MockState
-        where
-            P: Problem,
-            for<'a> MockStateA: OptimizerState<P, Evaluatee<'a> = ()>,
-            for<'a> MockStateB: OptimizerState<P, Evaluatee<'a> = ()>,
-        {
-            type Evaluatee<'a> = ();
-
-            fn evaluatee(&self) -> Self::Evaluatee<'_> {
-                match self {
-                    Self::A(x) => x.evaluatee(),
-                    Self::B(x) => x.evaluatee(),
-                }
-            }
-
-            fn best_point(&self) -> P::Point<'_> {
-                match self {
-                    Self::A(x) => x.best_point(),
-                    Self::B(x) => x.best_point(),
-                }
-            }
-
-            fn stored_best_point_value(&self) -> Option<P::Value> {
-                match self {
-                    Self::A(x) => x.stored_best_point_value(),
-                    Self::B(x) => x.stored_best_point_value(),
-                }
-            }
-        }
-
-        let mut o = MockConfig::A(MockConfigA).start(MockProblem);
+        let mut o = MaxStepsConfig(10).start(DynOptimizer::A(MockConfigA.start(MockProblem)));
         o.next();
         let store = serde_json::to_string(&o).unwrap();
         o = serde_json::from_str(&store).unwrap();
         o.next();
-        o.best_point_value();
+        o.into_inner().0.best_point_value();
     }
 }
