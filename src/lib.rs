@@ -187,7 +187,7 @@ mod tests {
                         self.0
                     }
 
-                    fn stored_best_point_value(&self) -> Option<&P::Value> {
+                    fn stored_best_point_value(&self) -> Option<P::Value> {
                         None
                     }
                 }
@@ -220,8 +220,7 @@ mod tests {
 
     #[test]
     fn optimizers_should_be_easily_comparable() {
-        type BoxedOptimizer<P> =
-            Box<dyn StreamingIterator<Item = dyn RunningOptimizerConfigless<P>>>;
+        type BoxedOptimizer<P> = Box<dyn StreamingIterator<Item = dyn Optimizer<P>>>;
 
         fn best_optimizer<P, I>(optimizers: I) -> usize
         where
@@ -234,7 +233,7 @@ mod tests {
                 .enumerate()
                 .map(|(i, mut o)| {
                     let o = o.nth(10).unwrap();
-                    (o.problem().evaluate(o.best_point()), i)
+                    (o.best_point_value(), i)
                 })
                 .min()
                 .expect("`optimizers` should be non-empty")
@@ -244,11 +243,11 @@ mod tests {
         best_optimizer([
             Box::new(
                 MockConfigA::start_default_for(MockProblem)
-                    .map_ref(|x| x as &dyn RunningOptimizerConfigless<MockProblem>),
+                    .map_ref(|x| x as &dyn Optimizer<MockProblem>),
             ) as BoxedOptimizer<MockProblem>,
             Box::new(
                 MockConfigB::start_default_for(MockProblem)
-                    .map_ref(|x| x as &dyn RunningOptimizerConfigless<MockProblem>),
+                    .map_ref(|x| x as &dyn Optimizer<MockProblem>),
             ) as BoxedOptimizer<MockProblem>,
         ]);
     }
@@ -523,7 +522,7 @@ mod tests {
                 }
             }
 
-            fn stored_best_point_value(&self) -> Option<&P::Value> {
+            fn stored_best_point_value(&self) -> Option<P::Value> {
                 match self {
                     Self::A(x) => x.stored_best_point_value(),
                     Self::B(x) => x.stored_best_point_value(),

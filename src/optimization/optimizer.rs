@@ -1,5 +1,3 @@
-use std::borrow::Cow;
-
 use blanket::blanket;
 use once_cell::sync::OnceCell;
 use streaming_iterator::StreamingIterator;
@@ -12,27 +10,18 @@ use serde::{Deserialize, Serialize};
 /// Running optimizer methods
 /// independent of configuration
 /// and state.
-///
-/// Consider this trait sealed.
-/// It should not be implemented
-/// outside the package defining it.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait RunningOptimizerConfigless<P>
+pub trait Optimizer<P>
 where
     P: Problem,
 {
-    /// Return problem being optimized.
-    fn problem(&self) -> &P;
-
     /// Return the best point discovered.
     fn best_point(&self) -> P::Point<'_>;
 
     /// Return the value of the best point discovered,
     /// evaluating the best point
     /// if necessary.
-    fn best_point_value(&self) -> Cow<P::Value>
-    where
-        P::Value: Clone;
+    fn best_point_value(&self) -> P::Value;
 }
 
 /// A running optimizer.
@@ -87,6 +76,11 @@ where
         &self.config
     }
 
+    /// Return problem being optimized.
+    pub fn problem(&self) -> &P {
+        &self.problem
+    }
+
     /// Return state of optimizer.
     pub fn state(&self) -> &C::State {
         &self.state
@@ -129,31 +123,6 @@ where
     }
 }
 
-impl<P, C> RunningOptimizerConfigless<P> for RunningOptimizer<P, C>
-where
-    P: Problem,
-    C: OptimizerConfig<P>,
-    C::State: OptimizerState<P>,
-{
-    fn problem(&self) -> &P {
-        &self.problem
-    }
-
-    fn best_point(&self) -> P::Point<'_> {
-        self.state.best_point()
-    }
-
-    fn best_point_value(&self) -> Cow<P::Value>
-    where
-        P::Value: Clone,
-    {
-        self.state.stored_best_point_value().map_or_else(
-            || Cow::Owned(self.problem().evaluate(self.best_point())),
-            Cow::Borrowed,
-        )
-    }
-}
-
 impl<P, C> StreamingIterator for RunningOptimizer<P, C>
 where
     P: Problem,
@@ -176,6 +145,23 @@ where
     }
 }
 
+impl<P, C> Optimizer<P> for RunningOptimizer<P, C>
+where
+    P: Problem,
+    C: OptimizerConfig<P>,
+    C::State: OptimizerState<P>,
+{
+    fn best_point(&self) -> P::Point<'_> {
+        self.state.best_point()
+    }
+
+    fn best_point_value(&self) -> P::Value {
+        self.state
+            .stored_best_point_value()
+            .unwrap_or_else(|| self.problem().evaluate(self.best_point()))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use static_assertions::assert_obj_safe;
@@ -186,7 +172,7 @@ mod tests {
 
     use crate::{optimizer::derivative_free::pbil, prelude::*};
 
-    assert_obj_safe!(RunningOptimizerConfigless<()>);
+    assert_obj_safe!(Optimizer<()>);
 
     #[test]
     fn running_optimizer_streaming_iterator_emits_initial_state() {

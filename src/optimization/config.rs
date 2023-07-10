@@ -97,7 +97,7 @@ where
     ///
     /// If an optimizer never stores the best point value,
     /// this will always return `None`.
-    fn stored_best_point_value(&self) -> Option<&P::Value> {
+    fn stored_best_point_value(&self) -> Option<P::Value> {
         None
     }
 }

@@ -79,7 +79,7 @@ mod extensions {
         where
             Self: Sized,
             P: Problem,
-            I: StreamingIterator + RunningOptimizerConfigless<P>,
+            I: StreamingIterator + Optimizer<P>,
         {
             (*self.run(it)).best_point()
         }

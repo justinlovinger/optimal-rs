@@ -267,6 +267,7 @@ where
 
 impl<A, P> OptimizerState<P> for State<A>
 where
+    A: Clone,
     for<'a> P: Problem<Point<'a> = CowArray<'a, A, Ix1>, Value = A> + 'a,
 {
     type Evaluatee<'a> = ArrayView1<'a, A> where A: 'a;
@@ -287,10 +288,10 @@ where
         .into()
     }
 
-    fn stored_best_point_value(&self) -> Option<&P::Value> {
+    fn stored_best_point_value(&self) -> Option<P::Value> {
         match self {
             State::Ready(_) => None,
-            State::Searching(x) => Some(&x.point_value),
+            State::Searching(x) => Some(x.point_value.clone()),
         }
     }
 }
