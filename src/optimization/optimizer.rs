@@ -33,19 +33,19 @@ where
 /// returning the 100th state.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "serde"), derive(Serialize, Deserialize))]
-pub struct RunningOptimizer<P, C>
+pub struct RunningOptimizer<C, P>
 where
     C: OptimizerConfig<P>,
 {
-    problem: P,
     config: C,
+    problem: P,
     state: C::State,
     skipped_first_step: bool,
     #[cfg_attr(any(test, feature = "serde"), serde(skip))]
     evaluation_cache: OnceCell<C::Evaluation>,
 }
 
-impl<P, C> RunningOptimizer<P, C>
+impl<C, P> RunningOptimizer<C, P>
 where
     C: OptimizerConfig<P>,
 {
@@ -87,7 +87,7 @@ where
     }
 }
 
-impl<P, C> RunningOptimizer<P, C>
+impl<C, P> RunningOptimizer<C, P>
 where
     P: Problem,
     C: OptimizerConfig<P>,
@@ -123,7 +123,7 @@ where
     }
 }
 
-impl<P, C> StreamingIterator for RunningOptimizer<P, C>
+impl<C, P> StreamingIterator for RunningOptimizer<C, P>
 where
     P: Problem,
     C: OptimizerConfig<P>,
@@ -145,7 +145,7 @@ where
     }
 }
 
-impl<P, C> Optimizer<P> for RunningOptimizer<P, C>
+impl<C, P> Optimizer<P> for RunningOptimizer<C, P>
 where
     P: Problem,
     C: OptimizerConfig<P>,

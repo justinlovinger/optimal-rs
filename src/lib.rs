@@ -307,7 +307,7 @@ mod tests {
             fn restart(&mut self);
         }
 
-        impl<P, C> Restart for RunningOptimizer<P, C>
+        impl<C, P> Restart for RunningOptimizer<C, P>
         where
             P: Problem,
             C: OptimizerConfig<P>,
@@ -383,8 +383,8 @@ mod tests {
     fn dynamic_optimizers_should_be_partially_runable() {
         #[derive(Clone, Debug, Serialize, Deserialize)]
         enum DynOptimizer {
-            A(RunningOptimizer<MockProblem, MockConfigA>),
-            B(RunningOptimizer<MockProblem, MockConfigB>),
+            A(RunningOptimizer<MockConfigA, MockProblem>),
+            B(RunningOptimizer<MockConfigB, MockProblem>),
         }
 
         impl StreamingIterator for DynOptimizer {

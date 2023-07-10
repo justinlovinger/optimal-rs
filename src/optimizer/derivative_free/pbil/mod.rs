@@ -53,7 +53,7 @@ trait Probabilities {
     fn probabilities(&self) -> &Array1<Probability>;
 }
 
-impl<P, C> Probabilities for RunningOptimizer<P, C>
+impl<C, P> Probabilities for RunningOptimizer<C, P>
 where
     C: OptimizerConfig<P>,
     C::State: Probabilities,
