@@ -138,57 +138,50 @@ mod tests {
         ( $id:ident ) => {
             paste::paste! {
                 #[derive(Clone, Debug, Serialize, Deserialize)]
-                struct [< MockConfig $id >];
+                struct [< MockOptimizer $id >]<P> {
+                    problem: P,
+                    state: usize,
+                }
 
-                #[derive(Clone, Debug, Serialize, Deserialize)]
-                struct [< MockState $id >](usize);
+                impl<P> [< MockOptimizer $id >]<P> {
+                    fn new(problem: P) -> Self {
+                        Self { problem, state: 0 }
+                    }
 
-                impl<P> OptimizerConfig<P> for [< MockConfig $id >]
+                    #[allow(dead_code)]
+                    fn evaluation(&self) -> usize
+                    where
+                        for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
+                    {
+                        self.problem.evaluate(self.state)
+                    }
+                }
+
+                impl<P> StreamingIterator for [< MockOptimizer $id >]<P>
                 where
                     for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
                 {
-                    type State = [< MockState $id >];
-                    type StateErr = ();
-                    type Evaluation = P::Value;
+                    type Item = Self;
 
-                    fn validate_state(&self, _problem: &P, _state: &Self::State) -> Result<(), Self::StateErr> {
-                        Ok(())
+                    fn advance(&mut self) {
+                        self.state += self.problem.evaluate(self.state)
                     }
 
-                    fn initial_state(&self, _problem: &P) -> Self::State {
-                        [< MockState $id >](1)
-                    }
-
-                    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
-                        problem.evaluate(state.0)
-                    }
-
-                    unsafe fn step_from_evaluated(&self, evaluation: Self::Evaluation, mut state: Self::State) -> Self::State {
-                        state.0 += evaluation;
-                        state
+                    fn get(&self) -> Option<&Self::Item> {
+                        Some(self)
                     }
                 }
 
-                impl<P> DefaultFor<P> for [< MockConfig $id >] {
-                    fn default_for(_problem: P) -> Self {
-                        Self
-                    }
-                }
-
-                impl<P> OptimizerState<P> for [< MockState $id >]
+                impl<P> Optimizer<P> for [< MockOptimizer $id >]<P>
                 where
-                    for<'a> P: Problem<Point<'a> = usize> + 'a,
+                    for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
                 {
-                    type Evaluatee<'a> = ();
-
-                    fn evaluatee(&self) -> Self::Evaluatee<'_> {}
-
                     fn best_point(&self) -> P::Point<'_> {
-                        self.0
+                        self.state
                     }
 
-                    fn stored_best_point_value(&self) -> Option<P::Value> {
-                        None
+                    fn best_point_value(&self) -> P::Value {
+                        self.problem.evaluate(self.state)
                     }
                 }
             }
@@ -243,57 +236,46 @@ mod tests {
         }
 
         best_optimizer([
-            Box::new(
-                MockConfigA::start_default_for(MockProblem)
-                    .map_ref(|x| x as &dyn Optimizer<MockProblem>),
-            ) as BoxedOptimizer<MockProblem>,
-            Box::new(
-                MockConfigB::start_default_for(MockProblem)
-                    .map_ref(|x| x as &dyn Optimizer<MockProblem>),
-            ) as BoxedOptimizer<MockProblem>,
+            Box::new(MockOptimizerA::new(MockProblem).map_ref(|x| x as &dyn Optimizer<MockProblem>))
+                as BoxedOptimizer<MockProblem>,
+            Box::new(MockOptimizerB::new(MockProblem).map_ref(|x| x as &dyn Optimizer<MockProblem>))
+                as BoxedOptimizer<MockProblem>,
         ]);
     }
 
     #[test]
     fn parallel_optimization_runs_should_be_easy() {
-        use std::{sync::Arc, thread::spawn};
+        use std::thread::spawn;
 
-        fn parallel<P, C, A>(problem: P, config: C)
+        fn parallel<P, A, O, F>(start: F)
         where
-            P: Problem + Clone + Debug + Send + Sync + 'static,
+            P: Problem,
             for<'a> P::Point<'a>: ToOwned<Owned = A>,
             A: Clone + Send + 'static,
-            C: OptimizerConfig<P> + Clone + Debug + Send + Sync + 'static,
-            C::State: OptimizerState<P>,
+            O: StreamingIterator + Optimizer<P> + Send + 'static,
+            F: Fn() -> O,
         {
-            let problem2 = problem.clone();
-            let config2 = config.clone();
-            let handler1 = spawn(move || {
-                #[allow(clippy::redundant_clone)] // False positive.
-                MaxStepsConfig(10)
-                    .argmin(&mut config2.start(problem2))
-                    .to_owned()
-            });
-            let handler2 = spawn(move || {
-                #[allow(clippy::redundant_clone)] // False positive.
-                MaxStepsConfig(10)
-                    .argmin(&mut config.start(problem))
-                    .to_owned()
-            });
+            let mut o1 = start();
+            let mut o2 = start();
+            #[allow(clippy::redundant_clone)] // False positive.
+            let handler1 = spawn(move || MaxStepsConfig(10).argmin(&mut o1).to_owned());
+            #[allow(clippy::redundant_clone)] // False positive.
+            let handler2 = spawn(move || MaxStepsConfig(10).argmin(&mut o2).to_owned());
             handler1.join().unwrap();
             handler2.join().unwrap();
         }
 
-        parallel(
-            Arc::new(MockProblem),
-            Arc::new(MockConfigA::default_for(MockProblem)),
-        );
+        parallel(|| MockOptimizerA::new(MockProblem));
     }
 
     #[test]
     fn examining_state_and_corresponding_evaluations_should_be_easy() {
-        MockConfigA::start_default_for(MockProblem)
-            .inspect(|o| println!("state: {:?}, evaluation: {:?}", o.state(), o.evaluation()))
+        // Note,
+        // this is a bit of a hack
+        // because methods providing evaluations are current a convention,
+        // not a part of the API.
+        MockOptimizerA::new(MockProblem)
+            .inspect(|o| println!("state: {:?}, evaluation: {:?}", o.state, o.evaluation()))
             .nth(10);
     }
 
@@ -307,16 +289,9 @@ mod tests {
             fn restart(&mut self);
         }
 
-        impl<C, P> Restart for RunningOptimizer<C, P>
-        where
-            P: Problem,
-            C: OptimizerConfig<P>,
-        {
+        impl<P> Restart for MockOptimizerA<P> {
             fn restart(&mut self) {
-                replace_with_or_abort(self, |o| {
-                    let (c, p, _) = o.into_inner();
-                    c.start(p)
-                })
+                replace_with_or_abort(self, |this| MockOptimizerA::new(this.problem))
             }
         }
 
@@ -371,7 +346,7 @@ mod tests {
         }
 
         let _ = RestarterConfig { max_restarts: 10 }
-            .start(MaxStepsConfig(10).start(MockConfigA::start_default_for(MockProblem)))
+            .start(MaxStepsConfig(10).start(MockOptimizerA::new(MockProblem)))
             .nth(100);
     }
 
@@ -383,8 +358,8 @@ mod tests {
     fn dynamic_optimizers_should_be_partially_runable() {
         #[derive(Clone, Debug, Serialize, Deserialize)]
         enum DynOptimizer {
-            A(RunningOptimizer<MockConfigA, MockProblem>),
-            B(RunningOptimizer<MockConfigB, MockProblem>),
+            A(MockOptimizerA<MockProblem>),
+            B(MockOptimizerB<MockProblem>),
         }
 
         impl StreamingIterator for DynOptimizer {
@@ -418,7 +393,7 @@ mod tests {
             }
         }
 
-        let mut o = MaxStepsConfig(10).start(DynOptimizer::A(MockConfigA.start(MockProblem)));
+        let mut o = MaxStepsConfig(10).start(DynOptimizer::A(MockOptimizerA::new(MockProblem)));
         o.next();
         let store = serde_json::to_string(&o).unwrap();
         o = serde_json::from_str(&store).unwrap();

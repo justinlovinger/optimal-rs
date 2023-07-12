@@ -70,6 +70,7 @@ use std::{
     ops::{Add, Div, Mul, Neg, RangeInclusive, Sub},
 };
 
+use derive_getters::Getters;
 use derive_more::Display;
 use ndarray::{linalg::Dot, prelude::*, Data, Zip};
 use num_traits::{
@@ -77,6 +78,7 @@ use num_traits::{
     real::Real,
     AsPrimitive, One,
 };
+use once_cell::sync::OnceCell;
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
     prelude::*,
@@ -96,9 +98,122 @@ use super::StepSize;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Running backtracking line search steepest descent optimizer
-/// with initial line search step size chosen by incrementing previous step size.
-pub type BacktrackingSteepest<A, P> = RunningOptimizer<P, Config<A>>;
+/// A running fixed step size steepest descent optimizer.
+#[derive(Clone, Debug, Getters)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct BacktrackingSteepest<A, P> {
+    /// Optimizer configuration.
+    config: Config<A>,
+
+    /// Problem being optimized.
+    problem: P,
+
+    /// State of optimizer.
+    state: State<A>,
+
+    #[getter(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    evaluation_cache: OnceCell<Evaluation<A>>,
+}
+
+impl<A, P> BacktrackingSteepest<A, P> {
+    fn new(state: State<A>, config: Config<A>, problem: P) -> Self {
+        Self {
+            problem,
+            config,
+            state,
+            evaluation_cache: OnceCell::new(),
+        }
+    }
+
+    /// Return configuration, problem, and state.
+    pub fn into_inner(self) -> (Config<A>, P, State<A>) {
+        (self.config, self.problem, self.state)
+    }
+}
+
+impl<A, P> BacktrackingSteepest<A, P>
+where
+    for<'a> P:
+        Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Value = A, Derivative = Array1<A>> + 'a,
+{
+    /// Return evaluation of current state,
+    /// evaluating and caching if necessary.
+    pub fn evaluation(&self) -> &Evaluation<A> {
+        self.evaluation_cache.get_or_init(|| self.evaluate())
+    }
+
+    fn evaluate(&self) -> Evaluation<A> {
+        match &self.state {
+            State::Ready(x) => Evaluation::ValueAndDerivatives(
+                self.problem.evaluate_differentiate(x.point().into()),
+            ),
+            State::Searching(x) => Evaluation::Value(self.problem.evaluate(x.point().into())),
+        }
+    }
+}
+
+impl<A, P> StreamingIterator for BacktrackingSteepest<A, P>
+where
+    for<'a> P:
+        Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Value = A, Derivative = Array1<A>> + 'a,
+    A: Real + 'static,
+    f64: AsPrimitive<A>,
+{
+    type Item = Self;
+
+    fn advance(&mut self) {
+        let evaluation = self
+            .evaluation_cache
+            .take()
+            .unwrap_or_else(|| self.evaluate());
+        replace_with::replace_with_or_abort(&mut self.state, |state| {
+            match state {
+                State::Ready(x) => {
+                    let (point_value, point_derivatives) = match evaluation {
+                        Evaluation::ValueAndDerivatives(x) => x,
+                        // `unreachable_unchecked` is safe if this method is safe,
+                        // because `evaluate` always returns `ValueAndDerivatives`
+                        // for `State::Ready`.
+                        _ => unsafe { unreachable_unchecked() },
+                    };
+                    x.step_from_evaluated(&self.config, point_value, point_derivatives)
+                }
+                State::Searching(x) => {
+                    let point_value = match evaluation {
+                        Evaluation::Value(x) => x,
+                        // `unreachable_unchecked` is safe if this method is safe,
+                        // because `evaluate` always returns `Value`
+                        // for `State::Searching`.
+                        _ => unsafe { unreachable_unchecked() },
+                    };
+                    x.step_from_evaluated(&self.config, point_value)
+                }
+            }
+        });
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        Some(self)
+    }
+}
+
+impl<A, P> Optimizer<P> for BacktrackingSteepest<A, P>
+where
+    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Value = A> + 'a,
+    A: Clone,
+{
+    fn best_point(&self) -> P::Point<'_> {
+        self.state.best_point().into()
+    }
+
+    fn best_point_value(&self) -> P::Value {
+        self.state
+            .stored_best_point_value()
+            .cloned()
+            .unwrap_or_else(|| self.problem().evaluate(self.best_point()))
+    }
+}
 
 /// Backtracking steepest descent configuration parameters.
 #[derive(Clone, Debug, PartialEq)]
@@ -168,23 +283,54 @@ impl<A> Config<A> {
     }
 }
 
-impl<A, P> OptimizerConfig<P> for Config<A>
-where
-    A: Debug + SampleUniform + Real + 'static,
-    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Value = A, Derivative = Array1<A>>
-        + FixedLength
-        + Bounded
-        + 'a,
-    P::Bounds: Iterator<Item = RangeInclusive<A>>,
-    f64: AsPrimitive<A>,
-{
-    type State = State<A>;
+impl<A> Config<A> {
+    /// Return this optimizer
+    /// running on the given problem.
+    ///
+    /// This may be nondeterministic.
+    pub fn start<P>(self, problem: P) -> BacktrackingSteepest<A, P>
+    where
+        A: Debug + SampleUniform + Real,
+        P: Bounded + FixedLength,
+        P::Bounds: Iterator<Item = RangeInclusive<A>>,
+    {
+        BacktrackingSteepest::new(
+            self.initial_state_using(problem.bounds().take(problem.len()), &mut thread_rng()),
+            self,
+            problem,
+        )
+    }
 
-    type StateErr = MismatchedLengthError;
+    /// Return this optimizer
+    /// running on the given problem
+    /// initialized using `rng`.
+    pub fn start_using<P, R>(self, problem: P, rng: &mut R) -> BacktrackingSteepest<A, P>
+    where
+        A: Debug + SampleUniform + Real,
+        P: Bounded + FixedLength,
+        P::Bounds: Iterator<Item = RangeInclusive<A>>,
+        R: Rng,
+    {
+        BacktrackingSteepest::new(
+            self.initial_state_using(problem.bounds().take(problem.len()), rng),
+            self,
+            problem,
+        )
+    }
 
-    type Evaluation = Evaluation<A>;
-
-    fn validate_state(&self, problem: &P, state: &Self::State) -> Result<(), Self::StateErr> {
+    /// Return this optimizer
+    /// running on the given problem.
+    /// if the given `state` is valid.
+    #[allow(clippy::type_complexity)]
+    #[allow(clippy::result_large_err)]
+    pub fn start_from<P>(
+        self,
+        problem: P,
+        state: State<A>,
+    ) -> Result<BacktrackingSteepest<A, P>, (MismatchedLengthError, Self, P, State<A>)>
+    where
+        P: FixedLength,
+    {
         // Note,
         // this assumes states cannot be modified
         // outside of `initial_state`
@@ -193,86 +339,37 @@ where
         // all states are derived from an initial state
         // and the only way for a state to be invalid
         // is if it was from a different problem.
-        match state {
-            State::Ready(x) => {
-                if x.point.len() == problem.len() {
-                    Ok(())
-                } else {
-                    Err(MismatchedLengthError)
-                }
-            }
-            State::Searching(x) => {
-                if x.point.len() == problem.len() {
-                    Ok(())
-                } else {
-                    Err(MismatchedLengthError)
-                }
-            }
+        if problem.len() == state.len() {
+            Ok(BacktrackingSteepest::new(state, self, problem))
+        } else {
+            Err((MismatchedLengthError, self, problem, state))
         }
     }
 
-    fn initial_state(&self, problem: &P) -> Self::State {
-        let mut rng = thread_rng();
+    fn initial_state_using<R>(
+        &self,
+        bounds: impl Iterator<Item = RangeInclusive<A>>,
+        rng: &mut R,
+    ) -> State<A>
+    where
+        A: Debug + SampleUniform + Real,
+        R: Rng,
+    {
         State::new(
-            problem
-                .bounds()
-                .take(problem.len())
+            bounds
                 .map(|range| {
                     let (start, end) = range.into_inner();
-                    Uniform::new_inclusive(start, end).sample(&mut rng)
+                    Uniform::new_inclusive(start, end).sample(rng)
                 })
                 .collect(),
             StepSize::new(A::one()).unwrap(),
         )
     }
-
-    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
-        match state {
-            State::Ready(x) => {
-                Evaluation::ValueAndDerivatives(problem.evaluate_differentiate(x.point().into()))
-            }
-            State::Searching(x) => Evaluation::Value(problem.evaluate(x.point().into())),
-        }
-    }
-
-    unsafe fn step_from_evaluated(
-        &self,
-        evaluation: Self::Evaluation,
-        state: Self::State,
-    ) -> Self::State {
-        match state {
-            State::Ready(x) => {
-                let (point_value, point_derivatives) = match evaluation {
-                    Evaluation::ValueAndDerivatives(x) => x,
-                    // `unreachable_unchecked` is safe if this method is safe,
-                    // because `evaluate` always returns `ValueAndDerivatives`
-                    // for `State::Ready`.
-                    _ => unsafe { unreachable_unchecked() },
-                };
-                x.step_from_evaluated(self, point_value, point_derivatives)
-            }
-            State::Searching(x) => {
-                let point_value = match evaluation {
-                    Evaluation::Value(x) => x,
-                    // `unreachable_unchecked` is safe if this method is safe,
-                    // because `evaluate` always returns `Value`
-                    // for `State::Searching`.
-                    _ => unsafe { unreachable_unchecked() },
-                };
-                x.step_from_evaluated(self, point_value)
-            }
-        }
-    }
 }
 
-impl<A, P> OptimizerState<P> for State<A>
-where
-    A: Clone,
-    for<'a> P: Problem<Point<'a> = CowArray<'a, A, Ix1>, Value = A> + 'a,
-{
-    type Evaluatee<'a> = ArrayView1<'a, A> where A: 'a;
-
-    fn evaluatee(&self) -> Self::Evaluatee<'_> {
+impl<A> State<A> {
+    /// Return data to be evaluated.
+    pub fn evaluatee(&self) -> ArrayView1<A> {
         (match self {
             State::Ready(x) => x.point(),
             State::Searching(x) => x.point(),
@@ -280,18 +377,22 @@ where
         .into()
     }
 
-    fn best_point(&self) -> P::Point<'_> {
+    /// Return the best point discovered.
+    pub fn best_point(&self) -> ArrayView1<A> {
         (match self {
             State::Ready(x) => x.best_point(),
             State::Searching(x) => x.best_point(),
         })
-        .into()
+        .view()
     }
 
-    fn stored_best_point_value(&self) -> Option<P::Value> {
+    /// Return the value of the best point discovered,
+    /// if possible
+    /// without evaluating.
+    fn stored_best_point_value(&self) -> Option<&A> {
         match self {
             State::Ready(_) => None,
-            State::Searching(x) => Some(x.point_value.clone()),
+            State::Searching(x) => Some(&x.point_value),
         }
     }
 }
@@ -303,6 +404,13 @@ impl<A> State<A> {
             point,
             last_step_size: initial_step_size.0,
         })
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Self::Ready(x) => x.point.len(),
+            Self::Searching(x) => x.point.len(),
+        }
     }
 }
 

@@ -56,7 +56,9 @@
 
 use std::ops::{Mul, RangeInclusive, SubAssign};
 
+use derive_getters::Getters;
 use ndarray::prelude::*;
+use once_cell::sync::OnceCell;
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
     prelude::*,
@@ -69,8 +71,89 @@ use super::StepSize;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Fixed step size steepest descent optimizer.
-pub type FixedStepSteepest<A, P> = RunningOptimizer<P, Config<A>>;
+/// A running fixed step size steepest descent optimizer.
+#[derive(Clone, Debug, Getters)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct FixedStepSteepest<A, P> {
+    /// Optimizer configuration.
+    config: Config<A>,
+
+    /// Problem being optimized.
+    problem: P,
+
+    /// State of optimizer.
+    state: Point<A>,
+
+    #[getter(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    evaluation_cache: OnceCell<Point<A>>,
+}
+
+impl<A, P> FixedStepSteepest<A, P> {
+    fn new(state: Point<A>, config: Config<A>, problem: P) -> Self {
+        Self {
+            problem,
+            config,
+            state,
+            evaluation_cache: OnceCell::new(),
+        }
+    }
+
+    /// Return configuration, problem, and state.
+    pub fn into_inner(self) -> (Config<A>, P, Point<A>) {
+        (self.config, self.problem, self.state)
+    }
+}
+
+impl<A, P> FixedStepSteepest<A, P>
+where
+    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Derivative = Array1<A>> + 'a,
+{
+    /// Return evaluation of current state,
+    /// evaluating and caching if necessary.
+    pub fn evaluation(&self) -> &P::Derivative {
+        self.evaluation_cache.get_or_init(|| self.evaluate())
+    }
+
+    fn evaluate(&self) -> P::Derivative {
+        self.problem.differentiate(self.state.view().into())
+    }
+}
+
+impl<A, P> StreamingIterator for FixedStepSteepest<A, P>
+where
+    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Derivative = Array1<A>> + 'a,
+    A: Clone + SubAssign + Mul<Output = A>,
+{
+    type Item = Self;
+
+    fn advance(&mut self) {
+        let evaluation = self
+            .evaluation_cache
+            .take()
+            .unwrap_or_else(|| self.evaluate());
+        self.state.zip_mut_with(&evaluation, |x, d| {
+            *x -= self.config.step_size.clone() * d.clone()
+        });
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        Some(self)
+    }
+}
+
+impl<A, P> Optimizer<P> for FixedStepSteepest<A, P>
+where
+    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>> + 'a,
+{
+    fn best_point(&self) -> P::Point<'_> {
+        self.state.view().into()
+    }
+
+    fn best_point_value(&self) -> P::Value {
+        self.problem().evaluate(self.best_point())
+    }
+}
 
 /// Fixed step size steepest descent configuration parameters.
 #[derive(Clone, Debug, PartialEq)]
@@ -89,66 +172,74 @@ impl<A> Config<A> {
     }
 }
 
-impl<A, P> OptimizerConfig<P> for Config<A>
-where
-    A: Clone + SubAssign + Mul<Output = A> + SampleUniform,
-    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Derivative = Array1<A>>
-        + FixedLength
-        + Bounded
-        + 'a,
-    P::Bounds: Iterator<Item = RangeInclusive<A>>,
-{
-    type State = Point<A>;
+impl<A> Config<A> {
+    /// Return this optimizer
+    /// running on the given problem.
+    ///
+    /// This may be nondeterministic.
+    pub fn start<P>(self, problem: P) -> FixedStepSteepest<A, P>
+    where
+        A: SampleUniform,
+        P: Bounded + FixedLength,
+        P::Bounds: Iterator<Item = RangeInclusive<A>>,
+    {
+        FixedStepSteepest::new(
+            self.initial_state_using(problem.bounds().take(problem.len()), &mut thread_rng()),
+            self,
+            problem,
+        )
+    }
 
-    type StateErr = MismatchedLengthError;
+    /// Return this optimizer
+    /// running on the given problem
+    /// initialized using `rng`.
+    pub fn start_using<P, R>(self, problem: P, rng: &mut R) -> FixedStepSteepest<A, P>
+    where
+        A: SampleUniform,
+        P: Bounded + FixedLength,
+        P::Bounds: Iterator<Item = RangeInclusive<A>>,
+        R: Rng,
+    {
+        FixedStepSteepest::new(
+            self.initial_state_using(problem.bounds().take(problem.len()), rng),
+            self,
+            problem,
+        )
+    }
 
-    type Evaluation = P::Derivative;
-
-    fn validate_state(&self, problem: &P, state: &Self::State) -> Result<(), Self::StateErr> {
+    /// Return this optimizer
+    /// running on the given problem.
+    /// if the given `state` is valid.
+    #[allow(clippy::type_complexity)]
+    pub fn start_from<P>(
+        self,
+        problem: P,
+        state: Point<A>,
+    ) -> Result<FixedStepSteepest<A, P>, (MismatchedLengthError, Self, P, Point<A>)>
+    where
+        P: FixedLength,
+    {
         if state.len() == problem.len() {
-            Ok(())
+            Ok(FixedStepSteepest::new(state, self, problem))
         } else {
-            Err(MismatchedLengthError)
+            Err((MismatchedLengthError, self, problem, state))
         }
     }
 
-    fn initial_state(&self, problem: &P) -> Self::State {
-        let mut rng = thread_rng();
-        problem
-            .bounds()
-            .take(problem.len())
+    fn initial_state_using<R>(
+        &self,
+        bounds: impl Iterator<Item = RangeInclusive<A>>,
+        rng: &mut R,
+    ) -> Point<A>
+    where
+        A: SampleUniform,
+        R: Rng,
+    {
+        bounds
             .map(|range| {
                 let (start, end) = range.into_inner();
-                Uniform::new_inclusive(start, end).sample(&mut rng)
+                Uniform::new_inclusive(start, end).sample(rng)
             })
             .collect()
-    }
-
-    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
-        problem.differentiate(state.view().into())
-    }
-
-    unsafe fn step_from_evaluated(
-        &self,
-        evaluation: Self::Evaluation,
-        mut state: Self::State,
-    ) -> Self::State {
-        state.zip_mut_with(&evaluation, |x, d| *x -= self.step_size.clone() * d.clone());
-        state
-    }
-}
-
-impl<A, P> OptimizerState<P> for Point<A>
-where
-    for<'a> P: Problem<Point<'a> = CowArray<'a, A, Ix1>> + 'a,
-{
-    type Evaluatee<'a> = ArrayView1<'a, A> where A: 'a;
-
-    fn evaluatee(&self) -> Self::Evaluatee<'_> {
-        self.into()
-    }
-
-    fn best_point(&self) -> P::Point<'_> {
-        self.into()
     }
 }

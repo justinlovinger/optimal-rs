@@ -39,7 +39,9 @@ mod types;
 
 use std::fmt::Debug;
 
+use derive_getters::Getters;
 use ndarray::prelude::*;
+use once_cell::sync::OnceCell;
 use rand_xoshiro::SplitMix64;
 
 use crate::{optimizer::MismatchedLengthError, prelude::*};
@@ -53,10 +55,9 @@ trait Probabilities {
     fn probabilities(&self) -> &Array1<Probability>;
 }
 
-impl<C, P> Probabilities for RunningOptimizer<C, P>
+impl<P> Probabilities for Pbil<P>
 where
-    C: OptimizerConfig<P>,
-    C::State: Probabilities,
+    P: Problem,
 {
     fn probabilities(&self) -> &Array1<Probability> {
         self.state().probabilities()
@@ -91,8 +92,111 @@ where
     }
 }
 
-/// PBIL optimizer.
-pub type Pbil<P> = RunningOptimizer<P, Config>;
+/// A running PBIL optimizer.
+#[derive(Clone, Debug, Getters)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Pbil<P>
+where
+    P: Problem,
+{
+    /// Optimizer configuration.
+    config: Config,
+
+    /// Problem being optimized.
+    problem: P,
+
+    /// State of optimizer.
+    state: State,
+
+    #[getter(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
+    evaluation_cache: OnceCell<Evaluation<P::Value>>,
+}
+
+impl<P> Pbil<P>
+where
+    P: Problem,
+{
+    fn new(state: State, config: Config, problem: P) -> Self {
+        Self {
+            problem,
+            config,
+            state,
+            evaluation_cache: OnceCell::new(),
+        }
+    }
+
+    /// Return configuration, problem, and state.
+    pub fn into_inner(self) -> (Config, P, State) {
+        (self.config, self.problem, self.state)
+    }
+}
+
+impl<P> Pbil<P>
+where
+    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + 'a,
+{
+    /// Return evaluation of current state,
+    /// evaluating and caching if necessary.
+    pub fn evaluation(&self) -> &Evaluation<P::Value> {
+        self.evaluation_cache.get_or_init(|| self.evaluate())
+    }
+
+    fn evaluate(&self) -> Evaluation<P::Value> {
+        self.state
+            .evaluatee()
+            .map(|xs| self.problem.evaluate_population(xs.into()))
+    }
+}
+
+impl<P> StreamingIterator for Pbil<P>
+where
+    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + 'a,
+    P::Value: Debug + PartialOrd,
+{
+    type Item = Self;
+
+    fn advance(&mut self) {
+        let evaluation = self
+            .evaluation_cache
+            .take()
+            .unwrap_or_else(|| self.evaluate());
+        replace_with::replace_with_or_abort(&mut self.state, |state| {
+            match state {
+                State::Ready(s) => State::Sampling(s.to_sampling(self.config.num_samples)),
+                State::Sampling(s) => {
+                    // `unwrap_unchecked` is safe
+                    // because `evaluate` always returns `Some`
+                    // for `State::Sampling`.
+                    State::Mutating(s.to_mutating(self.config.adjust_rate, unsafe {
+                        evaluation.unwrap_unchecked()
+                    }))
+                }
+                State::Mutating(s) => State::Ready(s.to_ready(
+                    self.config.mutation_chance,
+                    self.config.mutation_adjust_rate,
+                )),
+            }
+        });
+    }
+
+    fn get(&self) -> Option<&Self::Item> {
+        Some(self)
+    }
+}
+
+impl<P> Optimizer<P> for Pbil<P>
+where
+    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + 'a,
+{
+    fn best_point(&self) -> P::Point<'_> {
+        self.state.best_point().into()
+    }
+
+    fn best_point_value(&self) -> P::Value {
+        self.problem().evaluate(self.best_point())
+    }
+}
 
 /// PBIL configuration parameters.
 #[derive(Clone, Debug, PartialEq)]
@@ -126,6 +230,8 @@ pub enum State {
     Mutating(Mutating),
 }
 
+type Evaluation<B> = Option<Array1<B>>;
+
 impl Config {
     /// Return a new PBIL configuration.
     pub fn new(
@@ -157,78 +263,66 @@ where
     }
 }
 
-impl<P> OptimizerConfig<P> for Config
-where
-    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + FixedLength + 'a,
-    P::Value: Debug + PartialOrd,
-{
-    type State = State;
+impl Config {
+    /// Return this optimizer default
+    /// running on the given problem.
+    pub fn start_default_for<P>(problem: P) -> Pbil<P>
+    where
+        P: FixedLength,
+    {
+        Self::default_for(&problem).start(problem)
+    }
 
-    type StateErr = MismatchedLengthError;
+    /// Return this optimizer
+    /// running on the given problem.
+    ///
+    /// This may be nondeterministic.
+    pub fn start<P>(self, problem: P) -> Pbil<P>
+    where
+        P: FixedLength,
+    {
+        Pbil::new(State::Ready(Ready::initial(problem.len())), self, problem)
+    }
 
-    type Evaluation = Option<Array1<P::Value>>;
+    /// Return this optimizer
+    /// running on the given problem
+    /// initialized using `rng`.
+    pub fn start_using<P>(self, problem: P, rng: &mut SplitMix64) -> Pbil<P>
+    where
+        P: FixedLength,
+    {
+        Pbil::new(
+            State::Ready(Ready::initial_using(problem.len(), rng)),
+            self,
+            problem,
+        )
+    }
 
-    fn validate_state(&self, problem: &P, state: &Self::State) -> Result<(), Self::StateErr> {
+    /// Return this optimizer
+    /// running on the given problem.
+    /// if the given `state` is valid.
+    #[allow(clippy::result_large_err)]
+    pub fn start_from<P>(
+        self,
+        problem: P,
+        state: State,
+    ) -> Result<Pbil<P>, (MismatchedLengthError, Self, P, State)>
+    where
+        P: FixedLength,
+    {
         // If `Sampling::samples` could be changed independent of `probabilities`,
         // it would need to be validated.
         if state.probabilities().len() == problem.len() {
-            Ok(())
+            Ok(Pbil::new(state, self, problem))
         } else {
-            Err(MismatchedLengthError)
-        }
-    }
-
-    fn initial_state(&self, problem: &P) -> Self::State {
-        State::Ready(Ready::initial(problem.len()))
-    }
-
-    unsafe fn evaluate(&self, problem: &P, state: &Self::State) -> Self::Evaluation {
-        match state {
-            State::Ready(_) => None,
-            State::Sampling(s) => Some(problem.evaluate_population(s.samples().into())),
-            State::Mutating(_) => None,
-        }
-    }
-
-    unsafe fn step_from_evaluated(
-        &self,
-        evaluation: Self::Evaluation,
-        state: Self::State,
-    ) -> Self::State {
-        match state {
-            State::Ready(s) => State::Sampling(s.to_sampling(self.num_samples)),
-            State::Sampling(s) => {
-                // `unwrap_unchecked` is safe if this method is safe,
-                // because `evaluate` always returns `Some`
-                // for `State::Sampling`.
-                State::Mutating(
-                    s.to_mutating(self.adjust_rate, unsafe { evaluation.unwrap_unchecked() }),
-                )
-            }
-            State::Mutating(s) => {
-                State::Ready(s.to_ready(self.mutation_chance, self.mutation_adjust_rate))
-            }
+            Err((MismatchedLengthError, self, problem, state))
         }
     }
 }
 
-impl<P> StochasticOptimizerConfig<P, SplitMix64> for Config
-where
-    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + FixedLength + 'a,
-    P::Value: Debug + PartialOrd,
-{
-    fn initial_state_using(&self, problem: &P, rng: &mut SplitMix64) -> Self::State {
-        State::Ready(Ready::initial_using(problem.len(), rng))
-    }
-}
-
-impl<P> OptimizerState<P> for State
-where
-    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + 'a,
-{
-    type Evaluatee<'a> = Option<ArrayView2<'a, bool>>;
-
-    fn evaluatee(&self) -> Self::Evaluatee<'_> {
+impl State {
+    /// Return data to be evaluated.
+    pub fn evaluatee(&self) -> Option<ArrayView2<bool>> {
         match self {
             State::Ready(_) => None,
             State::Sampling(s) => Some(s.samples().into()),
@@ -236,12 +330,11 @@ where
         }
     }
 
-    fn best_point(&self) -> P::Point<'_> {
-        finalize(self.probabilities()).into()
+    /// Return the best point discovered.
+    pub fn best_point(&self) -> Array1<bool> {
+        finalize(self.probabilities())
     }
-}
 
-impl State {
     /// Return PBIL probabilities.
     pub fn probabilities(&self) -> &Array1<Probability> {
         match &self {

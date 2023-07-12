@@ -8,6 +8,5 @@
 //! that depends on its problem
 //! and configuration.
 
-pub mod config;
 pub mod optimizer;
 pub mod runner;
