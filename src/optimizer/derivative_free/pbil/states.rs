@@ -48,7 +48,7 @@ impl Ready {
     /// # Arguments
     ///
     /// - `num_bits`: number of bits in each sample
-    pub fn initial(num_bits: usize) -> Self {
+    pub(super) fn initial(num_bits: usize) -> Self {
         Self {
             probabilities: Array::from_elem(num_bits, Probability::default()),
             rng: Xoshiro256PlusPlus::from_entropy(),
@@ -61,7 +61,7 @@ impl Ready {
     ///
     /// - `num_bits`: number of bits in each sample
     /// - `rng`: source of randomness
-    pub fn initial_using<R>(num_bits: usize, rng: R) -> Self
+    pub(super) fn initial_using<R>(num_bits: usize, rng: R) -> Self
     where
         R: Rng,
     {
@@ -72,13 +72,14 @@ impl Ready {
     }
 
     /// Return custom initial state.
-    pub fn new(probabilities: Array1<Probability>, rng: Xoshiro256PlusPlus) -> Self {
+    pub(super) fn new(probabilities: Array1<Probability>, rng: Xoshiro256PlusPlus) -> Self {
         Self { probabilities, rng }
     }
 
     /// Step to a 'Sampling' state
     /// by generating samples.
-    pub fn to_sampling(mut self, num_samples: NumSamples) -> Sampling {
+    #[allow(clippy::wrong_self_convention)]
+    pub(super) fn to_sampling(mut self, num_samples: NumSamples) -> Sampling {
         Sampling {
             samples: self.samples(num_samples),
             probabilities: self.probabilities,
@@ -109,7 +110,8 @@ impl Sampling {
     ///
     /// - `point_values`: value of each sample,
     ///    each element corresponding to a row of `samples`.
-    pub fn to_mutating<A, S>(
+    #[allow(clippy::wrong_self_convention)]
+    pub(super) fn to_mutating<A, S>(
         mut self,
         adjust_rate: AdjustRate,
         sample_values: ArrayBase<S, Ix1>,
@@ -167,7 +169,12 @@ impl Mutating {
     /// With chance `chance`,
     /// adjust each probability towards a random probability
     /// at rate `adjust_rate`.
-    pub fn to_ready(mut self, chance: MutationChance, adjust_rate: MutationAdjustRate) -> Ready {
+    #[allow(clippy::wrong_self_convention)]
+    pub(super) fn to_ready(
+        mut self,
+        chance: MutationChance,
+        adjust_rate: MutationAdjustRate,
+    ) -> Ready {
         let distr: Bernoulli = chance.into();
         self.probabilities.zip_mut_with(
             &Array::random_using(self.probabilities.len(), distr, &mut self.rng),
@@ -247,18 +254,6 @@ where
     T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Copy,
 {
     x + rate * (y - x)
-}
-
-/// Finalize probabilities to bits.
-pub fn finalize(probabilities: &Array1<Probability>) -> Array1<bool> {
-    probabilities.map(|p| f64::from(*p) >= 0.5)
-}
-
-/// Have probabilities converged?
-pub fn converged(threshold: &ConvergedThreshold, probabilities: &Array1<Probability>) -> bool {
-    probabilities
-        .iter()
-        .all(|p| p > &threshold.upper_bound() || p < &threshold.lower_bound())
 }
 
 #[cfg(test)]

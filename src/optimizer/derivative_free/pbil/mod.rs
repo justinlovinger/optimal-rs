@@ -42,7 +42,7 @@ use std::fmt::Debug;
 use derive_getters::Getters;
 use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
-use rand_xoshiro::SplitMix64;
+use rand_xoshiro::{SplitMix64, Xoshiro256PlusPlus};
 
 use crate::{optimizer::MismatchedLengthError, prelude::*};
 
@@ -72,7 +72,7 @@ where
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UntilConvergedConfig {
     /// Probability convergence parameter.
-    pub converged_threshold: ConvergedThreshold,
+    pub threshold: ProbabilityThreshold,
 }
 
 impl<I> RunnerConfig<I> for UntilConvergedConfig
@@ -84,7 +84,9 @@ where
     fn initial_state(&self) -> Self::State {}
 
     fn is_done(&self, it: &I, _: &Self::State) -> bool {
-        converged(&self.converged_threshold, it.probabilities())
+        it.probabilities()
+            .iter()
+            .all(|p| p > &self.threshold.upper_bound() || p < &self.threshold.lower_bound())
     }
 }
 
@@ -317,6 +319,11 @@ impl Config {
 }
 
 impl State {
+    /// Return custom initial state.
+    pub fn new(probabilities: Array1<Probability>, rng: Xoshiro256PlusPlus) -> Self {
+        Self::Ready(Ready::new(probabilities, rng))
+    }
+
     /// Return data to be evaluated.
     pub fn evaluatee(&self) -> Option<ArrayView2<bool>> {
         match self {
@@ -328,7 +335,7 @@ impl State {
 
     /// Return the best point discovered.
     pub fn best_point(&self) -> Array1<bool> {
-        finalize(self.probabilities())
+        self.probabilities().map(|p| f64::from(*p) >= 0.5)
     }
 }
 

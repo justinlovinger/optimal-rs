@@ -389,7 +389,7 @@ impl<A> State<A> {
     /// Return the value of the best point discovered,
     /// if possible
     /// without evaluating.
-    fn stored_best_point_value(&self) -> Option<&A> {
+    pub fn stored_best_point_value(&self) -> Option<&A> {
         match self {
             State::Ready(_) => None,
             State::Searching(x) => Some(&x.point_value),

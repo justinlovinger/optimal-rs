@@ -194,27 +194,27 @@ derive_from_str_from_try_into!(Probability(f64));
 /// or below the inverse.
 #[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ConvergedThreshold {
+pub struct ProbabilityThreshold {
     ub: Probability,
     lb: Probability,
 }
 
 /// Error returned when 'ConvergedThreshold' is given an invalid value.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq)]
-pub enum InvalidConvergedThresholdError {
+pub enum InvalidProbabilityThresholdError {
     /// Value is below the lower bound.
     TooLow,
     /// Value is above the upper bound.
     TooHigh,
 }
 
-impl ConvergedThreshold {
+impl ProbabilityThreshold {
     /// Return a new 'ConvergedThreshold' if given a valid value.
-    pub fn new(value: Probability) -> Result<Self, InvalidConvergedThresholdError> {
+    pub fn new(value: Probability) -> Result<Self, InvalidProbabilityThresholdError> {
         if value < Self::min_value().into() {
-            Err(InvalidConvergedThresholdError::TooLow)
+            Err(InvalidProbabilityThresholdError::TooLow)
         } else if value > Self::max_value().into() {
-            Err(InvalidConvergedThresholdError::TooHigh)
+            Err(InvalidProbabilityThresholdError::TooHigh)
         } else {
             Ok(Self {
                 ub: value,
@@ -239,7 +239,7 @@ impl ConvergedThreshold {
     }
 }
 
-impl LowerBounded for ConvergedThreshold {
+impl LowerBounded for ProbabilityThreshold {
     fn min_value() -> Self {
         Self {
             ub: Probability(0.5 + EPSILON),
@@ -248,7 +248,7 @@ impl LowerBounded for ConvergedThreshold {
     }
 }
 
-impl UpperBounded for ConvergedThreshold {
+impl UpperBounded for ProbabilityThreshold {
     fn max_value() -> Self {
         Self {
             ub: Probability(1. - EPSILON),
@@ -257,7 +257,7 @@ impl UpperBounded for ConvergedThreshold {
     }
 }
 
-impl Default for ConvergedThreshold {
+impl Default for ProbabilityThreshold {
     fn default() -> Self {
         Self {
             ub: Probability(0.75),
@@ -266,14 +266,14 @@ impl Default for ConvergedThreshold {
     }
 }
 
-impl From<ConvergedThreshold> for Probability {
-    fn from(x: ConvergedThreshold) -> Self {
+impl From<ProbabilityThreshold> for Probability {
+    fn from(x: ProbabilityThreshold) -> Self {
         x.ub
     }
 }
 
-impl TryFrom<Probability> for ConvergedThreshold {
-    type Error = InvalidConvergedThresholdError;
+impl TryFrom<Probability> for ProbabilityThreshold {
+    type Error = InvalidProbabilityThresholdError;
     fn try_from(value: Probability) -> Result<Self, Self::Error> {
         Self::new(value)
     }
