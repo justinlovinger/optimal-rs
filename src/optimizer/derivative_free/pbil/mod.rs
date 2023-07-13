@@ -51,7 +51,9 @@ pub use self::{states::*, types::*};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-trait Probabilities {
+/// A type containing an array of probabilities.
+pub trait Probabilities {
+    /// Return probabilities.
     fn probabilities(&self) -> &Array1<Probability>;
 }
 
@@ -61,12 +63,6 @@ where
 {
     fn probabilities(&self) -> &Array1<Probability> {
         self.state().probabilities()
-    }
-}
-
-impl Probabilities for State {
-    fn probabilities(&self) -> &Array1<Probability> {
-        self.probabilities()
     }
 }
 
@@ -334,9 +330,10 @@ impl State {
     pub fn best_point(&self) -> Array1<bool> {
         finalize(self.probabilities())
     }
+}
 
-    /// Return PBIL probabilities.
-    pub fn probabilities(&self) -> &Array1<Probability> {
+impl Probabilities for State {
+    fn probabilities(&self) -> &Array1<Probability> {
         match &self {
             State::Ready(s) => s.probabilities(),
             State::Sampling(s) => s.probabilities(),
