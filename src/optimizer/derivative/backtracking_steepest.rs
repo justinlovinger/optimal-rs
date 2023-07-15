@@ -348,7 +348,7 @@ impl<A> Config<A> {
 
     fn initial_state_using<R>(
         &self,
-        bounds: impl Iterator<Item = RangeInclusive<A>>,
+        initial_bounds: impl Iterator<Item = RangeInclusive<A>>,
         rng: &mut R,
     ) -> State<A>
     where
@@ -356,7 +356,7 @@ impl<A> Config<A> {
         R: Rng,
     {
         State::new(
-            bounds
+            initial_bounds
                 .map(|range| {
                     let (start, end) = range.into_inner();
                     Uniform::new_inclusive(start, end).sample(rng)
