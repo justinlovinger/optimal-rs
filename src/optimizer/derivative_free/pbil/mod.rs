@@ -6,28 +6,25 @@
 //!
 //! ```
 //! use ndarray::prelude::*;
-//! use optimal::{optimizer::derivative_free::pbil, prelude::*};
+//! use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut o = pbil::Config::start_default_for(Count);
-//!     let point = pbil::UntilConvergedConfig::default().argmin(&mut o);
-//!     let point_value = Count.evaluate(point.view().into());
+//!     let mut o = Config::start_default_for(Count);
+//!     let point = UntilConvergedConfig::default().argmin(&mut o);
+//!     let point_value = Count.evaluate(point.view().into_shape((1, Count.len())).unwrap())[0];
 //!     println!("f({point}) = {point_value}");
 //! }
 //!
 //! struct Count;
 //!
 //! impl Problem for Count {
-//!     type Point<'a> = CowArray<'a, bool, Ix1>;
 //!     type Value = u64;
 //!
-//!     fn evaluate(&self, point: Self::Point<'_>) -> Self::Value {
-//!         point.fold(0, |acc, b| acc + *b as u64)
+//!     fn evaluate(&self, points: ArrayView2<bool>) -> Array1<Self::Value> {
+//!         points.fold_axis(Axis(1), 0, |acc, b| acc + *b as u64)
 //!     }
-//! }
 //!
-//! impl FixedLength for Count {
 //!     fn len(&self) -> usize {
 //!         16
 //!     }
@@ -39,6 +36,7 @@ mod types;
 
 use std::fmt::Debug;
 
+use blanket::blanket;
 use derive_getters::Getters;
 use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
@@ -90,6 +88,20 @@ where
     }
 }
 
+/// A PBIL optimization problem.
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
+#[allow(clippy::len_without_is_empty)] // Problems should never have no length.
+pub trait Problem {
+    /// Value of a point in this problem space.
+    type Value;
+
+    /// Return the objective values of points in this problem space.
+    fn evaluate(&self, points: ArrayView2<bool>) -> Array1<Self::Value>;
+
+    /// Return the length of each point in this problem space.
+    fn len(&self) -> usize;
+}
+
 /// A running PBIL optimizer.
 #[derive(Clone, Debug, Getters)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -132,8 +144,22 @@ where
 
 impl<P> Pbil<P>
 where
-    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + 'a,
+    P: Problem,
 {
+    /// Return value of the best point discovered.
+    pub fn best_point_value(&self) -> P::Value {
+        self.problem()
+            .evaluate(
+                self.best_point()
+                    .view()
+                    .into_shape((1, self.problem().len()))
+                    .unwrap(),
+            )
+            .into_iter()
+            .next()
+            .unwrap()
+    }
+
     /// Return evaluation of current state,
     /// evaluating and caching if necessary.
     pub fn evaluation(&self) -> &Evaluation<P::Value> {
@@ -141,15 +167,13 @@ where
     }
 
     fn evaluate(&self) -> Evaluation<P::Value> {
-        self.state
-            .evaluatee()
-            .map(|xs| self.problem.evaluate_population(xs.into()))
+        self.state.evaluatee().map(|xs| self.problem.evaluate(xs))
     }
 }
 
 impl<P> StreamingIterator for Pbil<P>
 where
-    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + 'a,
+    P: Problem,
     P::Value: Debug + PartialOrd,
 {
     type Item = Self;
@@ -183,16 +207,14 @@ where
     }
 }
 
-impl<P> Optimizer<P> for Pbil<P>
+impl<P> Optimizer for Pbil<P>
 where
-    for<'a> P: Problem<Point<'a> = CowArray<'a, bool, Ix1>> + 'a,
+    P: Problem,
 {
-    fn best_point(&self) -> P::Point<'_> {
-        self.state.best_point().into()
-    }
+    type Point = Array1<bool>;
 
-    fn best_point_value(&self) -> P::Value {
-        self.problem().evaluate(self.best_point())
+    fn best_point(&self) -> Self::Point {
+        self.state.best_point()
     }
 }
 
@@ -249,7 +271,7 @@ impl Config {
 
 impl<P> DefaultFor<P> for Config
 where
-    P: FixedLength,
+    P: Problem,
 {
     fn default_for(problem: P) -> Self {
         Self {
@@ -266,7 +288,7 @@ impl Config {
     /// running on the given problem.
     pub fn start_default_for<P>(problem: P) -> Pbil<P>
     where
-        P: FixedLength,
+        P: Problem,
     {
         Self::default_for(&problem).start(problem)
     }
@@ -277,7 +299,7 @@ impl Config {
     /// This may be nondeterministic.
     pub fn start<P>(self, problem: P) -> Pbil<P>
     where
-        P: FixedLength,
+        P: Problem,
     {
         Pbil::new(State::Ready(Ready::initial(problem.len())), self, problem)
     }
@@ -287,7 +309,7 @@ impl Config {
     /// initialized using `rng`.
     pub fn start_using<P>(self, problem: P, rng: &mut SplitMix64) -> Pbil<P>
     where
-        P: FixedLength,
+        P: Problem,
     {
         Pbil::new(
             State::Ready(Ready::initial_using(problem.len(), rng)),
@@ -306,7 +328,7 @@ impl Config {
         state: State,
     ) -> Result<Pbil<P>, (MismatchedLengthError, Self, P, State)>
     where
-        P: FixedLength,
+        P: Problem,
     {
         // If `Sampling::samples` could be changed independent of `probabilities`,
         // it would need to be validated.

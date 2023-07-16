@@ -5,6 +5,5 @@ pub use streaming_iterator::StreamingIterator;
 pub use crate::{
     optimization::{optimizer::*, runner::*},
     optimizer::derivative::StepSize,
-    problem::*,
     traits::DefaultFor,
 };

@@ -23,39 +23,23 @@
 //! struct Sphere;
 //!
 //! impl Problem for Sphere {
-//!     type Point<'a> = CowArray<'a, f64, Ix1>;
-//!     type Value = f64;
+//!     type Elem = f64;
 //!
-//!     fn evaluate(&self, point: Self::Point<'_>) -> Self::Value {
-//!         point.map(|x| x.powi(2)).sum()
-//!     }
-//! }
-//!
-//! impl Differentiable for Sphere {
-//!     type Derivative = Array1<f64>;
-//!
-//!     fn differentiate(&self, point: Self::Point<'_>) -> Self::Derivative {
-//!         point.map(|x| 2.0 * x)
-//!     }
-//! }
-//!
-//! impl FixedLength for Sphere {
-//!     fn len(&self) -> usize {
-//!         2
-//!     }
-//! }
-//!
-//! impl Bounded for Sphere {
 //!     type Bounds = std::iter::Take<std::iter::Repeat<std::ops::RangeInclusive<f64>>>;
 //!
+//!     fn differentiate(&self, point: ArrayView1<Self::Elem>) -> Array1<Self::Elem> {
+//!         point.map(|x| 2.0 * x)
+//!     }
+//!
 //!     fn bounds(&self) -> Self::Bounds {
-//!         std::iter::repeat(-10.0..=10.0).take(self.len())
+//!         std::iter::repeat(-10.0..=10.0).take(2)
 //!     }
 //! }
 //! ```
 
 use std::ops::{Mul, RangeInclusive, SubAssign};
 
+use blanket::blanket;
 use derive_getters::Getters;
 use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
@@ -71,26 +55,55 @@ use super::StepSize;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// A fixed step size steepest descent optimization problem.
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
+pub trait Problem {
+    /// Element of a point in this problem space.
+    type Elem;
+
+    /// Bounds for points in this problem space.
+    type Bounds: Iterator<Item = RangeInclusive<Self::Elem>>;
+
+    /// Return partial derivatives of a point.
+    fn differentiate(&self, point: ArrayView1<Self::Elem>) -> Array1<Self::Elem>;
+
+    /// Return bounds for this problem.
+    fn bounds(&self) -> Self::Bounds;
+}
+
 /// A running fixed step size steepest descent optimizer.
 #[derive(Clone, Debug, Getters)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct FixedStepSteepest<A, P> {
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "P: Serialize, P::Elem: Serialize",
+        deserialize = "P: Deserialize<'de>, P::Elem: Deserialize<'de>"
+    ))
+)]
+pub struct FixedStepSteepest<P>
+where
+    P: Problem,
+{
     /// Optimizer configuration.
-    config: Config<A>,
+    config: Config<P::Elem>,
 
     /// Problem being optimized.
     problem: P,
 
     /// State of optimizer.
-    state: Point<A>,
+    state: Point<P::Elem>,
 
     #[getter(skip)]
     #[cfg_attr(feature = "serde", serde(skip))]
-    evaluation_cache: OnceCell<Point<A>>,
+    evaluation_cache: OnceCell<Point<P::Elem>>,
 }
 
-impl<A, P> FixedStepSteepest<A, P> {
-    fn new(state: Point<A>, config: Config<A>, problem: P) -> Self {
+impl<P> FixedStepSteepest<P>
+where
+    P: Problem,
+{
+    fn new(state: Point<P::Elem>, config: Config<P::Elem>, problem: P) -> Self {
         Self {
             problem,
             config,
@@ -100,30 +113,30 @@ impl<A, P> FixedStepSteepest<A, P> {
     }
 
     /// Return configuration, problem, and state.
-    pub fn into_inner(self) -> (Config<A>, P, Point<A>) {
+    pub fn into_inner(self) -> (Config<P::Elem>, P, Point<P::Elem>) {
         (self.config, self.problem, self.state)
     }
 }
 
-impl<A, P> FixedStepSteepest<A, P>
+impl<P> FixedStepSteepest<P>
 where
-    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Derivative = Array1<A>> + 'a,
+    P: Problem,
 {
     /// Return evaluation of current state,
     /// evaluating and caching if necessary.
-    pub fn evaluation(&self) -> &P::Derivative {
+    pub fn evaluation(&self) -> &Array1<P::Elem> {
         self.evaluation_cache.get_or_init(|| self.evaluate())
     }
 
-    fn evaluate(&self) -> P::Derivative {
-        self.problem.differentiate(self.state.view().into())
+    fn evaluate(&self) -> Array1<P::Elem> {
+        self.problem.differentiate(self.state.view())
     }
 }
 
-impl<A, P> StreamingIterator for FixedStepSteepest<A, P>
+impl<P> StreamingIterator for FixedStepSteepest<P>
 where
-    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Derivative = Array1<A>> + 'a,
-    A: Clone + SubAssign + Mul<Output = A>,
+    P: Problem,
+    P::Elem: Clone + SubAssign + Mul<Output = P::Elem>,
 {
     type Item = Self;
 
@@ -142,16 +155,15 @@ where
     }
 }
 
-impl<A, P> Optimizer<P> for FixedStepSteepest<A, P>
+impl<P> Optimizer for FixedStepSteepest<P>
 where
-    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>> + 'a,
+    P: Problem,
+    P::Elem: Clone,
 {
-    fn best_point(&self) -> P::Point<'_> {
-        self.state.view().into()
-    }
+    type Point = Array1<P::Elem>;
 
-    fn best_point_value(&self) -> P::Value {
-        self.problem().evaluate(self.best_point())
+    fn best_point(&self) -> Self::Point {
+        self.state.clone()
     }
 }
 
@@ -177,14 +189,13 @@ impl<A> Config<A> {
     /// running on the given problem.
     ///
     /// This may be nondeterministic.
-    pub fn start<P>(self, problem: P) -> FixedStepSteepest<A, P>
+    pub fn start<P>(self, problem: P) -> FixedStepSteepest<P>
     where
         A: SampleUniform,
-        P: Bounded + FixedLength,
-        P::Bounds: Iterator<Item = RangeInclusive<A>>,
+        P: Problem<Elem = A>,
     {
         FixedStepSteepest::new(
-            self.initial_state_using(problem.bounds().take(problem.len()), &mut thread_rng()),
+            self.initial_state_using(problem.bounds(), &mut thread_rng()),
             self,
             problem,
         )
@@ -193,15 +204,14 @@ impl<A> Config<A> {
     /// Return this optimizer
     /// running on the given problem
     /// initialized using `rng`.
-    pub fn start_using<P, R>(self, problem: P, rng: &mut R) -> FixedStepSteepest<A, P>
+    pub fn start_using<P, R>(self, problem: P, rng: &mut R) -> FixedStepSteepest<P>
     where
         A: SampleUniform,
-        P: Bounded + FixedLength,
-        P::Bounds: Iterator<Item = RangeInclusive<A>>,
+        P: Problem<Elem = A>,
         R: Rng,
     {
         FixedStepSteepest::new(
-            self.initial_state_using(problem.bounds().take(problem.len()), rng),
+            self.initial_state_using(problem.bounds(), rng),
             self,
             problem,
         )
@@ -214,12 +224,12 @@ impl<A> Config<A> {
     pub fn start_from<P>(
         self,
         problem: P,
-        state: Point<A>,
-    ) -> Result<FixedStepSteepest<A, P>, (MismatchedLengthError, Self, P, Point<A>)>
+        state: Point<P::Elem>,
+    ) -> Result<FixedStepSteepest<P>, (MismatchedLengthError, Self, P, Point<P::Elem>)>
     where
-        P: FixedLength,
+        P: Problem<Elem = A>,
     {
-        if state.len() == problem.len() {
+        if state.len() == problem.bounds().count() {
             Ok(FixedStepSteepest::new(state, self, problem))
         } else {
             Err((MismatchedLengthError, self, problem, state))

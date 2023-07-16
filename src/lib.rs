@@ -32,28 +32,25 @@
 //!
 //! ```
 //! use ndarray::prelude::*;
-//! use optimal::{optimizer::derivative_free::pbil, prelude::*};
+//! use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
 //! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
-//!     let mut o = pbil::Config::start_default_for(Count);
-//!     let point = pbil::UntilConvergedConfig::default().argmin(&mut o);
-//!     let point_value = Count.evaluate(point.view().into());
+//!     let mut o = Config::start_default_for(Count);
+//!     let point = UntilConvergedConfig::default().argmin(&mut o);
+//!     let point_value = Count.evaluate(point.view().into_shape((1, Count.len())).unwrap())[0];
 //!     println!("f({point}) = {point_value}");
 //! }
 //!
 //! struct Count;
 //!
 //! impl Problem for Count {
-//!     type Point<'a> = CowArray<'a, bool, Ix1>;
 //!     type Value = u64;
 //!
-//!     fn evaluate(&self, point: Self::Point<'_>) -> Self::Value {
-//!         point.fold(0, |acc, b| acc + *b as u64)
+//!     fn evaluate(&self, points: ArrayView2<bool>) -> Array1<Self::Value> {
+//!         points.fold_axis(Axis(1), 0, |acc, b| acc + *b as u64)
 //!     }
-//! }
 //!
-//! impl FixedLength for Count {
 //!     fn len(&self) -> usize {
 //!         16
 //!     }
@@ -65,28 +62,25 @@
 //!
 //! ```
 //! # use ndarray::prelude::*;
-//! # use optimal::{optimizer::derivative_free::pbil, prelude::*};
+//! # use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
 //! # use streaming_iterator::StreamingIterator;
 //! #
 //! # #[derive(Clone, Debug)]
 //! # struct Count;
 //! #
 //! # impl Problem for Count {
-//! #     type Point<'a> = CowArray<'a, bool, Ix1>;
 //! #     type Value = u64;
 //! #
-//! #     fn evaluate(&self, point: Self::Point<'_>) -> Self::Value {
-//! #         point.fold(0, |acc, b| acc + *b as u64)
+//! #     fn evaluate(&self, points: ArrayView2<bool>) -> Array1<Self::Value> {
+//! #         points.fold_axis(Axis(1), 0, |acc, b| acc + *b as u64)
 //! #     }
-//! # }
 //! #
-//! # impl FixedLength for Count {
 //! #     fn len(&self) -> usize {
 //! #         16
 //! #     }
 //! # }
 //! #
-//! let mut it = pbil::UntilConvergedConfig::default().start(pbil::Config::start_default_for(Count));
+//! let mut it = UntilConvergedConfig::default().start(Config::start_default_for(Count));
 //! while let Some(o) = it.next() {
 //!     println!("{:?}", o.state());
 //! }
@@ -101,7 +95,6 @@ mod derive;
 mod optimization;
 pub mod optimizer;
 pub mod prelude;
-mod problem;
 mod traits;
 
 #[cfg(test)]
@@ -122,21 +115,26 @@ mod tests {
 
     use super::prelude::*;
 
-    #[derive(Clone, Debug, Serialize, Deserialize)]
-    struct MockProblem;
-
-    impl Problem for MockProblem {
-        type Point<'a> = usize;
-        type Value = usize;
-
-        fn evaluate<'a>(&'a self, point: Self::Point<'a>) -> Self::Value {
-            point + 1
-        }
+    fn mock_obj_func(x: usize) -> usize {
+        x + 1
     }
 
     macro_rules! mock_optimizer {
         ( $id:ident ) => {
             paste::paste! {
+                trait [< Problem $id >] {
+                    fn evaluate(&self, x: usize) -> usize;
+                }
+
+                #[derive(Clone, Debug, Serialize, Deserialize)]
+                struct [< MockProblem $id >];
+
+                impl [< Problem $id >] for [< MockProblem $id >] {
+                    fn evaluate(&self, x: usize) -> usize {
+                        mock_obj_func(x)
+                    }
+                }
+
                 #[derive(Clone, Debug, Serialize, Deserialize)]
                 struct [< MockOptimizer $id >]<P> {
                     problem: P,
@@ -151,7 +149,7 @@ mod tests {
                     #[allow(dead_code)]
                     fn evaluation(&self) -> usize
                     where
-                        for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
+                        P: [< Problem $id >],
                     {
                         self.problem.evaluate(self.state)
                     }
@@ -159,7 +157,7 @@ mod tests {
 
                 impl<P> StreamingIterator for [< MockOptimizer $id >]<P>
                 where
-                    for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
+                    P: [< Problem $id >],
                 {
                     type Item = Self;
 
@@ -172,16 +170,11 @@ mod tests {
                     }
                 }
 
-                impl<P> Optimizer<P> for [< MockOptimizer $id >]<P>
-                where
-                    for<'a> P: Problem<Point<'a> = usize, Value = usize> + 'a,
-                {
-                    fn best_point(&self) -> P::Point<'_> {
-                        self.state
-                    }
+                impl<P> Optimizer for [< MockOptimizer $id >]<P> {
+                    type Point = usize;
 
-                    fn best_point_value(&self) -> P::Value {
-                        self.problem.evaluate(self.state)
+                    fn best_point(&self) -> Self::Point {
+                        self.state
                     }
                 }
             }
@@ -215,57 +208,62 @@ mod tests {
 
     #[test]
     fn optimizers_should_be_easily_comparable() {
-        type BoxedOptimizer<P> = Box<dyn StreamingIterator<Item = dyn Optimizer<P>>>;
+        type BoxedOptimizer<A> = Box<dyn StreamingIterator<Item = dyn Optimizer<Point = A>>>;
 
-        fn best_optimizer<P, I>(optimizers: I) -> usize
+        fn best_optimizer<A, B, F, I>(obj_func: F, optimizers: I) -> usize
         where
-            P: Problem,
-            P::Value: Ord,
-            I: IntoIterator<Item = BoxedOptimizer<P>>,
+            B: Ord,
+            F: Fn(A) -> B,
+            I: IntoIterator<Item = BoxedOptimizer<A>>,
         {
             optimizers
                 .into_iter()
                 .enumerate()
                 .map(|(i, mut o)| {
                     let o = o.nth(10).unwrap();
-                    (o.best_point_value(), i)
+                    (obj_func(o.best_point()), i)
                 })
                 .min()
                 .expect("`optimizers` should be non-empty")
                 .1
         }
 
-        best_optimizer([
-            Box::new(MockOptimizerA::new(MockProblem).map_ref(|x| x as &dyn Optimizer<MockProblem>))
-                as BoxedOptimizer<MockProblem>,
-            Box::new(MockOptimizerB::new(MockProblem).map_ref(|x| x as &dyn Optimizer<MockProblem>))
-                as BoxedOptimizer<MockProblem>,
-        ]);
+        best_optimizer(
+            mock_obj_func,
+            [
+                Box::new(
+                    MockOptimizerA::new(MockProblemA)
+                        .map_ref(|x| x as &dyn Optimizer<Point = usize>),
+                ) as BoxedOptimizer<usize>,
+                Box::new(
+                    MockOptimizerB::new(MockProblemB)
+                        .map_ref(|x| x as &dyn Optimizer<Point = usize>),
+                ) as BoxedOptimizer<usize>,
+            ],
+        );
     }
 
     #[test]
     fn parallel_optimization_runs_should_be_easy() {
         use std::thread::spawn;
 
-        fn parallel<P, A, O, F>(start: F)
+        fn parallel<A, O, F>(start: F)
         where
-            P: Problem,
-            for<'a> P::Point<'a>: ToOwned<Owned = A>,
-            A: Clone + Send + 'static,
-            O: StreamingIterator + Optimizer<P> + Send + 'static,
+            A: Send + 'static,
+            O: StreamingIterator + Optimizer<Point = A> + Send + 'static,
             F: Fn() -> O,
         {
             let mut o1 = start();
             let mut o2 = start();
             #[allow(clippy::redundant_clone)] // False positive.
-            let handler1 = spawn(move || MaxStepsConfig(10).argmin(&mut o1).to_owned());
+            let handler1 = spawn(move || MaxStepsConfig(10).argmin(&mut o1));
             #[allow(clippy::redundant_clone)] // False positive.
-            let handler2 = spawn(move || MaxStepsConfig(10).argmin(&mut o2).to_owned());
+            let handler2 = spawn(move || MaxStepsConfig(10).argmin(&mut o2));
             handler1.join().unwrap();
             handler2.join().unwrap();
         }
 
-        parallel(|| MockOptimizerA::new(MockProblem));
+        parallel(|| MockOptimizerA::new(MockProblemA));
     }
 
     #[test]
@@ -274,7 +272,7 @@ mod tests {
         // this is a bit of a hack
         // because methods providing evaluations are current a convention,
         // not a part of the API.
-        MockOptimizerA::new(MockProblem)
+        MockOptimizerA::new(MockProblemA)
             .inspect(|o| println!("state: {:?}, evaluation: {:?}", o.state, o.evaluation()))
             .nth(10);
     }
@@ -346,7 +344,7 @@ mod tests {
         }
 
         let _ = RestarterConfig { max_restarts: 10 }
-            .start(MaxStepsConfig(10).start(MockOptimizerA::new(MockProblem)))
+            .start(MaxStepsConfig(10).start(MockOptimizerA::new(MockProblemA)))
             .nth(100);
     }
 
@@ -358,8 +356,8 @@ mod tests {
     fn dynamic_optimizers_should_be_partially_runable() {
         #[derive(Clone, Debug, Serialize, Deserialize)]
         enum DynOptimizer {
-            A(MockOptimizerA<MockProblem>),
-            B(MockOptimizerB<MockProblem>),
+            A(MockOptimizerA<MockProblemA>),
+            B(MockOptimizerB<MockProblemB>),
         }
 
         impl StreamingIterator for DynOptimizer {
@@ -377,27 +375,22 @@ mod tests {
             }
         }
 
-        impl Optimizer<MockProblem> for DynOptimizer {
-            fn best_point(&self) -> <MockProblem as Problem>::Point<'_> {
+        impl Optimizer for DynOptimizer {
+            type Point = usize;
+
+            fn best_point(&self) -> Self::Point {
                 match self {
                     DynOptimizer::A(x) => x.best_point(),
                     DynOptimizer::B(x) => x.best_point(),
                 }
             }
-
-            fn best_point_value(&self) -> <MockProblem as Problem>::Value {
-                match self {
-                    DynOptimizer::A(x) => x.best_point_value(),
-                    DynOptimizer::B(x) => x.best_point_value(),
-                }
-            }
         }
 
-        let mut o = MaxStepsConfig(10).start(DynOptimizer::A(MockOptimizerA::new(MockProblem)));
+        let mut o = MaxStepsConfig(10).start(DynOptimizer::A(MockOptimizerA::new(MockProblemA)));
         o.next();
         let store = serde_json::to_string(&o).unwrap();
         o = serde_json::from_str(&store).unwrap();
         o.next();
-        o.into_inner().0.best_point_value();
+        o.into_inner().0.best_point();
     }
 }

@@ -75,11 +75,10 @@ mod extensions {
         ///
         /// How well the point minimizes the problem
         /// depends on the optimizer.
-        fn argmin<P>(self, it: &mut I) -> P::Point<'_>
+        fn argmin(self, it: &mut I) -> I::Point
         where
             Self: Sized,
-            P: Problem,
-            I: StreamingIterator + Optimizer<P>,
+            I: StreamingIterator + Optimizer,
         {
             (*self.run(it)).best_point()
         }

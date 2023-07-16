@@ -1,22 +1,15 @@
 use blanket::blanket;
 
-use crate::prelude::*;
-
 /// Running optimizer methods
 /// independent of configuration
 /// and state.
 #[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait Optimizer<P>
-where
-    P: Problem,
-{
-    /// Return the best point discovered.
-    fn best_point(&self) -> P::Point<'_>;
+pub trait Optimizer {
+    /// A point in the problem space being optimized.
+    type Point;
 
-    /// Return the value of the best point discovered,
-    /// evaluating the best point
-    /// if necessary.
-    fn best_point_value(&self) -> P::Value;
+    /// Return the best point discovered.
+    fn best_point(&self) -> Self::Point;
 }
 
 #[cfg(test)]
@@ -25,5 +18,5 @@ mod tests {
 
     use super::*;
 
-    assert_obj_safe!(Optimizer<()>);
+    assert_obj_safe!(Optimizer<Point = ()>);
 }

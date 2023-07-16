@@ -33,34 +33,32 @@
 //! struct Sphere;
 //!
 //! impl Problem for Sphere {
-//!     type Point<'a> = CowArray<'a, f64, Ix1>;
-//!     type Value = f64;
+//!     type Elem = f64;
 //!
-//!     fn evaluate(&self, point: Self::Point<'_>) -> Self::Value {
-//!         point.map(|x| x.powi(2)).sum()
-//!     }
-//! }
-//!
-//! impl Differentiable for Sphere {
-//!     type Derivative = Array1<f64>;
-//!
-//!     fn differentiate(&self, point: Self::Point<'_>) -> Self::Derivative {
-//!         point.map(|x| 2.0 * x)
-//!     }
-//! }
-//!
-//! impl FixedLength for Sphere {
-//!     fn len(&self) -> usize {
-//!         2
-//!     }
-//! }
-//!
-//! impl Bounded for Sphere {
 //!     type Bounds = std::iter::Take<std::iter::Repeat<std::ops::RangeInclusive<f64>>>;
 //!
-//!     fn bounds(&self) -> Self::Bounds {
-//!         std::iter::repeat(-10.0..=10.0).take(self.len())
+//!     fn evaluate(&self, point: ArrayView1<Self::Elem>) -> Self::Elem {
+//!         obj_func(point)
 //!     }
+//!
+//!     fn evaluate_differentiate(
+//!         &self,
+//!         point: ArrayView1<Self::Elem>,
+//!     ) -> (Self::Elem, Array1<Self::Elem>) {
+//!         (obj_func(point), obj_func_d(point))
+//!     }
+//!
+//!     fn bounds(&self) -> Self::Bounds {
+//!         std::iter::repeat(-10.0..=10.0).take(2)
+//!     }
+//! }
+//!
+//! fn obj_func(point: ArrayView1<f64>) -> f64 {
+//!     point.map(|x| x.powi(2)).sum()
+//! }
+//!
+//! fn obj_func_d(point: ArrayView1<f64>) -> Array1<f64> {
+//!     point.map(|x| 2.0 * x)
 //! }
 //! ```
 
@@ -70,6 +68,7 @@ use std::{
     ops::{Add, Div, Mul, Neg, RangeInclusive, Sub},
 };
 
+use blanket::blanket;
 use derive_getters::Getters;
 use derive_more::Display;
 use ndarray::{linalg::Dot, prelude::*, Data, Zip};
@@ -98,26 +97,63 @@ use super::StepSize;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+/// A backtracking steepest descent optimization problem.
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
+pub trait Problem {
+    /// Value of a point in this problem space.
+    /// For this optimizer,
+    /// this doubles as the value of a point in this problem space.
+    type Elem;
+
+    /// Bounds for points in this problem space.
+    type Bounds: Iterator<Item = RangeInclusive<Self::Elem>>;
+
+    /// Return the objective value of a point in this problem space.
+    fn evaluate(&self, point: ArrayView1<Self::Elem>) -> Self::Elem;
+
+    /// Return objective value and partial derivatives of a point.
+    fn evaluate_differentiate(
+        &self,
+        point: ArrayView1<Self::Elem>,
+    ) -> (Self::Elem, Array1<Self::Elem>);
+
+    /// Return bounds for this problem.
+    fn bounds(&self) -> Self::Bounds;
+}
+
 /// A running fixed step size steepest descent optimizer.
 #[derive(Clone, Debug, Getters)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BacktrackingSteepest<A, P> {
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(
+        serialize = "P: Serialize, P::Elem: Serialize",
+        deserialize = "P: Deserialize<'de>, P::Elem: Deserialize<'de>"
+    ))
+)]
+pub struct BacktrackingSteepest<P>
+where
+    P: Problem,
+{
     /// Optimizer configuration.
-    config: Config<A>,
+    config: Config<P::Elem>,
 
     /// Problem being optimized.
     problem: P,
 
     /// State of optimizer.
-    state: State<A>,
+    state: State<P::Elem>,
 
     #[getter(skip)]
     #[cfg_attr(feature = "serde", serde(skip))]
-    evaluation_cache: OnceCell<Evaluation<A>>,
+    evaluation_cache: OnceCell<Evaluation<P::Elem>>,
 }
 
-impl<A, P> BacktrackingSteepest<A, P> {
-    fn new(state: State<A>, config: Config<A>, problem: P) -> Self {
+impl<P> BacktrackingSteepest<P>
+where
+    P: Problem,
+{
+    fn new(state: State<P::Elem>, config: Config<P::Elem>, problem: P) -> Self {
         Self {
             problem,
             config,
@@ -127,23 +163,34 @@ impl<A, P> BacktrackingSteepest<A, P> {
     }
 
     /// Return configuration, problem, and state.
-    pub fn into_inner(self) -> (Config<A>, P, State<A>) {
+    pub fn into_inner(self) -> (Config<P::Elem>, P, State<P::Elem>) {
         (self.config, self.problem, self.state)
     }
 }
 
-impl<A, P> BacktrackingSteepest<A, P>
+impl<P> BacktrackingSteepest<P>
 where
-    for<'a> P:
-        Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Value = A, Derivative = Array1<A>> + 'a,
+    P: Problem,
 {
+    /// Return value of the best point discovered,
+    /// evaluating the best point if necessary.
+    pub fn best_point_value(&self) -> P::Elem
+    where
+        P::Elem: Clone,
+    {
+        self.state
+            .stored_best_point_value()
+            .cloned()
+            .unwrap_or_else(|| self.problem().evaluate(self.state.best_point()))
+    }
+
     /// Return evaluation of current state,
     /// evaluating and caching if necessary.
-    pub fn evaluation(&self) -> &Evaluation<A> {
+    pub fn evaluation(&self) -> &Evaluation<P::Elem> {
         self.evaluation_cache.get_or_init(|| self.evaluate())
     }
 
-    fn evaluate(&self) -> Evaluation<A> {
+    fn evaluate(&self) -> Evaluation<P::Elem> {
         match &self.state {
             State::Ready(x) => Evaluation::ValueAndDerivatives(
                 self.problem.evaluate_differentiate(x.point().into()),
@@ -153,12 +200,11 @@ where
     }
 }
 
-impl<A, P> StreamingIterator for BacktrackingSteepest<A, P>
+impl<P> StreamingIterator for BacktrackingSteepest<P>
 where
-    for<'a> P:
-        Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Value = A, Derivative = Array1<A>> + 'a,
-    A: Real + 'static,
-    f64: AsPrimitive<A>,
+    P: Problem,
+    P::Elem: Real + 'static,
+    f64: AsPrimitive<P::Elem>,
 {
     type Item = Self;
 
@@ -198,20 +244,15 @@ where
     }
 }
 
-impl<A, P> Optimizer<P> for BacktrackingSteepest<A, P>
+impl<P> Optimizer for BacktrackingSteepest<P>
 where
-    for<'a> P: Differentiable<Point<'a> = CowArray<'a, A, Ix1>, Value = A> + 'a,
-    A: Clone,
+    P: Problem,
+    P::Elem: Clone,
 {
-    fn best_point(&self) -> P::Point<'_> {
-        self.state.best_point().into()
-    }
+    type Point = Array1<P::Elem>;
 
-    fn best_point_value(&self) -> P::Value {
-        self.state
-            .stored_best_point_value()
-            .cloned()
-            .unwrap_or_else(|| self.problem().evaluate(self.best_point()))
+    fn best_point(&self) -> Self::Point {
+        self.state.best_point().into_owned()
     }
 }
 
@@ -288,14 +329,13 @@ impl<A> Config<A> {
     /// running on the given problem.
     ///
     /// This may be nondeterministic.
-    pub fn start<P>(self, problem: P) -> BacktrackingSteepest<A, P>
+    pub fn start<P>(self, problem: P) -> BacktrackingSteepest<P>
     where
         A: Debug + SampleUniform + Real,
-        P: Bounded + FixedLength,
-        P::Bounds: Iterator<Item = RangeInclusive<A>>,
+        P: Problem<Elem = A>,
     {
         BacktrackingSteepest::new(
-            self.initial_state_using(problem.bounds().take(problem.len()), &mut thread_rng()),
+            self.initial_state_using(problem.bounds(), &mut thread_rng()),
             self,
             problem,
         )
@@ -304,15 +344,14 @@ impl<A> Config<A> {
     /// Return this optimizer
     /// running on the given problem
     /// initialized using `rng`.
-    pub fn start_using<P, R>(self, problem: P, rng: &mut R) -> BacktrackingSteepest<A, P>
+    pub fn start_using<P, R>(self, problem: P, rng: &mut R) -> BacktrackingSteepest<P>
     where
         A: Debug + SampleUniform + Real,
-        P: Bounded + FixedLength,
-        P::Bounds: Iterator<Item = RangeInclusive<A>>,
+        P: Problem<Elem = A>,
         R: Rng,
     {
         BacktrackingSteepest::new(
-            self.initial_state_using(problem.bounds().take(problem.len()), rng),
+            self.initial_state_using(problem.bounds(), rng),
             self,
             problem,
         )
@@ -327,9 +366,9 @@ impl<A> Config<A> {
         self,
         problem: P,
         state: State<A>,
-    ) -> Result<BacktrackingSteepest<A, P>, (MismatchedLengthError, Self, P, State<A>)>
+    ) -> Result<BacktrackingSteepest<P>, (MismatchedLengthError, Self, P, State<P::Elem>)>
     where
-        P: FixedLength,
+        P: Problem<Elem = A>,
     {
         // Note,
         // this assumes states cannot be modified
@@ -339,7 +378,7 @@ impl<A> Config<A> {
         // all states are derived from an initial state
         // and the only way for a state to be invalid
         // is if it was from a different problem.
-        if problem.len() == state.len() {
+        if problem.bounds().count() == state.len() {
             Ok(BacktrackingSteepest::new(state, self, problem))
         } else {
             Err((MismatchedLengthError, self, problem, state))

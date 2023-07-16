@@ -12,7 +12,7 @@ use crate::{
         derive_from_str_from_try_into, derive_into_inner, derive_new_from_bounded_float,
         derive_new_from_lower_bounded, derive_try_from_from_new,
     },
-    prelude::{DefaultFor, FixedLength},
+    prelude::DefaultFor,
 };
 
 /// Number of samples generated
@@ -81,7 +81,7 @@ pub struct MutationChance(f64);
 
 impl<P> DefaultFor<P> for MutationChance
 where
-    P: FixedLength,
+    P: super::Problem,
 {
     /// Return recommended default mutation chance,
     /// average of one mutation per step.
