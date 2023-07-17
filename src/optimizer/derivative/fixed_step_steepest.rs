@@ -9,37 +9,19 @@
 //! use ndarray::prelude::*;
 //! use optimal::{optimizer::derivative::fixed_step_steepest::*, prelude::*};
 //!
-//! fn main() {
-//!     println!(
-//!         "{}",
-//!         Config::new(StepSize::new(0.5).unwrap()).start(Sphere)
-//!             .nth(100)
-//!             .unwrap()
-//!             .best_point()
-//!     );
-//! }
-//!
-//! #[derive(Clone, Debug)]
-//! struct Sphere;
-//!
-//! impl Problem for Sphere {
-//!     type Elem = f64;
-//!
-//!     type Bounds = std::iter::Take<std::iter::Repeat<std::ops::RangeInclusive<f64>>>;
-//!
-//!     fn differentiate(&self, point: ArrayView1<Self::Elem>) -> Array1<Self::Elem> {
-//!         point.map(|x| 2.0 * x)
-//!     }
-//!
-//!     fn bounds(&self) -> Self::Bounds {
-//!         std::iter::repeat(-10.0..=10.0).take(2)
-//!     }
-//! }
+//! println!(
+//!     "{}",
+//!     Config::new(StepSize::new(0.5).unwrap())
+//!         .start(std::iter::repeat(-10.0..=10.0).take(2), |point| point
+//!             .map(|x| 2.0 * x))
+//!         .nth(100)
+//!         .unwrap()
+//!         .best_point()
+//! );
 //! ```
 
 use std::ops::{Mul, RangeInclusive, SubAssign};
 
-use blanket::blanket;
 use derive_getters::Getters;
 use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
@@ -48,95 +30,66 @@ use rand::{
     prelude::*,
 };
 
-use crate::{optimizer::MismatchedLengthError, prelude::*};
+use crate::prelude::*;
 
 use super::StepSize;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// A fixed step size steepest descent optimization problem.
-#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait Problem {
-    /// Element of a point in this problem space.
-    type Elem;
-
-    /// Bounds for points in this problem space.
-    type Bounds: Iterator<Item = RangeInclusive<Self::Elem>>;
-
-    /// Return partial derivatives of a point.
-    fn differentiate(&self, point: ArrayView1<Self::Elem>) -> Array1<Self::Elem>;
-
-    /// Return bounds for this problem.
-    fn bounds(&self) -> Self::Bounds;
-}
-
 /// A running fixed step size steepest descent optimizer.
 #[derive(Clone, Debug, Getters)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(
-    feature = "serde",
-    serde(bound(
-        serialize = "P: Serialize, P::Elem: Serialize",
-        deserialize = "P: Deserialize<'de>, P::Elem: Deserialize<'de>"
-    ))
-)]
-pub struct FixedStepSteepest<P>
-where
-    P: Problem,
-{
+pub struct FixedStepSteepest<A, FD> {
     /// Optimizer configuration.
-    config: Config<P::Elem>,
+    config: Config<A>,
 
-    /// Problem being optimized.
-    problem: P,
+    /// Derivative of objective function to minimize.
+    obj_func_d: FD,
 
     /// State of optimizer.
-    state: Point<P::Elem>,
+    state: Point<A>,
 
     #[getter(skip)]
     #[cfg_attr(feature = "serde", serde(skip))]
-    evaluation_cache: OnceCell<Point<P::Elem>>,
+    evaluation_cache: OnceCell<Point<A>>,
 }
 
-impl<P> FixedStepSteepest<P>
-where
-    P: Problem,
-{
-    fn new(state: Point<P::Elem>, config: Config<P::Elem>, problem: P) -> Self {
+impl<A, FD> FixedStepSteepest<A, FD> {
+    fn new(state: Point<A>, config: Config<A>, obj_func_d: FD) -> Self {
         Self {
-            problem,
             config,
+            obj_func_d,
             state,
             evaluation_cache: OnceCell::new(),
         }
     }
 
-    /// Return configuration, problem, and state.
-    pub fn into_inner(self) -> (Config<P::Elem>, P, Point<P::Elem>) {
-        (self.config, self.problem, self.state)
+    /// Return configuration, state, and problem parameters.
+    pub fn into_inner(self) -> (Config<A>, Point<A>, FD) {
+        (self.config, self.state, self.obj_func_d)
     }
 }
 
-impl<P> FixedStepSteepest<P>
+impl<A, FD> FixedStepSteepest<A, FD>
 where
-    P: Problem,
+    FD: Fn(ArrayView1<A>) -> Array1<A>,
 {
     /// Return evaluation of current state,
     /// evaluating and caching if necessary.
-    pub fn evaluation(&self) -> &Array1<P::Elem> {
+    pub fn evaluation(&self) -> &Array1<A> {
         self.evaluation_cache.get_or_init(|| self.evaluate())
     }
 
-    fn evaluate(&self) -> Array1<P::Elem> {
-        self.problem.differentiate(self.state.view())
+    fn evaluate(&self) -> Array1<A> {
+        (self.obj_func_d)(self.state.view())
     }
 }
 
-impl<P> StreamingIterator for FixedStepSteepest<P>
+impl<A, FD> StreamingIterator for FixedStepSteepest<A, FD>
 where
-    P: Problem,
-    P::Elem: Clone + SubAssign + Mul<Output = P::Elem>,
+    A: Clone + SubAssign + Mul<Output = A>,
+    FD: Fn(ArrayView1<A>) -> Array1<A>,
 {
     type Item = Self;
 
@@ -155,12 +108,11 @@ where
     }
 }
 
-impl<P> Optimizer for FixedStepSteepest<P>
+impl<A, FD> Optimizer for FixedStepSteepest<A, FD>
 where
-    P: Problem,
-    P::Elem: Clone,
+    A: Clone,
 {
-    type Point = Array1<P::Elem>;
+    type Point = Array1<A>;
 
     fn best_point(&self) -> Self::Point {
         self.state.clone()
@@ -189,51 +141,61 @@ impl<A> Config<A> {
     /// running on the given problem.
     ///
     /// This may be nondeterministic.
-    pub fn start<P>(self, problem: P) -> FixedStepSteepest<P>
+    ///
+    /// - `initial_bounds`: bounds for generating the initial random point
+    /// - `obj_func_d`: derivative of objective function to minimize
+    pub fn start<FD>(
+        self,
+        initial_bounds: impl Iterator<Item = RangeInclusive<A>>,
+        obj_func_d: FD,
+    ) -> FixedStepSteepest<A, FD>
     where
         A: SampleUniform,
-        P: Problem<Elem = A>,
+        FD: Fn(ArrayView1<A>) -> Array1<A>,
     {
         FixedStepSteepest::new(
-            self.initial_state_using(problem.bounds(), &mut thread_rng()),
+            self.initial_state_using(initial_bounds, &mut thread_rng()),
             self,
-            problem,
+            obj_func_d,
         )
     }
 
     /// Return this optimizer
     /// running on the given problem
     /// initialized using `rng`.
-    pub fn start_using<P, R>(self, problem: P, rng: &mut R) -> FixedStepSteepest<P>
+    ///
+    /// - `initial_bounds`: bounds for generating the initial random point
+    /// - `obj_func_d`: derivative of objective function to minimize
+    /// - `rng`: source of randomness
+    pub fn start_using<FD, R>(
+        self,
+        initial_bounds: impl Iterator<Item = RangeInclusive<A>>,
+        obj_func_d: FD,
+        rng: &mut R,
+    ) -> FixedStepSteepest<A, FD>
     where
         A: SampleUniform,
-        P: Problem<Elem = A>,
+        FD: Fn(ArrayView1<A>) -> Array1<A>,
         R: Rng,
     {
         FixedStepSteepest::new(
-            self.initial_state_using(problem.bounds(), rng),
+            self.initial_state_using(initial_bounds, rng),
             self,
-            problem,
+            obj_func_d,
         )
     }
 
     /// Return this optimizer
     /// running on the given problem.
     /// if the given `state` is valid.
-    #[allow(clippy::type_complexity)]
-    pub fn start_from<P>(
-        self,
-        problem: P,
-        state: Point<P::Elem>,
-    ) -> Result<FixedStepSteepest<P>, (MismatchedLengthError, Self, P, Point<P::Elem>)>
+    ///
+    /// - `obj_func_d`: derivative of objective function to minimize
+    /// - `state`: initial point to start from
+    pub fn start_from<FD>(self, obj_func_d: FD, state: Point<A>) -> FixedStepSteepest<A, FD>
     where
-        P: Problem<Elem = A>,
+        FD: Fn(ArrayView1<A>) -> Array1<A>,
     {
-        if state.len() == problem.bounds().count() {
-            Ok(FixedStepSteepest::new(state, self, problem))
-        } else {
-            Err((MismatchedLengthError, self, problem, state))
-        }
+        FixedStepSteepest::new(state, self, obj_func_d)
     }
 
     fn initial_state_using<R>(

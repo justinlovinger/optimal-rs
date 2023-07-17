@@ -79,17 +79,14 @@ derive_from_str_from_try_into!(AdjustRate(f64));
 #[cfg_attr(feature = "serde", serde(try_from = "f64"))]
 pub struct MutationChance(f64);
 
-impl<P> DefaultFor<P> for MutationChance
-where
-    P: super::Problem,
-{
+impl DefaultFor<usize> for MutationChance {
     /// Return recommended default mutation chance,
     /// average of one mutation per step.
-    fn default_for(problem: P) -> Self {
-        if problem.len() == 0 {
+    fn default_for(num_bits: usize) -> Self {
+        if num_bits == 0 {
             Self(1.)
         } else {
-            Self(1. / problem.len() as f64)
+            Self(1. / num_bits as f64)
         }
     }
 }

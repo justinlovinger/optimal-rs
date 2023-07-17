@@ -1,4 +1,6 @@
 #![allow(clippy::needless_doctest_main)]
+#![cfg_attr(test, feature(unboxed_closures))]
+#![cfg_attr(test, feature(fn_traits))]
 
 //! Mathematical optimization and machine learning framework
 //! and algorithms.
@@ -33,54 +35,25 @@
 //! ```
 //! use ndarray::prelude::*;
 //! use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
-//! use streaming_iterator::StreamingIterator;
 //!
-//! fn main() {
-//!     let mut o = Config::start_default_for(Count);
-//!     let point = UntilConvergedConfig::default().argmin(&mut o);
-//!     let point_value = Count.evaluate(point.view().into_shape((1, Count.len())).unwrap())[0];
-//!     println!("f({point}) = {point_value}");
-//! }
-//!
-//! struct Count;
-//!
-//! impl Problem for Count {
-//!     type Value = u64;
-//!
-//!     fn evaluate(&self, points: ArrayView2<bool>) -> Array1<Self::Value> {
-//!         points.fold_axis(Axis(1), 0, |acc, b| acc + *b as u64)
-//!     }
-//!
-//!     fn len(&self) -> usize {
-//!         16
-//!     }
-//! }
+//! println!(
+//!     "{}",
+//!     UntilConvergedConfig::default().argmin(&mut Config::start_default_for(16, |points| {
+//!         points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
+//!     }))
+//! );
 //! ```
 //!
 //! Minimize a problem
 //! one step at a time:
 //!
 //! ```
-//! # use ndarray::prelude::*;
-//! # use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
-//! # use streaming_iterator::StreamingIterator;
-//! #
-//! # #[derive(Clone, Debug)]
-//! # struct Count;
-//! #
-//! # impl Problem for Count {
-//! #     type Value = u64;
-//! #
-//! #     fn evaluate(&self, points: ArrayView2<bool>) -> Array1<Self::Value> {
-//! #         points.fold_axis(Axis(1), 0, |acc, b| acc + *b as u64)
-//! #     }
-//! #
-//! #     fn len(&self) -> usize {
-//! #         16
-//! #     }
-//! # }
-//! #
-//! let mut it = UntilConvergedConfig::default().start(Config::start_default_for(Count));
+//! use ndarray::prelude::*;
+//! use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
+//!
+//! let mut it = UntilConvergedConfig::default().start(Config::start_default_for(16, |points| {
+//!     points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
+//! }));
 //! while let Some(o) = it.next() {
 //!     println!("{:?}", o.state());
 //! }
@@ -122,47 +95,33 @@ mod tests {
     macro_rules! mock_optimizer {
         ( $id:ident ) => {
             paste::paste! {
-                trait [< Problem $id >] {
-                    fn evaluate(&self, x: usize) -> usize;
-                }
-
                 #[derive(Clone, Debug, Serialize, Deserialize)]
-                struct [< MockProblem $id >];
-
-                impl [< Problem $id >] for [< MockProblem $id >] {
-                    fn evaluate(&self, x: usize) -> usize {
-                        mock_obj_func(x)
-                    }
-                }
-
-                #[derive(Clone, Debug, Serialize, Deserialize)]
-                struct [< MockOptimizer $id >]<P> {
-                    problem: P,
+                struct [< MockOptimizer $id >]<F> {
+                    obj_func: F,
                     state: usize,
                 }
 
-                impl<P> [< MockOptimizer $id >]<P> {
-                    fn new(problem: P) -> Self {
-                        Self { problem, state: 0 }
+                impl<F> [< MockOptimizer $id >]<F> {
+                    fn new(obj_func: F) -> Self {
+                        Self { obj_func, state: 0 }
                     }
 
-                    #[allow(dead_code)]
                     fn evaluation(&self) -> usize
                     where
-                        P: [< Problem $id >],
+                        F: Fn(usize) -> usize
                     {
-                        self.problem.evaluate(self.state)
+                        (self.obj_func)(self.state)
                     }
                 }
 
-                impl<P> StreamingIterator for [< MockOptimizer $id >]<P>
+                impl<F> StreamingIterator for [< MockOptimizer $id >]<F>
                 where
-                    P: [< Problem $id >],
+                    F: Fn(usize) -> usize
                 {
                     type Item = Self;
 
                     fn advance(&mut self) {
-                        self.state += self.problem.evaluate(self.state)
+                        self.state += self.evaluation()
                     }
 
                     fn get(&self) -> Option<&Self::Item> {
@@ -232,11 +191,11 @@ mod tests {
             mock_obj_func,
             [
                 Box::new(
-                    MockOptimizerA::new(MockProblemA)
+                    MockOptimizerA::new(mock_obj_func)
                         .map_ref(|x| x as &dyn Optimizer<Point = usize>),
                 ) as BoxedOptimizer<usize>,
                 Box::new(
-                    MockOptimizerB::new(MockProblemB)
+                    MockOptimizerB::new(mock_obj_func)
                         .map_ref(|x| x as &dyn Optimizer<Point = usize>),
                 ) as BoxedOptimizer<usize>,
             ],
@@ -263,7 +222,7 @@ mod tests {
             handler2.join().unwrap();
         }
 
-        parallel(|| MockOptimizerA::new(MockProblemA));
+        parallel(|| MockOptimizerA::new(mock_obj_func));
     }
 
     #[test]
@@ -272,7 +231,7 @@ mod tests {
         // this is a bit of a hack
         // because methods providing evaluations are current a convention,
         // not a part of the API.
-        MockOptimizerA::new(MockProblemA)
+        MockOptimizerA::new(mock_obj_func)
             .inspect(|o| println!("state: {:?}, evaluation: {:?}", o.state, o.evaluation()))
             .nth(10);
     }
@@ -289,7 +248,7 @@ mod tests {
 
         impl<P> Restart for MockOptimizerA<P> {
             fn restart(&mut self) {
-                replace_with_or_abort(self, |this| MockOptimizerA::new(this.problem))
+                replace_with_or_abort(self, |this| MockOptimizerA::new(this.obj_func))
             }
         }
 
@@ -344,7 +303,7 @@ mod tests {
         }
 
         let _ = RestarterConfig { max_restarts: 10 }
-            .start(MaxStepsConfig(10).start(MockOptimizerA::new(MockProblemA)))
+            .start(MaxStepsConfig(10).start(MockOptimizerA::new(mock_obj_func)))
             .nth(100);
     }
 
@@ -355,18 +314,21 @@ mod tests {
     #[test]
     fn dynamic_optimizers_should_be_partially_runable() {
         #[derive(Clone, Debug, Serialize, Deserialize)]
-        enum DynOptimizer {
-            A(MockOptimizerA<MockProblemA>),
-            B(MockOptimizerB<MockProblemB>),
+        enum DynOptimizer<F> {
+            A(MockOptimizerA<F>),
+            B(MockOptimizerB<F>),
         }
 
-        impl StreamingIterator for DynOptimizer {
+        impl<F> StreamingIterator for DynOptimizer<F>
+        where
+            F: Fn(usize) -> usize,
+        {
             type Item = Self;
 
             fn advance(&mut self) {
                 match self {
-                    DynOptimizer::A(x) => x.advance(),
-                    DynOptimizer::B(x) => x.advance(),
+                    Self::A(x) => x.advance(),
+                    Self::B(x) => x.advance(),
                 }
             }
 
@@ -375,18 +337,40 @@ mod tests {
             }
         }
 
-        impl Optimizer for DynOptimizer {
+        impl<F> Optimizer for DynOptimizer<F> {
             type Point = usize;
 
             fn best_point(&self) -> Self::Point {
                 match self {
-                    DynOptimizer::A(x) => x.best_point(),
-                    DynOptimizer::B(x) => x.best_point(),
+                    Self::A(x) => x.best_point(),
+                    Self::B(x) => x.best_point(),
                 }
             }
         }
 
-        let mut o = MaxStepsConfig(10).start(DynOptimizer::A(MockOptimizerA::new(MockProblemA)));
+        #[derive(Clone, Debug, Serialize, Deserialize)]
+        struct MockObjFunc;
+
+        impl FnOnce<(usize,)> for MockObjFunc {
+            type Output = usize;
+            extern "rust-call" fn call_once(self, args: (usize,)) -> Self::Output {
+                mock_obj_func(args.0)
+            }
+        }
+
+        impl FnMut<(usize,)> for MockObjFunc {
+            extern "rust-call" fn call_mut(&mut self, args: (usize,)) -> Self::Output {
+                mock_obj_func(args.0)
+            }
+        }
+
+        impl Fn<(usize,)> for MockObjFunc {
+            extern "rust-call" fn call(&self, args: (usize,)) -> Self::Output {
+                mock_obj_func(args.0)
+            }
+        }
+
+        let mut o = MaxStepsConfig(10).start(DynOptimizer::A(MockOptimizerA::new(MockObjFunc)));
         o.next();
         let store = serde_json::to_string(&o).unwrap();
         o = serde_json::from_str(&store).unwrap();

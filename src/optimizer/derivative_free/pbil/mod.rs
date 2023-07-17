@@ -7,28 +7,13 @@
 //! ```
 //! use ndarray::prelude::*;
 //! use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
-//! use streaming_iterator::StreamingIterator;
 //!
-//! fn main() {
-//!     let mut o = Config::start_default_for(Count);
-//!     let point = UntilConvergedConfig::default().argmin(&mut o);
-//!     let point_value = Count.evaluate(point.view().into_shape((1, Count.len())).unwrap())[0];
-//!     println!("f({point}) = {point_value}");
-//! }
-//!
-//! struct Count;
-//!
-//! impl Problem for Count {
-//!     type Value = u64;
-//!
-//!     fn evaluate(&self, points: ArrayView2<bool>) -> Array1<Self::Value> {
-//!         points.fold_axis(Axis(1), 0, |acc, b| acc + *b as u64)
-//!     }
-//!
-//!     fn len(&self) -> usize {
-//!         16
-//!     }
-//! }
+//! println!(
+//!     "{}",
+//!     UntilConvergedConfig::default().argmin(&mut Config::start_default_for(16, |points| {
+//!         points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
+//!     }))
+//! );
 //! ```
 
 mod states;
@@ -36,13 +21,12 @@ mod types;
 
 use std::fmt::Debug;
 
-use blanket::blanket;
 use derive_getters::Getters;
 use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
 use rand_xoshiro::{SplitMix64, Xoshiro256PlusPlus};
 
-use crate::{optimizer::MismatchedLengthError, prelude::*};
+use crate::prelude::*;
 
 pub use self::{states::*, types::*};
 
@@ -55,10 +39,7 @@ pub trait Probabilities {
     fn probabilities(&self) -> &Array1<Probability>;
 }
 
-impl<P> Probabilities for Pbil<P>
-where
-    P: Problem,
-{
+impl<B, F> Probabilities for Pbil<B, F> {
     fn probabilities(&self) -> &Array1<Probability> {
         self.state().probabilities()
     }
@@ -88,93 +69,72 @@ where
     }
 }
 
-/// A PBIL optimization problem.
-#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-#[allow(clippy::len_without_is_empty)] // Problems should never have no length.
-pub trait Problem {
-    /// Value of a point in this problem space.
-    type Value;
-
-    /// Return the objective values of points in this problem space.
-    fn evaluate(&self, points: ArrayView2<bool>) -> Array1<Self::Value>;
-
-    /// Return the length of each point in this problem space.
-    fn len(&self) -> usize;
-}
-
 /// A running PBIL optimizer.
 #[derive(Clone, Debug, Getters)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Pbil<P>
-where
-    P: Problem,
-{
+pub struct Pbil<B, F> {
     /// Optimizer configuration.
     config: Config,
 
-    /// Problem being optimized.
-    problem: P,
+    /// Objective function to minimize.
+    obj_func: F,
 
     /// State of optimizer.
     state: State,
 
     #[getter(skip)]
     #[cfg_attr(feature = "serde", serde(skip))]
-    evaluation_cache: OnceCell<Evaluation<P::Value>>,
+    evaluation_cache: OnceCell<Evaluation<B>>,
 }
 
-impl<P> Pbil<P>
-where
-    P: Problem,
-{
-    fn new(state: State, config: Config, problem: P) -> Self {
+impl<B, F> Pbil<B, F> {
+    fn new(state: State, config: Config, obj_func: F) -> Self {
         Self {
-            problem,
             config,
+            obj_func,
             state,
             evaluation_cache: OnceCell::new(),
         }
     }
 
-    /// Return configuration, problem, and state.
-    pub fn into_inner(self) -> (Config, P, State) {
-        (self.config, self.problem, self.state)
+    /// Return configuration, state, and problem parameters.
+    pub fn into_inner(self) -> (Config, State, F) {
+        (self.config, self.state, self.obj_func)
     }
 }
 
-impl<P> Pbil<P>
+impl<B, F> Pbil<B, F>
 where
-    P: Problem,
+    F: Fn(ArrayView2<bool>) -> Array1<B>,
 {
     /// Return value of the best point discovered.
-    pub fn best_point_value(&self) -> P::Value {
-        self.problem()
-            .evaluate(
-                self.best_point()
-                    .view()
-                    .into_shape((1, self.problem().len()))
-                    .unwrap(),
-            )
-            .into_iter()
-            .next()
-            .unwrap()
+    pub fn best_point_value(&self) -> B {
+        (self.obj_func)(
+            self.best_point()
+                .view()
+                .into_shape((1, self.state().num_bits()))
+                .unwrap(),
+        )
+        .into_iter()
+        .next()
+        .unwrap()
     }
 
     /// Return evaluation of current state,
     /// evaluating and caching if necessary.
-    pub fn evaluation(&self) -> &Evaluation<P::Value> {
+    pub fn evaluation(&self) -> &Evaluation<B> {
         self.evaluation_cache.get_or_init(|| self.evaluate())
     }
 
-    fn evaluate(&self) -> Evaluation<P::Value> {
-        self.state.evaluatee().map(|xs| self.problem.evaluate(xs))
+    fn evaluate(&self) -> Evaluation<B> {
+        self.state.evaluatee().map(|xs| (self.obj_func)(xs))
     }
 }
 
-impl<P> StreamingIterator for Pbil<P>
+impl<B, F> StreamingIterator for Pbil<B, F>
 where
-    P: Problem,
-    P::Value: Debug + PartialOrd,
+    B: Debug + PartialOrd,
+    F: Fn(ArrayView2<bool>) -> Array1<B>,
 {
     type Item = Self;
 
@@ -207,10 +167,7 @@ where
     }
 }
 
-impl<P> Optimizer for Pbil<P>
-where
-    P: Problem,
-{
+impl<B, F> Optimizer for Pbil<B, F> {
     type Point = Array1<bool>;
 
     fn best_point(&self) -> Self::Point {
@@ -269,15 +226,12 @@ impl Config {
     }
 }
 
-impl<P> DefaultFor<P> for Config
-where
-    P: Problem,
-{
-    fn default_for(problem: P) -> Self {
+impl DefaultFor<usize> for Config {
+    fn default_for(num_bits: usize) -> Self {
         Self {
             num_samples: NumSamples::default(),
             adjust_rate: AdjustRate::default(),
-            mutation_chance: MutationChance::default_for(problem),
+            mutation_chance: MutationChance::default_for(num_bits),
             mutation_adjust_rate: MutationAdjustRate::default(),
         }
     }
@@ -286,57 +240,67 @@ where
 impl Config {
     /// Return this optimizer default
     /// running on the given problem.
-    pub fn start_default_for<P>(problem: P) -> Pbil<P>
+    ///
+    /// # Arguments
+    ///
+    /// - `num_bits`: number of bits in each point
+    /// - `obj_func`: objective function to minimize
+    pub fn start_default_for<B, F>(num_bits: usize, obj_func: F) -> Pbil<B, F>
     where
-        P: Problem,
+        F: Fn(ArrayView2<bool>) -> Array1<B>,
     {
-        Self::default_for(&problem).start(problem)
+        Self::default_for(num_bits).start(num_bits, obj_func)
     }
 
     /// Return this optimizer
     /// running on the given problem.
     ///
     /// This may be nondeterministic.
-    pub fn start<P>(self, problem: P) -> Pbil<P>
+    ///
+    /// # Arguments
+    ///
+    /// - `num_bits`: number of bits in each point
+    /// - `obj_func`: objective function to minimize
+    pub fn start<B, F>(self, num_bits: usize, obj_func: F) -> Pbil<B, F>
     where
-        P: Problem,
+        F: Fn(ArrayView2<bool>) -> Array1<B>,
     {
-        Pbil::new(State::Ready(Ready::initial(problem.len())), self, problem)
+        Pbil::new(State::Ready(Ready::initial(num_bits)), self, obj_func)
     }
 
     /// Return this optimizer
     /// running on the given problem
     /// initialized using `rng`.
-    pub fn start_using<P>(self, problem: P, rng: &mut SplitMix64) -> Pbil<P>
+    ///
+    /// # Arguments
+    ///
+    /// - `num_bits`: number of bits in each point
+    /// - `obj_func`: objective function to minimize
+    /// - `rng`: source of randomness
+    pub fn start_using<B, F>(self, num_bits: usize, obj_func: F, rng: &mut SplitMix64) -> Pbil<B, F>
     where
-        P: Problem,
+        F: Fn(ArrayView2<bool>) -> Array1<B>,
     {
         Pbil::new(
-            State::Ready(Ready::initial_using(problem.len(), rng)),
+            State::Ready(Ready::initial_using(num_bits, rng)),
             self,
-            problem,
+            obj_func,
         )
     }
 
     /// Return this optimizer
     /// running on the given problem.
     /// if the given `state` is valid.
-    #[allow(clippy::result_large_err)]
-    pub fn start_from<P>(
-        self,
-        problem: P,
-        state: State,
-    ) -> Result<Pbil<P>, (MismatchedLengthError, Self, P, State)>
+    ///
+    /// # Arguments
+    ///
+    /// - `obj_func`: objective function to minimize
+    /// - `state`: PBIL state to start from
+    pub fn start_from<B, F>(self, obj_func: F, state: State) -> Pbil<B, F>
     where
-        P: Problem,
+        F: Fn(ArrayView2<bool>) -> Array1<B>,
     {
-        // If `Sampling::samples` could be changed independent of `probabilities`,
-        // it would need to be validated.
-        if state.probabilities().len() == problem.len() {
-            Ok(Pbil::new(state, self, problem))
-        } else {
-            Err((MismatchedLengthError, self, problem, state))
-        }
+        Pbil::new(state, self, obj_func)
     }
 }
 
@@ -344,6 +308,11 @@ impl State {
     /// Return custom initial state.
     pub fn new(probabilities: Array1<Probability>, rng: Xoshiro256PlusPlus) -> Self {
         Self::Ready(Ready::new(probabilities, rng))
+    }
+
+    /// Return number of bits being optimized.
+    pub fn num_bits(&self) -> usize {
+        self.probabilities().len()
     }
 
     /// Return data to be evaluated.
