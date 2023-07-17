@@ -1,5 +1,9 @@
 {
   inputs = {
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     naersk = {
       url = "github:nix-community/naersk/master";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -10,6 +14,7 @@
 
   outputs = {
     self,
+    fenix,
     nixpkgs,
     utils,
     naersk,
@@ -20,17 +25,12 @@
     in {
       defaultPackage = naersk-lib.buildPackage {
         src = ./.;
-        doCheck = true;
+        doCheck = false; # Tests require nightly Rust.
       };
       devShell = with pkgs;
         mkShell {
-          buildInputs = [
-            cargo
-            cargo-tarpaulin
-            rust-analyzer
-            rustc
-            rustfmt
-            rustPackages.clippy
+          nativeBuildInputs = [
+            fenix.packages.${system}.latest.toolchain
           ];
         };
     });
