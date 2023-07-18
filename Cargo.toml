@@ -7,7 +7,7 @@ edition = "2021"
 serde = ["dep:serde", "ndarray/serde", "rand_xoshiro/serde1"]
 
 [dependencies]
-blanket = { git = "https://github.com/JustinLovinger/blanket.git", branch = "develop" }
+blanket = "0.3.0"
 derive-getters = "0.3.0"
 derive_more = "0.99"
 lazy_static = "1.4.0"
