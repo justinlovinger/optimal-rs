@@ -81,15 +81,15 @@ pub struct BacktrackingSteepest<A, F, FD> {
     /// Optimizer configuration.
     config: Config<A>,
 
+    /// State of optimizer.
+    state: State<A>,
+
     /// Objective function to minimize.
     obj_func: F,
 
     /// Function returning value and partial derivatives
     /// of objective function to minimize.
     obj_func_d: FD,
-
-    /// State of optimizer.
-    state: State<A>,
 
     #[getter(skip)]
     #[cfg_attr(feature = "serde", serde(skip))]

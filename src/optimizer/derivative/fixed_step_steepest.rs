@@ -44,11 +44,11 @@ pub struct FixedStepSteepest<A, FD> {
     /// Optimizer configuration.
     config: Config<A>,
 
-    /// Derivative of objective function to minimize.
-    obj_func_d: FD,
-
     /// State of optimizer.
     state: Point<A>,
+
+    /// Derivative of objective function to minimize.
+    obj_func_d: FD,
 
     #[getter(skip)]
     #[cfg_attr(feature = "serde", serde(skip))]

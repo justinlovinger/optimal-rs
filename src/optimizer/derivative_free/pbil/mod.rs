@@ -76,11 +76,11 @@ pub struct Pbil<B, F> {
     /// Optimizer configuration.
     config: Config,
 
-    /// Objective function to minimize.
-    obj_func: F,
-
     /// State of optimizer.
     state: State,
+
+    /// Objective function to minimize.
+    obj_func: F,
 
     #[getter(skip)]
     #[cfg_attr(feature = "serde", serde(skip))]
