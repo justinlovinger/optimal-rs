@@ -275,7 +275,7 @@ impl<A> Config<A> {
     /// This may be nondeterministic.
     pub fn start<F, FD>(
         self,
-        initial_bounds: impl Iterator<Item = RangeInclusive<A>>,
+        initial_bounds: impl IntoIterator<Item = RangeInclusive<A>>,
         obj_func: F,
         obj_func_d: FD,
     ) -> BacktrackingSteepest<A, F, FD>
@@ -297,7 +297,7 @@ impl<A> Config<A> {
     /// initialized using `rng`.
     pub fn start_using<F, FD, R>(
         self,
-        initial_bounds: impl Iterator<Item = RangeInclusive<A>>,
+        initial_bounds: impl IntoIterator<Item = RangeInclusive<A>>,
         obj_func: F,
         obj_func_d: FD,
         rng: &mut R,
@@ -343,7 +343,7 @@ impl<A> Config<A> {
 
     fn initial_state_using<R>(
         &self,
-        initial_bounds: impl Iterator<Item = RangeInclusive<A>>,
+        initial_bounds: impl IntoIterator<Item = RangeInclusive<A>>,
         rng: &mut R,
     ) -> State<A>
     where
@@ -352,6 +352,7 @@ impl<A> Config<A> {
     {
         State::new(
             initial_bounds
+                .into_iter()
                 .map(|range| {
                     let (start, end) = range.into_inner();
                     Uniform::new_inclusive(start, end).sample(rng)

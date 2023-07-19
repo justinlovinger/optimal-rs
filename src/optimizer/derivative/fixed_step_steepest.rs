@@ -146,7 +146,7 @@ impl<A> Config<A> {
     /// - `obj_func_d`: derivative of objective function to minimize
     pub fn start<FD>(
         self,
-        initial_bounds: impl Iterator<Item = RangeInclusive<A>>,
+        initial_bounds: impl IntoIterator<Item = RangeInclusive<A>>,
         obj_func_d: FD,
     ) -> FixedStepSteepest<A, FD>
     where
@@ -169,7 +169,7 @@ impl<A> Config<A> {
     /// - `rng`: source of randomness
     pub fn start_using<FD, R>(
         self,
-        initial_bounds: impl Iterator<Item = RangeInclusive<A>>,
+        initial_bounds: impl IntoIterator<Item = RangeInclusive<A>>,
         obj_func_d: FD,
         rng: &mut R,
     ) -> FixedStepSteepest<A, FD>
@@ -200,7 +200,7 @@ impl<A> Config<A> {
 
     fn initial_state_using<R>(
         &self,
-        initial_bounds: impl Iterator<Item = RangeInclusive<A>>,
+        initial_bounds: impl IntoIterator<Item = RangeInclusive<A>>,
         rng: &mut R,
     ) -> Point<A>
     where
@@ -208,6 +208,7 @@ impl<A> Config<A> {
         R: Rng,
     {
         initial_bounds
+            .into_iter()
             .map(|range| {
                 let (start, end) = range.into_inner();
                 Uniform::new_inclusive(start, end).sample(rng)
