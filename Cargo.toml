@@ -2,6 +2,16 @@
 name = "optimal"
 version = "0.1.0"
 edition = "2021"
+authors = ["Justin Lovinger"]
+description = "Mathematical optimization and machine learning framework and algorithms"
+repository = "https://github.com/justinlovinger/optimal-rs"
+readme = "README.md"
+keywords = ["ai", "machine-learning", "optimization"]
+categories = ["science", "mathematics"]
+license = "MIT"
+
+[badges]
+github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 
 [features]
 serde = ["dep:serde", "ndarray/serde", "rand_xoshiro/serde1"]

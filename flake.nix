@@ -30,8 +30,13 @@
       devShell = with pkgs;
         mkShell {
           nativeBuildInputs = [
+            cargo-readme
             fenix.packages.${system}.latest.toolchain
           ];
+
+          shellHook = ''
+            ln -f .hooks/* .git/hooks/
+          '';
         };
     });
 }
