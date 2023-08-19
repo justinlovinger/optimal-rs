@@ -1,18 +1,25 @@
-//! Derivative optimization,
-//! gradient descent.
+#![warn(missing_debug_implementations)]
+#![warn(missing_docs)]
+
+//! Steepest descent optimizers.
 
 pub mod backtracking_steepest;
 pub mod fixed_step_steepest;
 
 use std::ops::Mul;
 
+use derive_bounded::{derive_into_inner, derive_new_from_lower_bounded_partial_ord};
 use derive_more::Display;
 use num_traits::{bounds::LowerBounded, real::Real};
 
-use crate::derive::{derive_into_inner, derive_new_from_lower_bounded_partial_ord};
-
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+/// Error returned when
+/// problem length does not match state length.
+#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
+#[error("problem length does not match state length")]
+pub struct MismatchedLengthError;
 
 /// Multiplier for each component of a step direction
 /// in derivative optimization.

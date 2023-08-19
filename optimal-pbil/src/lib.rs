@@ -1,4 +1,6 @@
 #![allow(clippy::needless_doctest_main)]
+#![warn(missing_debug_implementations)]
+#![warn(missing_docs)]
 
 //! Population-based incremental learning (PBIL).
 //!
@@ -6,7 +8,8 @@
 //!
 //! ```
 //! use ndarray::prelude::*;
-//! use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
+//! use optimal_pbil::*;
+//! use optimal::prelude::*;
 //!
 //! println!(
 //!     "{}",
@@ -21,17 +24,23 @@ mod types;
 
 use std::fmt::Debug;
 
+use default_for::DefaultFor;
 use derive_getters::Getters;
 use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
+use optimal::prelude::*;
 use rand_xoshiro::{SplitMix64, Xoshiro256PlusPlus};
-
-use crate::prelude::*;
 
 pub use self::{states::*, types::*};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+/// Error returned when
+/// problem length does not match state length.
+#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
+#[error("problem length does not match state length")]
+pub struct MismatchedLengthError;
 
 /// A type containing an array of probabilities.
 pub trait Probabilities {

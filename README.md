@@ -34,7 +34,8 @@ using a PBIL optimizer:
 
 ```rust
 use ndarray::prelude::*;
-use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
+use optimal_pbil::*;
+use optimal::prelude::*;
 
 println!(
     "{}",
@@ -49,7 +50,8 @@ one step at a time:
 
 ```rust
 use ndarray::prelude::*;
-use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
+use optimal_pbil::*;
+use optimal::prelude::*;
 
 let mut it = UntilConvergedConfig::default().start(Config::start_default_for(16, |points| {
     points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())

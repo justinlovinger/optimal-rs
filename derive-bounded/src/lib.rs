@@ -1,9 +1,13 @@
 #![allow(unused_macros)]
 #![allow(unused_imports)]
 
+pub use paste;
+pub use thiserror;
+
+#[macro_export]
 macro_rules! derive_new_from_bounded_partial_ord {
     ( $type:ident < $a:ty : $bound:ident > ) => {
-        crate::derive::_derive_new_from_bounded_partial_ord!(
+        $crate::_derive_new_from_bounded_partial_ord!(
             $type<$a: $bound>,
             $a,
             IsIncomparable,
@@ -11,7 +15,7 @@ macro_rules! derive_new_from_bounded_partial_ord {
         );
     };
     ( $type:ident {( $inner:ty )} ) => {
-        crate::derive::_derive_new_from_bounded_partial_ord!(
+        $crate::_derive_new_from_bounded_partial_ord!(
             $type,
             $inner,
             IsIncomparable,
@@ -20,20 +24,22 @@ macro_rules! derive_new_from_bounded_partial_ord {
     };
 }
 
+#[macro_export]
 macro_rules! derive_new_from_bounded_float {
     ( $type:ident < $a:ty : $bound:ident > ) => {
-        crate::derive::_derive_new_from_bounded_partial_ord!($type<$a: $bound>, $a, IsNan, "NaN");
+        $crate::_derive_new_from_bounded_partial_ord!($type<$a: $bound>, $a, IsNan, "NaN");
     };
     ( $type:ident ( $inner:ty ) ) => {
-        crate::derive::_derive_new_from_bounded_partial_ord!($type, $inner, IsNan, "NaN");
+        $crate::_derive_new_from_bounded_partial_ord!($type, $inner, IsNan, "NaN");
     };
 }
 
+#[macro_export]
 macro_rules! _derive_new_from_bounded_partial_ord {
     ( $type:ident $( < $a:ty : $bound:ident > )?, $inner:ty, $incomparable_name:ident, $incomparable_str:literal ) => {
-        paste::paste! {
+        $crate::paste::paste! {
             #[doc = "Error returned when '" $type "' is given an invalid value."]
-            #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
+            #[derive(Clone, Copy, Debug, $crate::thiserror::Error, PartialEq)]
             pub enum [<Invalid $type Error>] $(< $a : $bound >)? {
                 #[doc = "Value is " $incomparable_str "."]
                 #[error("{0} is {}", $incomparable_str)]
@@ -64,9 +70,10 @@ macro_rules! _derive_new_from_bounded_partial_ord {
     };
 }
 
+#[macro_export]
 macro_rules! derive_new_from_lower_bounded_partial_ord {
     ( $type:ident < $a:ty : $bound:ident > ) => {
-        crate::derive::_derive_new_from_lower_bounded_partial_ord!(
+        $crate::_derive_new_from_lower_bounded_partial_ord!(
             $type<$a: $bound>,
             $a,
             IsIncomparable,
@@ -74,7 +81,7 @@ macro_rules! derive_new_from_lower_bounded_partial_ord {
         );
     };
     ( $type:ident {( $inner:ty )} ) => {
-        crate::derive::_derive_new_from_lower_bounded_partial_ord!(
+        $crate::_derive_new_from_lower_bounded_partial_ord!(
             $type,
             $inner,
             IsIncomparable,
@@ -83,25 +90,22 @@ macro_rules! derive_new_from_lower_bounded_partial_ord {
     };
 }
 
+#[macro_export]
 macro_rules! derive_new_from_lower_bounded_float {
     ( $type:ident < $a:ty : $bound:ident > ) => {
-        crate::derive::_derive_new_from_lower_bounded_partial_ord!(
-            $type<$a: $bound>,
-            $a,
-            IsNan,
-            "NaN"
-        );
+        $crate::_derive_new_from_lower_bounded_partial_ord!($type<$a: $bound>, $a, IsNan, "NaN");
     };
     ( $type:ident ( $inner:ty ) ) => {
-        crate::derive::_derive_new_from_lower_bounded_partial_ord!($type, $inner, IsNan, "NaN");
+        $crate::_derive_new_from_lower_bounded_partial_ord!($type, $inner, IsNan, "NaN");
     };
 }
 
+#[macro_export]
 macro_rules! _derive_new_from_lower_bounded_partial_ord {
     ( $type:ident $( < $a:ty : $bound:ident > )?, $inner:ty, $incomparable_name:ident, $incomparable_str:literal ) => {
-        paste::paste! {
+        $crate::paste::paste! {
             #[doc = "Error returned when '" $type "' is given an invalid value."]
-            #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq, Eq)]
+            #[derive(Clone, Copy, Debug, $crate::thiserror::Error, PartialEq, Eq)]
             pub enum [<Invalid $type Error>] $(< $a : $bound >)? {
                 #[doc = "Value is " $incomparable_str "."]
                 #[error("{0} is {}", $incomparable_str)]
@@ -125,11 +129,12 @@ macro_rules! _derive_new_from_lower_bounded_partial_ord {
     };
 }
 
+#[macro_export]
 macro_rules! derive_new_from_lower_bounded {
     ( $type:ident ( $inner: ty ) ) => {
-        paste::paste! {
+        $crate::paste::paste! {
             #[doc = "Error returned when '" $type "' is given a value below the lower bound."]
-            #[derive(Clone, Copy, Debug, thiserror::Error)]
+            #[derive(Clone, Copy, Debug, $crate::thiserror::Error)]
             #[error("{0} is below the lower bound ({})", $type::min_value())]
             pub struct [<Invalid $type Error>]($inner);
 
@@ -147,9 +152,10 @@ macro_rules! derive_new_from_lower_bounded {
     };
 }
 
+#[macro_export]
 macro_rules! derive_try_from_from_new {
     ( $type:ident ( $inner:ty ) ) => {
-        paste::paste! {
+        $crate::paste::paste! {
             impl core::convert::TryFrom<$inner> for $type {
                 type Error = [<Invalid $type Error>];
                 fn try_from(value: $inner) -> Result<Self, Self::Error> {
@@ -160,11 +166,12 @@ macro_rules! derive_try_from_from_new {
     };
 }
 
+#[macro_export]
 macro_rules! derive_from_str_from_try_into {
     ( $type:ident ( $inner:ty ) ) => {
-        paste::paste! {
+        $crate::paste::paste! {
             #[doc = "Error returned when failing to convert from a string or into '" $type "'."]
-            #[derive(Clone, Copy, Debug, thiserror::Error)]
+            #[derive(Clone, Copy, Debug, $crate::thiserror::Error)]
             pub enum [<$type FromStrError>]<A, B> {
                 #[doc = "Error convering to '" $inner "'."]
                 FromStr(A),
@@ -188,9 +195,10 @@ macro_rules! derive_from_str_from_try_into {
     };
 }
 
+#[macro_export]
 macro_rules! derive_into_inner {
     ( $type:ident ( $inner:ty ) ) => {
-        paste::paste! {
+        $crate::paste::paste! {
             impl $type {
                 #[doc = "Unwrap '" $type "' into inner value."]
                 pub fn into_inner(self) -> $inner {
@@ -200,7 +208,7 @@ macro_rules! derive_into_inner {
         }
     };
     ( $type:ident < $a:ty > ) => {
-        paste::paste! {
+        $crate::paste::paste! {
             impl < $a > $type < $a > {
                 #[doc = "Unwrap '" $type "' into inner value."]
                 pub fn into_inner(self) -> $a {
@@ -210,14 +218,3 @@ macro_rules! derive_into_inner {
         }
     };
 }
-
-pub(crate) use _derive_new_from_bounded_partial_ord;
-pub(crate) use _derive_new_from_lower_bounded_partial_ord;
-pub(crate) use derive_from_str_from_try_into;
-pub(crate) use derive_into_inner;
-pub(crate) use derive_new_from_bounded_float;
-pub(crate) use derive_new_from_bounded_partial_ord;
-pub(crate) use derive_new_from_lower_bounded;
-pub(crate) use derive_new_from_lower_bounded_float;
-pub(crate) use derive_new_from_lower_bounded_partial_ord;
-pub(crate) use derive_try_from_from_new;

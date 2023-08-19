@@ -9,7 +9,8 @@
 //! ```
 //! use ndarray::{prelude::*, Data};
 //! use ndarray_rand::RandomExt;
-//! use optimal::{optimizer::derivative::backtracking_steepest::*, prelude::*};
+//! use optimal_steepest::backtracking_steepest::*;
+//! use optimal::prelude::*;
 //! use rand::distributions::Uniform;
 //! use streaming_iterator::StreamingIterator;
 //!
@@ -47,6 +48,10 @@ use std::{
     ops::{Add, Div, Mul, Neg, RangeInclusive, Sub},
 };
 
+use derive_bounded::{
+    derive_into_inner, derive_new_from_bounded_partial_ord,
+    derive_new_from_lower_bounded_partial_ord,
+};
 use derive_getters::Getters;
 use derive_more::Display;
 use ndarray::{linalg::Dot, prelude::*, Data, Zip};
@@ -56,20 +61,13 @@ use num_traits::{
     AsPrimitive, One,
 };
 use once_cell::sync::OnceCell;
+use optimal::prelude::*;
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
     prelude::*,
 };
 
-use crate::{
-    derive::{
-        derive_into_inner, derive_new_from_bounded_partial_ord,
-        derive_new_from_lower_bounded_partial_ord,
-    },
-    prelude::*,
-};
-
-use super::StepSize;
+pub use super::StepSize;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};

@@ -1,0 +1,15 @@
+[package]
+name = "default-for"
+version = "0.1.0"
+edition = "2021"
+authors = ["Justin Lovinger"]
+description = "Generalization of the `Default` trait"
+repository = "https://github.com/justinlovinger/optimal-rs"
+readme = "README.md"
+keywords = ["trait"]
+categories = ["rust-patterns"]
+license = "MIT"
+
+[dependencies]
+
+[dev-dependencies]

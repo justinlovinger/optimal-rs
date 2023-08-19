@@ -2,8 +2,4 @@
 
 pub use streaming_iterator::StreamingIterator;
 
-pub use crate::{
-    optimization::{optimizer::*, runner::*},
-    optimizer::derivative::StepSize,
-    traits::DefaultFor,
-};
+pub use crate::optimization::{optimizer::*, runner::*};

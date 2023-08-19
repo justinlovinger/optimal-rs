@@ -1,19 +1,17 @@
 use core::convert::TryFrom;
+use std::f64::EPSILON;
+
+use default_for::DefaultFor;
+use derive_bounded::{
+    derive_from_str_from_try_into, derive_into_inner, derive_new_from_bounded_float,
+    derive_new_from_lower_bounded, derive_try_from_from_new,
+};
 use derive_more::{Display, Into};
 use num_traits::bounds::{LowerBounded, UpperBounded};
 use rand::distributions::Bernoulli;
-use std::f64::EPSILON;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
-
-use crate::{
-    derive::{
-        derive_from_str_from_try_into, derive_into_inner, derive_new_from_bounded_float,
-        derive_new_from_lower_bounded, derive_try_from_from_new,
-    },
-    prelude::DefaultFor,
-};
 
 /// Number of samples generated
 /// during steps.

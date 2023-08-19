@@ -1,6 +1,8 @@
 #![allow(clippy::needless_doctest_main)]
 #![cfg_attr(test, feature(unboxed_closures))]
 #![cfg_attr(test, feature(fn_traits))]
+#![warn(missing_debug_implementations)]
+#![warn(missing_docs)]
 
 //! Mathematical optimization and machine learning framework
 //! and algorithms.
@@ -34,7 +36,8 @@
 //!
 //! ```
 //! use ndarray::prelude::*;
-//! use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
+//! use optimal_pbil::*;
+//! use optimal::prelude::*;
 //!
 //! println!(
 //!     "{}",
@@ -49,7 +52,8 @@
 //!
 //! ```
 //! use ndarray::prelude::*;
-//! use optimal::{optimizer::derivative_free::pbil::*, prelude::*};
+//! use optimal_pbil::*;
+//! use optimal::prelude::*;
 //!
 //! let mut it = UntilConvergedConfig::default().start(Config::start_default_for(16, |points| {
 //!     points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
@@ -61,14 +65,8 @@
 //! println!("f({}) = {}", o.best_point(), o.best_point_value());
 //! ```
 
-#![warn(missing_debug_implementations)]
-#![warn(missing_docs)]
-
-mod derive;
 mod optimization;
-pub mod optimizer;
 pub mod prelude;
-mod traits;
 
 #[cfg(test)]
 mod tests {

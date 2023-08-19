@@ -7,7 +7,8 @@
 //!
 //! ```
 //! use ndarray::prelude::*;
-//! use optimal::{optimizer::derivative::fixed_step_steepest::*, prelude::*};
+//! use optimal_steepest::fixed_step_steepest::*;
+//! use optimal::prelude::*;
 //!
 //! println!(
 //!     "{}",
@@ -25,14 +26,13 @@ use std::ops::{Mul, RangeInclusive, SubAssign};
 use derive_getters::Getters;
 use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
+use optimal::prelude::*;
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
     prelude::*,
 };
 
-use crate::prelude::*;
-
-use super::StepSize;
+pub use super::StepSize;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
