@@ -39,9 +39,11 @@ use optimal::prelude::*;
 
 println!(
     "{}",
-    UntilConvergedConfig::default().argmin(&mut Config::start_default_for(16, |points| {
-        points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
-    }))
+    UntilConvergedConfig::default()
+        .start(Config::start_default_for(16, |points| {
+            points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
+        }))
+        .argmin()
 );
 ```
 
@@ -59,7 +61,7 @@ let mut it = UntilConvergedConfig::default().start(Config::start_default_for(16,
 while let Some(o) = it.next() {
     println!("{:?}", o.state());
 }
-let o = it.into_inner().0;
+let o = it.stop();
 println!("f({}) = {}", o.best_point(), o.best_point_value());
 ```
 

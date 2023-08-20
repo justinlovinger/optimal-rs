@@ -11,9 +11,11 @@ use optimal::prelude::*;
 
 println!(
     "{}",
-    UntilConvergedConfig::default().argmin(&mut Config::start_default_for(16, |points| {
-        points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
-    }))
+    UntilConvergedConfig::default()
+        .start(Config::start_default_for(16, |points| {
+            points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
+        }))
+        .argmin()
 );
 ```
 

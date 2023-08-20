@@ -13,9 +13,11 @@
 //!
 //! println!(
 //!     "{}",
-//!     UntilConvergedConfig::default().argmin(&mut Config::start_default_for(16, |points| {
-//!         points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
-//!     }))
+//!     UntilConvergedConfig::default()
+//!         .start(Config::start_default_for(16, |points| {
+//!             points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
+//!         }))
+//!         .argmin()
 //! );
 //! ```
 
@@ -56,6 +58,15 @@ impl<B, F> Probabilities for Pbil<B, F> {
 
 /// PBIL runner
 /// to check for converged probabilities.
+#[derive(Clone, Debug, Getters)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct UntilConvergedRunner<I> {
+    config: UntilConvergedConfig,
+    it: I,
+}
+
+/// Config for PBIL runner
+/// to check for converged probabilities.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct UntilConvergedConfig {
@@ -63,18 +74,54 @@ pub struct UntilConvergedConfig {
     pub threshold: ProbabilityThreshold,
 }
 
-impl<I> RunnerConfig<I> for UntilConvergedConfig
+impl UntilConvergedConfig {
+    /// Return this runner
+    /// wrapping the given iterator.
+    pub fn start<I>(self, it: I) -> UntilConvergedRunner<I> {
+        UntilConvergedRunner { config: self, it }
+    }
+}
+
+impl<I> UntilConvergedRunner<I> {
+    /// Return configuration and iterator.
+    pub fn into_inner(self) -> (UntilConvergedConfig, I) {
+        (self.config, self.it)
+    }
+}
+
+impl<I> StreamingIterator for UntilConvergedRunner<I>
 where
-    I: Probabilities,
+    I: StreamingIterator + Probabilities,
 {
-    type State = ();
+    type Item = I::Item;
 
-    fn initial_state(&self) -> Self::State {}
+    fn advance(&mut self) {
+        self.it.advance()
+    }
 
-    fn is_done(&self, it: &I, _: &Self::State) -> bool {
-        it.probabilities()
-            .iter()
-            .all(|p| p > &self.threshold.upper_bound() || p < &self.threshold.lower_bound())
+    fn get(&self) -> Option<&Self::Item> {
+        if self.it.probabilities().iter().all(|p| {
+            p > &self.config.threshold.upper_bound() || p < &self.config.threshold.lower_bound()
+        }) {
+            None
+        } else {
+            self.it.get()
+        }
+    }
+}
+
+impl<I> Runner for UntilConvergedRunner<I>
+where
+    Self: StreamingIterator,
+{
+    type It = I;
+
+    fn stop(self) -> Self::It
+    where
+        Self: Sized,
+        Self::It: Sized,
+    {
+        self.it
     }
 }
 

@@ -23,7 +23,6 @@ github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 
 [dependencies]
 blanket = "0.3.0"
-replace_with = "0.1"
 streaming-iterator = "0.1"
 
 [dev-dependencies]

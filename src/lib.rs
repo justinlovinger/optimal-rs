@@ -41,9 +41,11 @@
 //!
 //! println!(
 //!     "{}",
-//!     UntilConvergedConfig::default().argmin(&mut Config::start_default_for(16, |points| {
-//!         points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
-//!     }))
+//!     UntilConvergedConfig::default()
+//!         .start(Config::start_default_for(16, |points| {
+//!             points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
+//!         }))
+//!         .argmin()
 //! );
 //! ```
 //!
@@ -61,7 +63,7 @@
 //! while let Some(o) = it.next() {
 //!     println!("{:?}", o.state());
 //! }
-//! let o = it.into_inner().0;
+//! let o = it.stop();
 //! println!("f({}) = {}", o.best_point(), o.best_point_value());
 //! ```
 
@@ -142,24 +144,57 @@ mod tests {
     mock_optimizer!(B);
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    struct MaxStepsConfig(usize);
+    struct MaxSteps<I> {
+        max_i: usize,
+        i: usize,
+        it: I,
+    }
 
     #[derive(Clone, Debug, Serialize, Deserialize)]
-    struct MaxStepsState(usize);
+    struct MaxStepsConfig(usize);
 
-    impl<I> RunnerConfig<I> for MaxStepsConfig {
-        type State = MaxStepsState;
+    impl MaxStepsConfig {
+        fn start<I>(self, it: I) -> MaxSteps<I> {
+            MaxSteps {
+                i: 0,
+                max_i: self.0,
+                it,
+            }
+        }
+    }
 
-        fn initial_state(&self) -> Self::State {
-            MaxStepsState(0)
+    impl<I> StreamingIterator for MaxSteps<I>
+    where
+        I: StreamingIterator,
+    {
+        type Item = I::Item;
+
+        fn advance(&mut self) {
+            self.it.advance();
+            self.i += 1;
         }
 
-        fn is_done(&self, _it: &I, state: &Self::State) -> bool {
-            state.0 >= self.0
+        fn get(&self) -> Option<&Self::Item> {
+            if self.i >= self.max_i {
+                None
+            } else {
+                self.it.get()
+            }
         }
+    }
 
-        fn update(&self, _it: &I, state: &mut Self::State) {
-            state.0 += 1;
+    impl<I> Runner for MaxSteps<I>
+    where
+        I: StreamingIterator,
+    {
+        type It = I;
+
+        fn stop(self) -> Self::It
+        where
+            Self: Sized,
+            Self::It: Sized,
+        {
+            self.it
         }
     }
 
@@ -210,12 +245,10 @@ mod tests {
             O: StreamingIterator + Optimizer<Point = A> + Send + 'static,
             F: Fn() -> O,
         {
-            let mut o1 = start();
-            let mut o2 = start();
-            #[allow(clippy::redundant_clone)] // False positive.
-            let handler1 = spawn(move || MaxStepsConfig(10).argmin(&mut o1));
-            #[allow(clippy::redundant_clone)] // False positive.
-            let handler2 = spawn(move || MaxStepsConfig(10).argmin(&mut o2));
+            let o1 = start();
+            let o2 = start();
+            let handler1 = spawn(move || MaxStepsConfig(10).start(o1).argmin());
+            let handler2 = spawn(move || MaxStepsConfig(10).start(o2).argmin());
             handler1.join().unwrap();
             handler2.join().unwrap();
         }
@@ -250,53 +283,71 @@ mod tests {
             }
         }
 
-        impl<I, C> Restart for Runner<I, C>
+        impl<I> Restart for MaxSteps<I>
         where
             I: Restart,
-            C: RunnerConfig<I>,
         {
             fn restart(&mut self) {
-                replace_with_or_abort(self, |x| {
-                    let (mut it, c, _) = x.into_inner();
+                replace_with_or_abort(self, |this| {
+                    let mut it = this.it;
                     it.restart();
-                    c.start(it)
+                    MaxStepsConfig(this.max_i).start(it)
                 })
             }
+        }
+
+        struct Restarter<I> {
+            max_restarts: usize,
+            restarts: usize,
+            it: I,
         }
 
         struct RestarterConfig {
             max_restarts: usize,
         }
 
-        struct RestarterState {
-            restarts: usize,
+        impl RestarterConfig {
+            fn start<I>(self, it: I) -> Restarter<I> {
+                Restarter {
+                    max_restarts: self.max_restarts,
+                    restarts: 0,
+                    it,
+                }
+            }
         }
 
-        impl<I, C> RunnerConfig<Runner<I, C>> for RestarterConfig
+        impl<I> StreamingIterator for Restarter<I>
         where
-            I: Restart,
-            C: RunnerConfig<I>,
+            I: StreamingIterator + Restart,
         {
-            type State = RestarterState;
+            type Item = I::Item;
 
-            fn initial_state(&self) -> Self::State {
-                RestarterState { restarts: 0 }
-            }
-
-            fn is_done(&self, _it: &Runner<I, C>, state: &Self::State) -> bool {
-                state.restarts >= self.max_restarts
-            }
-
-            fn advance(&self, it: &mut Runner<I, C>, state: &mut Self::State)
-            where
-                Runner<I, C>: StreamingIterator,
-            {
-                if it.is_done() {
-                    state.restarts += 1;
-                    it.restart();
+            fn advance(&mut self) {
+                if self.restarts < self.max_restarts && self.it.is_done() {
+                    self.restarts += 1;
+                    self.it.restart();
                 } else {
-                    it.advance()
+                    self.it.advance()
                 }
+            }
+
+            fn get(&self) -> Option<&Self::Item> {
+                self.it.get()
+            }
+        }
+
+        impl<I> Runner for Restarter<I>
+        where
+            I: Runner + Restart,
+        {
+            type It = I::It;
+
+            fn stop(self) -> Self::It
+            where
+                Self: Sized,
+                Self::It: Sized,
+            {
+                self.it.stop()
             }
         }
 
@@ -373,6 +424,6 @@ mod tests {
         let store = serde_json::to_string(&o).unwrap();
         o = serde_json::from_str(&store).unwrap();
         o.next();
-        o.into_inner().0.best_point();
+        o.stop().best_point();
     }
 }

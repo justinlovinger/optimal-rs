@@ -1,152 +1,45 @@
-use blanket::blanket;
 use streaming_iterator::StreamingIterator;
 
-pub use self::extensions::*;
+use crate::prelude::Optimizer;
 
-/// A runner configuration.
-///
-/// A runner can determine when an optimization sequence is done
+// TODO: maybe make this more general,
+// like a `StreamingIterator`
+// that can still `get`
+// when done.
+/// A runner
+/// able to determine when an optimization sequence is done
 /// and run it to completion.
-#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
-pub trait RunnerConfig<I> {
-    /// Type of this runners state.
-    type State;
+pub trait Runner: StreamingIterator {
+    /// Type of inner iterator.
+    type It;
 
-    /// Return the initial state of this runner.
-    fn initial_state(&self) -> Self::State;
-
-    /// Return if optimization is done.
-    fn is_done(&self, it: &I, state: &Self::State) -> bool;
-
-    /// Advance the optimization sequence,
-    /// updating the state of this runner
-    /// if necessary.
-    fn advance(&self, it: &mut I, _state: &mut Self::State)
+    /// Stop the optimization run,
+    /// returning inner optimization sequence.
+    fn stop(self) -> Self::It
     where
-        I: StreamingIterator,
+        Self: Sized,
+        Self::It: Sized;
+
+    /// Run to completion.
+    fn run(mut self) -> Self::It
+    where
+        Self: Sized,
+        Self::It: Sized,
     {
-        it.advance()
+        while self.next().is_some() {}
+        self.stop()
     }
 
-    /// Update state of this runner
-    /// after optimization sequence advanced.
-    fn update(&self, _it: &I, _state: &mut Self::State) {}
-}
-
-mod extensions {
-    use replace_with::replace_with_or_abort;
-
-    use crate::prelude::*;
-
-    use super::*;
-
-    /// Automatically implemented extensions to `RunnerConfig`.
-    pub trait RunnerConfigExt<I>: RunnerConfig<I> {
-        /// Start the optimization run
-        /// defined by this config
-        /// and the given optimization sequence.
-        fn start(self, it: I) -> Runner<I, Self>
-        where
-            Self: Sized,
-        {
-            Runner {
-                inner: it,
-                state: self.initial_state(),
-                config: self,
-            }
-        }
-
-        /// Run the given sequence to completion.
-        fn run(self, it: &mut I) -> &mut I
-        where
-            Self: Sized,
-            I: StreamingIterator,
-        {
-            replace_with_or_abort(it, |it| {
-                let mut it = self.start(it);
-                while it.next().is_some() {}
-                it.into_inner().0
-            });
-            it
-        }
-
-        /// Return point that attempts to minimize a problem
-        /// by running the given optimizer to completion.
-        ///
-        /// How well the point minimizes the problem
-        /// depends on the optimizer.
-        fn argmin(self, it: &mut I) -> I::Point
-        where
-            Self: Sized,
-            I: StreamingIterator + Optimizer,
-        {
-            (*self.run(it)).best_point()
-        }
-    }
-
-    impl<I, T> RunnerConfigExt<I> for T where T: RunnerConfig<I> {}
-
-    /// An optimization run.
-    #[derive(Clone, Debug)]
-    #[cfg_attr(
-        any(test, feature = "serde"),
-        derive(serde::Serialize, serde::Deserialize)
-    )]
-    pub struct Runner<I, C>
+    /// Return point that attempts to minimize a problem
+    /// by running to completion.
+    ///
+    /// How well the point minimizes the problem
+    /// depends on the optimizer.
+    fn argmin(self) -> <Self::It as Optimizer>::Point
     where
-        C: RunnerConfig<I>,
+        Self: Sized,
+        Self::It: Sized + Optimizer,
     {
-        inner: I,
-        config: C,
-        state: C::State,
-    }
-
-    impl<I, C> Runner<I, C>
-    where
-        C: RunnerConfig<I>,
-    {
-        /// Return inner iterator.
-        pub fn inner(&self) -> &I {
-            &self.inner
-        }
-
-        /// Return runner configuration.
-        pub fn config(&self) -> &C {
-            &self.config
-        }
-
-        /// Return runner state.
-        pub fn state(&self) -> &C::State {
-            &self.state
-        }
-
-        /// Stop optimization run,
-        /// returning inner optimization sequence,
-        /// runner configuration,
-        /// and runner state.
-        pub fn into_inner(self) -> (I, C, C::State) {
-            (self.inner, self.config, self.state)
-        }
-    }
-
-    impl<I, C> StreamingIterator for Runner<I, C>
-    where
-        I: StreamingIterator,
-        C: RunnerConfig<I>,
-    {
-        type Item = I::Item;
-
-        fn advance(&mut self) {
-            self.config.advance(&mut self.inner, &mut self.state);
-            self.config.update(&self.inner, &mut self.state);
-        }
-
-        fn get(&self) -> Option<&Self::Item> {
-            if self.config.is_done(&self.inner, &self.state) {
-                None
-            } else {
-                self.inner.get()
-            }
-        }
+        self.run().best_point()
     }
 }
