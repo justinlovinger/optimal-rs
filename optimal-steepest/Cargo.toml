@@ -17,18 +17,18 @@ serde = ["dep:serde", "ndarray/serde"]
 default-for = { path = "../default-for" }
 derive-bounded = { path = "../derive-bounded" }
 derive-getters = "0.3.0"
-derive_more = "0.99"
-ndarray = "0.15"
-ndarray-rand = "0.14"
-num-traits = "0.2"
-once_cell = "1.17.1"
+derive_more = "0.99.17"
+ndarray = "0.15.6"
+ndarray-rand = "0.14.0"
+num-traits = "0.2.16"
+once_cell = "1.18.0"
 optimal = { path = ".." }
-rand = "0.8"
-replace_with = "0.1"
-serde = { version = "1", features = ["derive"], optional = true }
-streaming-iterator = "0.1"
-thiserror = "1.0.40"
+rand = "0.8.5"
+replace_with = "0.1.7"
+serde = { version = "1.0.185", features = ["derive"], optional = true }
+streaming-iterator = "0.1.9"
+thiserror = "1.0.47"
 
 [dev-dependencies]
-proptest = "1"
-test-strategy = "0.2.1"
+proptest = "1.2.0"
+test-strategy = "0.3.1"

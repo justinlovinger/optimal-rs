@@ -30,6 +30,7 @@
       devShell = with pkgs;
         mkShell {
           nativeBuildInputs = [
+            cargo-edit
             cargo-readme
             fenix.packages.${system}.latest.toolchain
           ];
