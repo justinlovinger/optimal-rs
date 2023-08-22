@@ -254,9 +254,17 @@ checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
 name = "optimal"
 version = "0.1.0"
 dependencies = [
+ "ndarray",
+ "optimal-core",
+ "optimal-pbil",
+]
+
+[[package]]
+name = "optimal-core"
+version = "0.1.0"
+dependencies = [
  "blanket",
  "ndarray",
- "optimal-pbil",
  "paste",
  "replace_with",
  "serde",
@@ -277,7 +285,7 @@ dependencies = [
  "ndarray-rand",
  "num-traits",
  "once_cell",
- "optimal",
+ "optimal-core",
  "proptest",
  "rand",
  "rand_xoshiro",
@@ -300,7 +308,7 @@ dependencies = [
  "ndarray-rand",
  "num-traits",
  "once_cell",
- "optimal",
+ "optimal-core",
  "proptest",
  "rand",
  "replace_with",

@@ -3,6 +3,7 @@
 cargo readme -o README.md
 cargo readme -r default-for -o README.md
 cargo readme -r derive-bounded -o README.md
+cargo readme -r optimal-core -o README.md
 cargo readme -r optimal-pbil -o README.md
 cargo readme -r optimal-steepest -o README.md
 

@@ -9,7 +9,6 @@
 //! ```
 //! use ndarray::prelude::*;
 //! use optimal_pbil::*;
-//! use optimal::prelude::*;
 //!
 //! println!(
 //!     "{}",
@@ -30,7 +29,7 @@ use default_for::DefaultFor;
 use derive_getters::Getters;
 use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
-use optimal::prelude::*;
+pub use optimal_core::prelude::*;
 use rand_xoshiro::{SplitMix64, Xoshiro256PlusPlus};
 
 pub use self::{states::*, types::*};

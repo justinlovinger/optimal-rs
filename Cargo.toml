@@ -2,6 +2,7 @@
 members = [
   "default-for",
   "derive-bounded",
+  "optimal-core",
   "optimal-pbil",
   "optimal-steepest",
 ]
@@ -22,14 +23,8 @@ license = "MIT"
 github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 
 [dependencies]
-blanket = "0.3.0"
-streaming-iterator = "0.1.9"
+optimal-core = { path = "optimal-core" }
 
 [dev-dependencies]
 ndarray = "0.15.6"
 optimal-pbil = { path = "optimal-pbil" }
-paste = "1.0.14"
-replace_with = "0.1.7"
-serde = { version = "1.0.185", features = ["derive"] }
-serde_json = "1.0.105"
-static_assertions = "1.1.0"

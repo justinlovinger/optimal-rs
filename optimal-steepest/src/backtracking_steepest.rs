@@ -7,12 +7,8 @@
 //! # Examples
 //!
 //! ```
-//! use ndarray::{prelude::*, Data};
-//! use ndarray_rand::RandomExt;
+//! use ndarray::prelude::*;
 //! use optimal_steepest::backtracking_steepest::*;
-//! use optimal::prelude::*;
-//! use rand::distributions::Uniform;
-//! use streaming_iterator::StreamingIterator;
 //!
 //! fn main() {
 //!     let backtracking_rate = BacktrackingRate::default();
@@ -61,7 +57,7 @@ use num_traits::{
     AsPrimitive, One,
 };
 use once_cell::sync::OnceCell;
-use optimal::prelude::*;
+pub use optimal_core::prelude::*;
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
     prelude::*,

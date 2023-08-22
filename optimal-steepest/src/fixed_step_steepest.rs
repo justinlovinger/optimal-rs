@@ -8,7 +8,6 @@
 //! ```
 //! use ndarray::prelude::*;
 //! use optimal_steepest::fixed_step_steepest::*;
-//! use optimal::prelude::*;
 //!
 //! println!(
 //!     "{}",
@@ -26,7 +25,7 @@ use std::ops::{Mul, RangeInclusive, SubAssign};
 use derive_getters::Getters;
 use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
-use optimal::prelude::*;
+pub use optimal_core::prelude::*;
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
     prelude::*,

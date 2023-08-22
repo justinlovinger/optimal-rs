@@ -1,0 +1,23 @@
+[package]
+name = "optimal-core"
+version = "0.1.0"
+edition = "2021"
+authors = ["Justin Lovinger"]
+description = "Mathematical optimization and machine learning framework"
+repository = "https://github.com/justinlovinger/optimal-rs"
+readme = "README.md"
+keywords = ["ai", "machine-learning", "optimization"]
+categories = ["science", "mathematics"]
+license = "MIT"
+
+[dependencies]
+blanket = "0.3.0"
+streaming-iterator = "0.1.9"
+
+[dev-dependencies]
+ndarray = "0.15.6"
+paste = "1.0.14"
+replace_with = "0.1.7"
+serde = { version = "1.0.185", features = ["derive"] }
+serde_json = "1.0.105"
+static_assertions = "1.1.0"
