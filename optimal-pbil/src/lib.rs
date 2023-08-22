@@ -1,6 +1,8 @@
 #![allow(clippy::needless_doctest_main)]
 #![warn(missing_debug_implementations)]
-#![warn(missing_docs)]
+// `missing_docs` does not work with `IsVariant`,
+// see <https://github.com/JelteF/derive_more/issues/215>.
+// #![warn(missing_docs)]
 
 //! Population-based incremental learning (PBIL).
 //!
@@ -27,6 +29,7 @@ use std::fmt::Debug;
 
 use default_for::DefaultFor;
 use derive_getters::Getters;
+use derive_more::IsVariant;
 use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
 pub use optimal_core::prelude::*;
@@ -198,22 +201,23 @@ where
             .evaluation_cache
             .take()
             .unwrap_or_else(|| self.evaluate());
-        replace_with::replace_with_or_abort(&mut self.state, |state| {
-            match state {
-                State::Ready(s) => State::Sampling(s.to_sampling(self.config.num_samples)),
-                State::Sampling(s) => {
-                    // `unwrap_unchecked` is safe
-                    // because `evaluate` always returns `Some`
-                    // for `State::Sampling`.
+        replace_with::replace_with_or_abort(&mut self.state, |state| match state {
+            State::Ready(s) => State::Sampling(s.to_sampling(self.config.num_samples)),
+            State::Sampling(s) => {
+                if self.config.mutation_chance.is_zero() {
+                    State::Ready(s.to_ready(self.config.adjust_rate, unsafe {
+                        evaluation.unwrap_unchecked()
+                    }))
+                } else {
                     State::Mutating(s.to_mutating(self.config.adjust_rate, unsafe {
                         evaluation.unwrap_unchecked()
                     }))
                 }
-                State::Mutating(s) => State::Ready(s.to_ready(
-                    self.config.mutation_chance,
-                    self.config.mutation_adjust_rate,
-                )),
             }
+            State::Mutating(s) => State::Ready(s.to_ready(
+                self.config.mutation_chance,
+                self.config.mutation_adjust_rate,
+            )),
         });
     }
 
@@ -249,7 +253,7 @@ pub struct Config {
 }
 
 /// PBIL state.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, IsVariant)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum State {
     /// Ready to start a new iteration.
@@ -392,5 +396,25 @@ impl Probabilities for State {
             State::Sampling(s) => s.probabilities(),
             State::Mutating(s) => s.probabilities(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pbil_should_not_mutate_if_chance_is_zero() {
+        Config {
+            num_samples: NumSamples::default(),
+            adjust_rate: AdjustRate::default(),
+            mutation_chance: MutationChance::new(0.0).unwrap(),
+            mutation_adjust_rate: MutationAdjustRate::default(),
+        }
+        .start(16, |points| {
+            points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
+        })
+        .inspect(|x| assert!(!x.state().is_mutating()))
+        .nth(100);
     }
 }

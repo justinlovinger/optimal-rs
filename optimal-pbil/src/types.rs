@@ -112,6 +112,12 @@ derive_into_inner!(MutationChance(f64));
 derive_try_from_from_new!(MutationChance(f64));
 derive_from_str_from_try_into!(MutationChance(f64));
 
+impl MutationChance {
+    pub fn is_zero(&self) -> bool {
+        self.0 == 0.0
+    }
+}
+
 /// Degree to adjust probability towards random value
 /// when mutating.
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Into)]
