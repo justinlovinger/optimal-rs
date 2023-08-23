@@ -2,10 +2,6 @@ use streaming_iterator::StreamingIterator;
 
 use crate::prelude::Optimizer;
 
-// TODO: maybe make this more general,
-// like a `StreamingIterator`
-// that can still `get`
-// when done.
 /// A runner
 /// able to determine when an optimization sequence is done
 /// and run it to completion.
