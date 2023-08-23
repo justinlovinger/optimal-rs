@@ -11,21 +11,16 @@
 //! use optimal_steepest::backtracking_steepest::*;
 //!
 //! fn main() {
-//!     let backtracking_rate = BacktrackingRate::default();
 //!     println!(
 //!         "{}",
-//!         Config::new(
-//!             SufficientDecreaseParameter::default(),
-//!             backtracking_rate,
-//!             IncrRate::from_backtracking_rate(backtracking_rate),
-//!         )
-//!         .start(std::iter::repeat(-10.0..=10.0).take(2), obj_func, |x| (
-//!             obj_func(x),
-//!             obj_func_d(x)
-//!         ))
-//!         .nth(100)
-//!         .unwrap()
-//!         .best_point()
+//!         Config::default()
+//!             .start(std::iter::repeat(-10.0..=10.0).take(2), obj_func, |x| (
+//!                 obj_func(x),
+//!                 obj_func_d(x)
+//!             ))
+//!             .nth(100)
+//!             .unwrap()
+//!             .best_point()
 //!     );
 //! }
 //!
@@ -258,6 +253,21 @@ impl<A> Config<A> {
             c_1,
             backtracking_rate,
             initial_step_size_incr_rate,
+        }
+    }
+}
+
+impl<A> Default for Config<A>
+where
+    A: 'static + Copy + One + Sub<Output = A> + Div<Output = A>,
+    f64: AsPrimitive<A>,
+{
+    fn default() -> Self {
+        let backtracking_rate = BacktrackingRate::default();
+        Self {
+            c_1: SufficientDecreaseParameter::default(),
+            backtracking_rate: BacktrackingRate::default(),
+            initial_step_size_incr_rate: IncrRate::from_backtracking_rate(backtracking_rate),
         }
     }
 }
