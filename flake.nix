@@ -21,18 +21,23 @@
   }:
     utils.lib.eachDefaultSystem (system: let
       pkgs = import nixpkgs {inherit system;};
-      naersk-lib = pkgs.callPackage naersk {};
+      naersk-lib = pkgs.callPackage naersk {
+        cargo = toolchain;
+        rustc = toolchain;
+      };
+      toolchain = fenix.packages.${system}.latest.toolchain;
     in {
       defaultPackage = naersk-lib.buildPackage {
         src = ./.;
-        doCheck = false; # Tests require nightly Rust.
+        doCheck = true;
+        cargoTestOptions = xs: xs ++ ["--all"];
       };
       devShell = with pkgs;
         mkShell {
           nativeBuildInputs = [
             cargo-edit
             cargo-readme
-            fenix.packages.${system}.latest.toolchain
+            toolchain
           ];
 
           shellHook = ''
