@@ -257,6 +257,8 @@ dependencies = [
  "ndarray",
  "optimal-core",
  "optimal-pbil",
+ "optimal-steepest",
+ "rand_xoshiro",
 ]
 
 [[package]]

@@ -23,8 +23,10 @@ license = "MIT"
 github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 
 [dependencies]
+ndarray = "0.15.6"
 optimal-core = { path = "optimal-core" }
+optimal-pbil = { path = "optimal-pbil" }
+optimal-steepest = { path = "optimal-steepest" }
+rand_xoshiro = "0.6.0"
 
 [dev-dependencies]
-ndarray = "0.15.6"
-optimal-pbil = { path = "optimal-pbil" }

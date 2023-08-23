@@ -29,40 +29,45 @@ in other ways.
 
 ## Examples
 
-Minimize the `Count` problem
-using a PBIL optimizer:
+Minimize the "count" problem
+using a derivative-free optimizer:
 
 ```rust
-use ndarray::prelude::*;
-use optimal_pbil::*;
-use optimal::prelude::*;
+use optimal::{prelude::*, BinaryDerivativeFreeConfig};
 
 println!(
     "{}",
-    UntilConvergedConfig::default()
-        .start(Config::start_default_for(16, |points| {
-            points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
-        }))
-        .argmin()
+    BinaryDerivativeFreeConfig::start_default_for(16, |point| {
+        point.iter().filter(|x| **x).count() as f64
+    })
+    .argmin()
 );
 ```
 
-Minimize a problem
-one step at a time:
+Minimize the "sphere" problem
+using a derivative optimizer:
 
 ```rust
-use ndarray::prelude::*;
-use optimal_pbil::*;
-use optimal::prelude::*;
+use optimal::{prelude::*, RealDerivativeConfig};
 
-let mut it = UntilConvergedConfig::default().start(Config::start_default_for(16, |points| {
-    points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
-}));
-while let Some(o) = it.next() {
-    println!("{:?}", o.state());
-}
-let o = it.stop();
-println!("f({}) = {}", o.best_point(), o.best_point_value());
+println!(
+    "{}",
+    RealDerivativeConfig::start_default_for(
+        2,
+        std::iter::repeat(-10.0..=10.0).take(2),
+        |point| { point.map(|x| x.powi(2)).sum() },
+        |point| { point.map(|x| 2.0 * x) }
+    )
+    .nth(100)
+    .unwrap()
+    .best_point()
+);
 ```
+
+For more control over configuration parameters,
+introspection of the optimization process,
+serialization,
+and specialization that may improve performance,
+see individual optimizer packages.
 
 License: MIT

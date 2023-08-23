@@ -22,7 +22,9 @@ pub trait Runner: StreamingIterator {
         Self: Sized,
         Self::It: Sized,
     {
-        while self.next().is_some() {}
+        while !self.is_done() {
+            self.advance()
+        }
         self.stop()
     }
 
