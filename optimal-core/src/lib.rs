@@ -5,9 +5,79 @@
 #![warn(missing_docs)]
 
 //! Core traits and types for Optimal.
+//!
+//! Most optimizers are expected to adhere to particular conventions.
+//! An optimizer configuration should remain static during operation.
+//! A problem and configuration
+//! can be used to start a running optimizer.
+//! A running optimizer has state
+//! that depends on its problem
+//! and configuration.
 
-mod optimization;
-pub mod prelude;
+use blanket::blanket;
+use streaming_iterator::StreamingIterator;
+
+/// Running optimizer methods
+/// independent of configuration
+/// and state.
+#[blanket(derive(Ref, Rc, Arc, Mut, Box))]
+pub trait Optimizer {
+    /// A point in the problem space being optimized.
+    type Point;
+
+    /// Return the best point discovered.
+    fn best_point(&self) -> Self::Point;
+}
+
+/// A runner
+/// able to determine when an optimization sequence is done
+/// and run it to completion.
+pub trait Runner: StreamingIterator {
+    /// Type of inner iterator.
+    type It;
+
+    /// Stop the optimization run,
+    /// returning inner optimization sequence.
+    fn stop(self) -> Self::It
+    where
+        Self: Sized,
+        Self::It: Sized;
+
+    /// Run to completion.
+    fn run(mut self) -> Self::It
+    where
+        Self: Sized,
+        Self::It: Sized,
+    {
+        while !self.is_done() {
+            self.advance()
+        }
+        self.stop()
+    }
+
+    /// Return point that attempts to minimize a problem
+    /// by running to completion.
+    ///
+    /// How well the point minimizes the problem
+    /// depends on the optimizer.
+    fn argmin(self) -> <Self::It as Optimizer>::Point
+    where
+        Self: Sized,
+        Self::It: Sized + Optimizer,
+    {
+        self.run().best_point()
+    }
+}
+
+/// Useful traits,
+/// types,
+/// and functions
+/// unlikely to conflict with existing definitions.
+pub mod prelude {
+    pub use streaming_iterator::StreamingIterator;
+
+    pub use super::{Optimizer, Runner};
+}
 
 #[cfg(test)]
 mod tests {
@@ -24,8 +94,11 @@ mod tests {
 
     use replace_with::replace_with_or_abort;
     use serde::{Deserialize, Serialize};
+    use static_assertions::assert_obj_safe;
 
-    use super::prelude::*;
+    use crate::prelude::*;
+
+    assert_obj_safe!(Optimizer<Point = ()>);
 
     fn mock_obj_func(x: usize) -> usize {
         x + 1

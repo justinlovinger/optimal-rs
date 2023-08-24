@@ -2,4 +2,12 @@
 
 Core traits and types for Optimal.
 
+Most optimizers are expected to adhere to particular conventions.
+An optimizer configuration should remain static during operation.
+A problem and configuration
+can be used to start a running optimizer.
+A running optimizer has state
+that depends on its problem
+and configuration.
+
 License: MIT
