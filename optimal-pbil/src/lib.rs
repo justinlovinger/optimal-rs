@@ -14,7 +14,7 @@
 //!
 //! println!(
 //!     "{:?}",
-//!     UntilConvergedConfig::default()
+//!     UntilProbabilitiesConvergedConfig::default()
 //!         .start(Config::start_default_for(16, |points| {
 //!             points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
 //!         }))
@@ -62,8 +62,8 @@ impl<B, F> Probabilities for Pbil<B, F> {
 /// to check for converged probabilities.
 #[derive(Clone, Debug, Getters)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct UntilConvergedRunner<I> {
-    config: UntilConvergedConfig,
+pub struct UntilProbabilitiesConverged<I> {
+    config: UntilProbabilitiesConvergedConfig,
     it: I,
 }
 
@@ -71,27 +71,27 @@ pub struct UntilConvergedRunner<I> {
 /// to check for converged probabilities.
 #[derive(Clone, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct UntilConvergedConfig {
+pub struct UntilProbabilitiesConvergedConfig {
     /// Probability convergence parameter.
     pub threshold: ProbabilityThreshold,
 }
 
-impl UntilConvergedConfig {
+impl UntilProbabilitiesConvergedConfig {
     /// Return this runner
     /// wrapping the given iterator.
-    pub fn start<I>(self, it: I) -> UntilConvergedRunner<I> {
-        UntilConvergedRunner { config: self, it }
+    pub fn start<I>(self, it: I) -> UntilProbabilitiesConverged<I> {
+        UntilProbabilitiesConverged { config: self, it }
     }
 }
 
-impl<I> UntilConvergedRunner<I> {
+impl<I> UntilProbabilitiesConverged<I> {
     /// Return configuration and iterator.
-    pub fn into_inner(self) -> (UntilConvergedConfig, I) {
+    pub fn into_inner(self) -> (UntilProbabilitiesConvergedConfig, I) {
         (self.config, self.it)
     }
 }
 
-impl<I> StreamingIterator for UntilConvergedRunner<I>
+impl<I> StreamingIterator for UntilProbabilitiesConverged<I>
 where
     I: StreamingIterator + Probabilities,
 {

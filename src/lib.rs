@@ -80,7 +80,7 @@ pub use optimal_core::prelude;
 pub use optimal_core::prelude::*;
 use optimal_pbil::{
     AdjustRate, MutationAdjustRate, MutationChance, NumSamples, Pbil, Probability,
-    ProbabilityThreshold, UntilConvergedConfig, UntilConvergedRunner,
+    ProbabilityThreshold, UntilProbabilitiesConverged, UntilProbabilitiesConvergedConfig,
 };
 use optimal_steepest::backtracking_steepest::{self, BacktrackingSteepest};
 use rand_xoshiro::SplitMix64;
@@ -234,7 +234,7 @@ impl RealDerivativeConfig {
 /// A generic binary derivative-free optimizer.
 #[allow(missing_debug_implementations)]
 pub struct BinaryDerivativeFree {
-    inner: UntilConvergedRunner<Pbil<f64, OverRows<bool, f64>>>,
+    inner: UntilProbabilitiesConverged<Pbil<f64, OverRows<bool, f64>>>,
 }
 
 /// Binary derivative-free optimizer configuration parameters.
@@ -330,7 +330,7 @@ impl BinaryDerivativeFreeConfig {
         }
     }
 
-    fn inner_config(self, len: usize) -> (UntilConvergedConfig, optimal_pbil::Config) {
+    fn inner_config(self, len: usize) -> (UntilProbabilitiesConvergedConfig, optimal_pbil::Config) {
         // These numbers are approximate at best.
         let (threshold, num_samples, adjust_rate) = match self.optimality {
             x if x > 0 => {
@@ -385,7 +385,7 @@ impl BinaryDerivativeFreeConfig {
             ),
         };
         (
-            UntilConvergedConfig { threshold },
+            UntilProbabilitiesConvergedConfig { threshold },
             optimal_pbil::Config {
                 num_samples,
                 adjust_rate,
