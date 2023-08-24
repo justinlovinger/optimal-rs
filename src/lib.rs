@@ -36,7 +36,7 @@
 //! use optimal::{prelude::*, BinaryDerivativeFreeConfig};
 //!
 //! println!(
-//!     "{}",
+//!     "{:?}",
 //!     BinaryDerivativeFreeConfig::start_default_for(16, |point| {
 //!         point.iter().filter(|x| **x).count() as f64
 //!     })
@@ -51,7 +51,7 @@
 //! use optimal::{prelude::*, RealDerivativeConfig};
 //!
 //! println!(
-//!     "{}",
+//!     "{:?}",
 //!     RealDerivativeConfig::start_default_for(
 //!         2,
 //!         std::iter::repeat(-10.0..=10.0).take(2),
@@ -269,21 +269,6 @@ impl Optimizer for BinaryDerivativeFree {
 
     fn best_point(&self) -> Self::Point {
         self.inner.it().best_point()
-    }
-}
-
-impl Runner for BinaryDerivativeFree
-where
-    Self: StreamingIterator,
-{
-    type It = Self;
-
-    fn stop(self) -> Self::It
-    where
-        Self: Sized,
-        Self::It: Sized,
-    {
-        self
     }
 }
 

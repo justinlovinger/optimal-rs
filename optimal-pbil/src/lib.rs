@@ -13,7 +13,7 @@
 //! use optimal_pbil::*;
 //!
 //! println!(
-//!     "{}",
+//!     "{:?}",
 //!     UntilConvergedConfig::default()
 //!         .start(Config::start_default_for(16, |points| {
 //!             points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
@@ -102,28 +102,14 @@ where
     }
 
     fn get(&self) -> Option<&Self::Item> {
-        if self.it.probabilities().iter().all(|p| {
-            p > &self.config.threshold.upper_bound() || p < &self.config.threshold.lower_bound()
-        }) {
-            None
-        } else {
-            self.it.get()
-        }
+        self.it.get()
     }
-}
 
-impl<I> Runner for UntilConvergedRunner<I>
-where
-    Self: StreamingIterator,
-{
-    type It = I;
-
-    fn stop(self) -> Self::It
-    where
-        Self: Sized,
-        Self::It: Sized,
-    {
-        self.it
+    fn is_done(&self) -> bool {
+        self.it.is_done()
+            || self.it.probabilities().iter().all(|p| {
+                p > &self.config.threshold.upper_bound() || p < &self.config.threshold.lower_bound()
+            })
     }
 }
 

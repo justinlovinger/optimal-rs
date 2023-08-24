@@ -29,45 +29,38 @@ pub trait Optimizer {
     fn best_point(&self) -> Self::Point;
 }
 
-/// A runner
-/// able to determine when an optimization sequence is done
-/// and run it to completion.
-pub trait Runner: StreamingIterator {
-    /// Type of inner iterator.
-    type It;
-
-    /// Stop the optimization run,
-    /// returning inner optimization sequence.
-    fn stop(self) -> Self::It
-    where
-        Self: Sized,
-        Self::It: Sized;
-
-    /// Run to completion.
-    fn run(mut self) -> Self::It
-    where
-        Self: Sized,
-        Self::It: Sized,
-    {
+/// An extension trait adding methods to `StreamingIterator`.
+pub trait StreamingIteratorExt: StreamingIterator {
+    /// Return the last item
+    /// in this iterator,
+    /// assuming `get()` returns `Some`
+    /// when `is_done()` returns `true`.
+    fn last(&mut self) -> Option<&Self::Item> {
         while !self.is_done() {
             self.advance()
         }
-        self.stop()
+        (*self).get()
     }
+}
 
+/// An extension trait adding methods to `StreamingIterator`
+/// for optimization.
+pub trait OptimizerExt: StreamingIteratorExt {
     /// Return point that attempts to minimize a problem
     /// by running to completion.
     ///
     /// How well the point minimizes the problem
     /// depends on the optimizer.
-    fn argmin(self) -> <Self::It as Optimizer>::Point
+    fn argmin(&mut self) -> Option<<Self::Item as Optimizer>::Point>
     where
-        Self: Sized,
-        Self::It: Sized + Optimizer,
+        Self::Item: Optimizer,
     {
-        self.run().best_point()
+        self.last().map(|x| x.best_point())
     }
 }
+
+impl<T> StreamingIteratorExt for T where T: StreamingIterator {}
+impl<T> OptimizerExt for T where T: StreamingIterator {}
 
 /// Useful traits,
 /// types,
@@ -76,7 +69,7 @@ pub trait Runner: StreamingIterator {
 pub mod prelude {
     pub use streaming_iterator::StreamingIterator;
 
-    pub use super::{Optimizer, Runner};
+    pub use super::{Optimizer, OptimizerExt, StreamingIteratorExt};
 }
 
 #[cfg(test)]
@@ -187,26 +180,11 @@ mod tests {
         }
 
         fn get(&self) -> Option<&Self::Item> {
-            if self.i >= self.max_i {
-                None
-            } else {
-                self.it.get()
-            }
+            self.it.get()
         }
-    }
 
-    impl<I> Runner for MaxSteps<I>
-    where
-        I: StreamingIterator,
-    {
-        type It = I;
-
-        fn stop(self) -> Self::It
-        where
-            Self: Sized,
-            Self::It: Sized,
-        {
-            self.it
+        fn is_done(&self) -> bool {
+            self.it.is_done() || self.i >= self.max_i
         }
     }
 
@@ -254,7 +232,8 @@ mod tests {
         fn parallel<A, O, F>(start: F)
         where
             A: Send + 'static,
-            O: StreamingIterator + Optimizer<Point = A> + Send + 'static,
+            O: StreamingIterator + Send + 'static,
+            O::Item: Optimizer<Point = A>,
             F: Fn() -> O,
         {
             let o1 = start();
@@ -348,21 +327,6 @@ mod tests {
             }
         }
 
-        impl<I> Runner for Restarter<I>
-        where
-            I: Runner + Restart,
-        {
-            type It = I::It;
-
-            fn stop(self) -> Self::It
-            where
-                Self: Sized,
-                Self::It: Sized,
-            {
-                self.it.stop()
-            }
-        }
-
         let _ = RestarterConfig { max_restarts: 10 }
             .start(MaxStepsConfig(10).start(MockOptimizerA::new(mock_obj_func)))
             .nth(100);
@@ -436,6 +400,6 @@ mod tests {
         let store = serde_json::to_string(&o).unwrap();
         o = serde_json::from_str(&store).unwrap();
         o.next();
-        o.stop().best_point();
+        o.get().unwrap().best_point();
     }
 }

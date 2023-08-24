@@ -43,7 +43,7 @@ using a derivative-free optimizer:
 use optimal::{prelude::*, BinaryDerivativeFreeConfig};
 
 println!(
-    "{}",
+    "{:?}",
     BinaryDerivativeFreeConfig::start_default_for(16, |point| {
         point.iter().filter(|x| **x).count() as f64
     })
@@ -58,7 +58,7 @@ using a derivative optimizer:
 use optimal::{prelude::*, RealDerivativeConfig};
 
 println!(
-    "{}",
+    "{:?}",
     RealDerivativeConfig::start_default_for(
         2,
         std::iter::repeat(-10.0..=10.0).take(2),
