@@ -44,11 +44,11 @@ macro_rules! _derive_new_from_bounded_partial_ord {
                 #[doc = "Value is " $incomparable_str "."]
                 #[error("{0} is {}", $incomparable_str)]
                 $incomparable_name($inner),
-                /// Value is below the lower bound.
-                #[error("{0} is below the lower bound ({})", < $type $(< $a >)? > ::min_value())]
+                /// Value is below lower bound.
+                #[error("{0} is below lower bound ({})", < $type $(< $a >)? > ::min_value())]
                 TooLow($inner),
-                /// Value is above the upper bound.
-                #[error("{0} is above the upper bound ({})", < $type $(< $a >)? > ::max_value())]
+                /// Value is above upper bound.
+                #[error("{0} is above upper bound ({})", < $type $(< $a >)? > ::max_value())]
                 TooHigh($inner),
             }
 
@@ -110,8 +110,8 @@ macro_rules! _derive_new_from_lower_bounded_partial_ord {
                 #[doc = "Value is " $incomparable_str "."]
                 #[error("{0} is {}", $incomparable_str)]
                 $incomparable_name($inner),
-                /// Value is below the lower bound.
-                #[error("{0} is below the lower bound ({})", < $type $(< $a >)? > ::min_value())]
+                /// Value is below lower bound.
+                #[error("{0} is below lower bound ({})", < $type $(< $a >)? > ::min_value())]
                 TooLow($inner),
             }
 
@@ -133,9 +133,9 @@ macro_rules! _derive_new_from_lower_bounded_partial_ord {
 macro_rules! derive_new_from_lower_bounded {
     ( $type:ident ( $inner: ty ) ) => {
         $crate::paste::paste! {
-            #[doc = "Error returned when '" $type "' is given a value below the lower bound."]
+            #[doc = "Error returned when '" $type "' is given a value below lower bound."]
             #[derive(Clone, Copy, Debug, $crate::thiserror::Error)]
-            #[error("{0} is below the lower bound ({})", $type::min_value())]
+            #[error("{0} is below lower bound ({})", $type::min_value())]
             pub struct [<Invalid $type Error>]($inner);
 
             impl $type {
@@ -171,24 +171,28 @@ macro_rules! derive_from_str_from_try_into {
     ( $type:ident ( $inner:ty ) ) => {
         $crate::paste::paste! {
             #[doc = "Error returned when failing to convert from a string or into '" $type "'."]
-            #[derive(Clone, Copy, Debug, $crate::thiserror::Error)]
-            pub enum [<$type FromStrError>]<A, B> {
-                #[doc = "Error convering to '" $inner "'."]
-                FromStr(A),
-                #[doc = "Error convering to '" $type "'."]
-                TryInto(B),
+            #[derive(Clone, Debug, $crate::thiserror::Error)]
+            #[error(transparent)]
+            pub struct [<$type FromStrError>](#[from] [<_ $type FromStrError>]);
+
+            #[derive(Clone, Debug, $crate::thiserror::Error)]
+            enum [<_ $type FromStrError>] {
+                #[doc = "Error convering from 'str' to '" $inner "'."]
+                #[error("Failed to convert from 'str': {0}")]
+                FromStr(<$inner as std::str::FromStr>::Err),
+                #[doc = "Error convering from '" $inner "' to '" $type "'."]
+                #[error("Failed to convert into type: {0}")]
+                TryInto(<$type as TryFrom<$inner>>::Error),
             }
 
             impl std::str::FromStr for $type {
-                type Err = [<$type FromStrError>]<
-                    <$inner as std::str::FromStr>::Err,
-                    <Self as TryFrom<$inner>>::Error,
-                >;
+                type Err = [<$type FromStrError>];
 
                 fn from_str(s: &str) -> Result<Self, Self::Err> {
                     s.parse::<$inner>()
-                        .map_err(|e| Self::Err::FromStr(e))
-                        .and_then(|x| x.try_into().map_err(Self::Err::TryInto))
+                        .map_err([<_ $type FromStrError>]::FromStr)
+                        .and_then(|x| x.try_into().map_err([<_ $type FromStrError>]::TryInto))
+                        .map_err(|x| x.into())
                 }
             }
         }
