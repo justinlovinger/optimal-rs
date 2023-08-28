@@ -262,6 +262,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "optimal-binary"
+version = "0.1.0"
+dependencies = [
+ "num-traits",
+]
+
+[[package]]
 name = "optimal-core"
 version = "0.1.0"
 dependencies = [

@@ -2,6 +2,7 @@
 members = [
   "default-for",
   "derive-bounded",
+  "optimal-binary",
   "optimal-core",
   "optimal-pbil",
   "optimal-steepest",

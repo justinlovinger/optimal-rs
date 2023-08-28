@@ -1,0 +1,16 @@
+[package]
+name = "optimal-binary"
+version = "0.1.0"
+edition = "2021"
+authors = ["Justin Lovinger"]
+description = "Utilities for working with binary optimizers"
+repository = "https://github.com/justinlovinger/optimal-rs"
+readme = "README.md"
+keywords = ["optimization", "binary"]
+categories = ["science", "mathematics"]
+license = "MIT"
+
+[dependencies]
+num-traits = "0.2.16"
+
+[dev-dependencies]
