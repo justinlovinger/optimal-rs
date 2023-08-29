@@ -7,12 +7,11 @@
 //! # Examples
 //!
 //! ```
-//! use ndarray::prelude::*;
 //! use optimal_steepest::backtracking_steepest::*;
 //!
 //! fn main() {
 //!     println!(
-//!         "{}",
+//!         "{:?}",
 //!         Config::default()
 //!             .start(std::iter::repeat(-10.0..=10.0).take(2), obj_func, |x| (
 //!                 obj_func(x),
@@ -24,18 +23,19 @@
 //!     );
 //! }
 //!
-//! fn obj_func(point: ArrayView1<f64>) -> f64 {
-//!     point.map(|x| x.powi(2)).sum()
+//! fn obj_func(point: &[f64]) -> f64 {
+//!     point.iter().map(|x| x.powi(2)).sum()
 //! }
 //!
-//! fn obj_func_d(point: ArrayView1<f64>) -> Array1<f64> {
-//!     point.map(|x| 2.0 * x)
+//! fn obj_func_d(point: &[f64]) -> Vec<f64> {
+//!     point.iter().map(|x| 2.0 * x).collect()
 //! }
 //! ```
 
 use std::{
     fmt::Debug,
     hint::unreachable_unchecked,
+    iter::Sum,
     ops::{Add, Div, Mul, Neg, RangeInclusive, Sub},
 };
 
@@ -45,7 +45,6 @@ use derive_bounded::{
 };
 use derive_getters::Getters;
 use derive_more::Display;
-use ndarray::{linalg::Dot, prelude::*, Data, Zip};
 use num_traits::{
     bounds::{LowerBounded, UpperBounded},
     real::Real,
@@ -104,8 +103,8 @@ impl<A, F, FD> BacktrackingSteepest<A, F, FD> {
 
 impl<A, F, FD> BacktrackingSteepest<A, F, FD>
 where
-    F: Fn(ArrayView1<A>) -> A,
-    FD: Fn(ArrayView1<A>) -> (A, Array1<A>),
+    F: Fn(&[A]) -> A,
+    FD: Fn(&[A]) -> (A, Vec<A>),
 {
     /// Return value of the best point discovered,
     /// evaluating the best point if necessary.
@@ -127,18 +126,18 @@ where
 
     fn evaluate(&self) -> Evaluation<A> {
         match &self.state {
-            State::Ready(x) => Evaluation::ValueAndDerivatives((self.obj_func_d)(x.point().into())),
-            State::Searching(x) => Evaluation::Value((self.obj_func)(x.point().into())),
+            State::Ready(x) => Evaluation::ValueAndDerivatives((self.obj_func_d)(x.point())),
+            State::Searching(x) => Evaluation::Value((self.obj_func)(x.point())),
         }
     }
 }
 
 impl<A, F, FD> StreamingIterator for BacktrackingSteepest<A, F, FD>
 where
-    A: Real + 'static,
+    A: Real + Sum + 'static,
     f64: AsPrimitive<A>,
-    F: Fn(ArrayView1<A>) -> A,
-    FD: Fn(ArrayView1<A>) -> (A, Array1<A>),
+    F: Fn(&[A]) -> A,
+    FD: Fn(&[A]) -> (A, Vec<A>),
 {
     type Item = Self;
 
@@ -182,10 +181,10 @@ impl<A, F, FD> Optimizer for BacktrackingSteepest<A, F, FD>
 where
     A: Clone,
 {
-    type Point = Array1<A>;
+    type Point = Vec<A>;
 
     fn best_point(&self) -> Self::Point {
-        self.state.best_point().into_owned()
+        self.state.best_point().into()
     }
 }
 
@@ -226,7 +225,7 @@ pub struct Ready<A> {
 pub struct Searching<A> {
     point: Point<A>,
     point_value: A,
-    step_direction: Array1<A>,
+    step_direction: Vec<A>,
     c_1_times_point_derivatives_dot_step_direction: A,
     step_size: A,
     point_at_step: Point<A>,
@@ -239,7 +238,7 @@ pub enum Evaluation<A> {
     /// An objective value.
     Value(A),
     /// An objective value and point derivatives.
-    ValueAndDerivatives((A, Array1<A>)),
+    ValueAndDerivatives((A, Vec<A>)),
 }
 
 impl<A> Config<A> {
@@ -285,8 +284,8 @@ impl<A> Config<A> {
     ) -> BacktrackingSteepest<A, F, FD>
     where
         A: Debug + SampleUniform + Real,
-        F: Fn(ArrayView1<A>) -> A,
-        FD: Fn(ArrayView1<A>) -> (A, Array1<A>),
+        F: Fn(&[A]) -> A,
+        FD: Fn(&[A]) -> (A, Vec<A>),
     {
         BacktrackingSteepest::new(
             self.initial_state_using(initial_bounds, &mut thread_rng()),
@@ -308,8 +307,8 @@ impl<A> Config<A> {
     ) -> BacktrackingSteepest<A, F, FD>
     where
         A: Debug + SampleUniform + Real,
-        F: Fn(ArrayView1<A>) -> A,
-        FD: Fn(ArrayView1<A>) -> (A, Array1<A>),
+        F: Fn(&[A]) -> A,
+        FD: Fn(&[A]) -> (A, Vec<A>),
         R: Rng,
     {
         BacktrackingSteepest::new(
@@ -330,8 +329,8 @@ impl<A> Config<A> {
         state: State<A>,
     ) -> BacktrackingSteepest<A, F, FD>
     where
-        F: Fn(ArrayView1<A>) -> A,
-        FD: Fn(ArrayView1<A>) -> (A, Array1<A>),
+        F: Fn(&[A]) -> A,
+        FD: Fn(&[A]) -> (A, Vec<A>),
     {
         // Note,
         // this assumes states cannot be modified
@@ -369,21 +368,19 @@ impl<A> Config<A> {
 
 impl<A> State<A> {
     /// Return data to be evaluated.
-    pub fn evaluatee(&self) -> ArrayView1<A> {
-        (match self {
+    pub fn evaluatee(&self) -> &[A] {
+        match self {
             State::Ready(x) => x.point(),
             State::Searching(x) => x.point(),
-        })
-        .into()
+        }
     }
 
     /// Return the best point discovered.
-    pub fn best_point(&self) -> ArrayView1<A> {
-        (match self {
+    pub fn best_point(&self) -> &[A] {
+        match self {
             State::Ready(x) => x.best_point(),
             State::Searching(x) => x.best_point(),
-        })
-        .view()
+        }
     }
 
     /// Return the value of the best point discovered,
@@ -425,11 +422,11 @@ impl<A> Ready<A> {
         &self.point
     }
 
-    fn step_from_evaluated<S>(
+    fn step_from_evaluated(
         self,
         config: &Config<A>,
         point_value: A,
-        point_derivatives: ArrayBase<S, Ix1>,
+        point_derivatives: Vec<A>,
     ) -> State<A>
     where
         A: 'static
@@ -439,19 +436,22 @@ impl<A> Ready<A> {
             + Add<Output = A>
             + Sub<Output = A>
             + Div<Output = A>
-            + One,
-        S: Data<Elem = A>,
+            + One
+            + Sum,
         f64: AsPrimitive<A>,
-        ArrayBase<S, Ix1>: Dot<Array1<A>, Output = A>,
     {
-        let step_direction = point_derivatives.mapv(|x| -x);
+        let step_direction = point_derivatives.iter().map(|x| -*x).collect::<Vec<_>>();
         let step_size = config.initial_step_size_incr_rate * self.last_step_size;
         State::Searching(Searching {
             point_at_step: descend(&self.point, step_size, &step_direction),
             point: self.point,
             point_value,
             c_1_times_point_derivatives_dot_step_direction: config.c_1.0
-                * point_derivatives.dot(&step_direction),
+                * point_derivatives
+                    .into_iter()
+                    .zip(step_direction.iter().copied())
+                    .map(|(x, y)| x * y)
+                    .sum(),
             step_direction,
             step_size,
         })
@@ -490,13 +490,15 @@ impl<A> Searching<A> {
     }
 }
 
-fn descend<A>(point: &Point<A>, step_size: A, step_direction: &Array1<A>) -> Point<A>
+fn descend<A>(point: &Point<A>, step_size: A, step_direction: &[A]) -> Point<A>
 where
     A: Clone + Add<Output = A> + Mul<Output = A>,
 {
-    Zip::from(point)
-        .and(step_direction)
-        .map_collect(|x, d| x.clone() + step_size.clone() * d.clone())
+    point
+        .iter()
+        .zip(step_direction)
+        .map(|(x, d)| x.clone() + step_size.clone() * d.clone())
+        .collect()
 }
 
 /// The sufficient decrease condition,
@@ -627,4 +629,4 @@ where
     }
 }
 
-type Point<A> = Array1<A>;
+type Point<A> = Vec<A>;

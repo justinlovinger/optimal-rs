@@ -62,8 +62,8 @@ println!(
     RealDerivativeConfig::start_default_for(
         2,
         std::iter::repeat(-10.0..=10.0).take(2),
-        |point| { point.map(|x| x.powi(2)).sum() },
-        |point| { point.map(|x| 2.0 * x) }
+        |point| point.iter().map(|x| x.powi(2)).sum(),
+        |point| point.iter().map(|x| 2.0 * x).collect(),
     )
     .nth(100)
     .unwrap()

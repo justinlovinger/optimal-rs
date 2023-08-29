@@ -6,14 +6,15 @@
 //! # Examples
 //!
 //! ```
-//! use ndarray::prelude::*;
 //! use optimal_steepest::fixed_step_steepest::*;
 //!
 //! println!(
-//!     "{}",
+//!     "{:?}",
 //!     Config::new(StepSize::new(0.5).unwrap())
 //!         .start(std::iter::repeat(-10.0..=10.0).take(2), |point| point
-//!             .map(|x| 2.0 * x))
+//!             .iter()
+//!             .map(|x| 2.0 * x)
+//!             .collect())
 //!         .nth(100)
 //!         .unwrap()
 //!         .best_point()
@@ -23,7 +24,6 @@
 use std::ops::{Mul, RangeInclusive, SubAssign};
 
 use derive_getters::Getters;
-use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
 pub use optimal_core::prelude::*;
 use rand::{
@@ -72,23 +72,23 @@ impl<A, FD> FixedStepSteepest<A, FD> {
 
 impl<A, FD> FixedStepSteepest<A, FD>
 where
-    FD: Fn(ArrayView1<A>) -> Array1<A>,
+    FD: Fn(&[A]) -> Vec<A>,
 {
     /// Return evaluation of current state,
     /// evaluating and caching if necessary.
-    pub fn evaluation(&self) -> &Array1<A> {
+    pub fn evaluation(&self) -> &[A] {
         self.evaluation_cache.get_or_init(|| self.evaluate())
     }
 
-    fn evaluate(&self) -> Array1<A> {
-        (self.obj_func_d)(self.state.view())
+    fn evaluate(&self) -> Vec<A> {
+        (self.obj_func_d)(&self.state)
     }
 }
 
 impl<A, FD> StreamingIterator for FixedStepSteepest<A, FD>
 where
     A: Clone + SubAssign + Mul<Output = A>,
-    FD: Fn(ArrayView1<A>) -> Array1<A>,
+    FD: Fn(&[A]) -> Vec<A>,
 {
     type Item = Self;
 
@@ -97,9 +97,10 @@ where
             .evaluation_cache
             .take()
             .unwrap_or_else(|| self.evaluate());
-        self.state.zip_mut_with(&evaluation, |x, d| {
-            *x -= self.config.step_size.clone() * d.clone()
-        });
+        self.state
+            .iter_mut()
+            .zip(&evaluation)
+            .for_each(|(x, d)| *x -= self.config.step_size.clone() * d.clone());
     }
 
     fn get(&self) -> Option<&Self::Item> {
@@ -111,7 +112,7 @@ impl<A, FD> Optimizer for FixedStepSteepest<A, FD>
 where
     A: Clone,
 {
-    type Point = Array1<A>;
+    type Point = Vec<A>;
 
     fn best_point(&self) -> Self::Point {
         self.state.clone()
@@ -126,7 +127,7 @@ pub struct Config<A> {
     pub step_size: StepSize<A>,
 }
 
-type Point<A> = Array1<A>;
+type Point<A> = Vec<A>;
 
 impl<A> Config<A> {
     /// Return a new 'Config'.
@@ -150,7 +151,7 @@ impl<A> Config<A> {
     ) -> FixedStepSteepest<A, FD>
     where
         A: SampleUniform,
-        FD: Fn(ArrayView1<A>) -> Array1<A>,
+        FD: Fn(&[A]) -> Vec<A>,
     {
         FixedStepSteepest::new(
             self.initial_state_using(initial_bounds, &mut thread_rng()),
@@ -174,7 +175,7 @@ impl<A> Config<A> {
     ) -> FixedStepSteepest<A, FD>
     where
         A: SampleUniform,
-        FD: Fn(ArrayView1<A>) -> Array1<A>,
+        FD: Fn(&[A]) -> Vec<A>,
         R: Rng,
     {
         FixedStepSteepest::new(
@@ -192,7 +193,7 @@ impl<A> Config<A> {
     /// - `state`: initial point to start from
     pub fn start_from<FD>(self, obj_func_d: FD, state: Point<A>) -> FixedStepSteepest<A, FD>
     where
-        FD: Fn(ArrayView1<A>) -> Array1<A>,
+        FD: Fn(&[A]) -> Vec<A>,
     {
         FixedStepSteepest::new(state, self, obj_func_d)
     }

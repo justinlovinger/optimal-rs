@@ -5,7 +5,6 @@ Population-based incremental learning (PBIL).
 ## Examples
 
 ```rust
-use ndarray::prelude::*;
 use optimal_pbil::*;
 
 println!(

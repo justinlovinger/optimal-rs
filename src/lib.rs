@@ -55,8 +55,8 @@
 //!     RealDerivativeConfig::start_default_for(
 //!         2,
 //!         std::iter::repeat(-10.0..=10.0).take(2),
-//!         |point| { point.map(|x| x.powi(2)).sum() },
-//!         |point| { point.map(|x| 2.0 * x) }
+//!         |point| point.iter().map(|x| x.powi(2)).sum(),
+//!         |point| point.iter().map(|x| 2.0 * x).collect(),
 //!     )
 //!     .nth(100)
 //!     .unwrap()
@@ -75,7 +75,6 @@ use std::{
     ops::{Add, Mul, RangeInclusive, Sub},
 };
 
-use ndarray::prelude::*;
 pub use optimal_core::prelude;
 pub use optimal_core::prelude::*;
 use optimal_pbil::{
@@ -96,8 +95,8 @@ pub struct RealDerivative {
     #[allow(clippy::type_complexity)]
     inner: BacktrackingSteepest<
         f64,
-        Box<dyn Fn(ArrayView1<f64>) -> f64>,
-        Box<dyn Fn(ArrayView1<f64>) -> (f64, Array1<f64>)>,
+        Box<dyn Fn(&[f64]) -> f64>,
+        Box<dyn Fn(&[f64]) -> (f64, Vec<f64>)>,
     >,
 }
 
@@ -129,7 +128,7 @@ impl StreamingIterator for RealDerivative {
 }
 
 impl Optimizer for RealDerivative {
-    type Point = Array1<f64>;
+    type Point = Vec<f64>;
 
     fn best_point(&self) -> Self::Point {
         self.inner.best_point()
@@ -153,8 +152,8 @@ impl RealDerivativeConfig {
         obj_func_d: FD,
     ) -> RealDerivative
     where
-        F: Fn(ArrayView1<f64>) -> f64 + Clone + 'static,
-        FD: Fn(ArrayView1<f64>) -> Array1<f64> + 'static,
+        F: Fn(&[f64]) -> f64 + Clone + 'static,
+        FD: Fn(&[f64]) -> Vec<f64> + 'static,
     {
         Self::default().start(len, initial_bounds, obj_func, obj_func_d)
     }
@@ -178,8 +177,8 @@ impl RealDerivativeConfig {
         obj_func_d: FD,
     ) -> RealDerivative
     where
-        F: Fn(ArrayView1<f64>) -> f64 + Clone + 'static,
-        FD: Fn(ArrayView1<f64>) -> Array1<f64> + 'static,
+        F: Fn(&[f64]) -> f64 + Clone + 'static,
+        FD: Fn(&[f64]) -> Vec<f64> + 'static,
     {
         RealDerivative {
             inner: self.inner_config(len).start(
@@ -210,8 +209,8 @@ impl RealDerivativeConfig {
         rng: &mut SplitMix64,
     ) -> RealDerivative
     where
-        F: Fn(ArrayView1<f64>) -> f64 + Clone + 'static,
-        FD: Fn(ArrayView1<f64>) -> Array1<f64> + 'static,
+        F: Fn(&[f64]) -> f64 + Clone + 'static,
+        FD: Fn(&[f64]) -> Vec<f64> + 'static,
     {
         RealDerivative {
             inner: self.inner_config(len).start_using(
@@ -235,7 +234,7 @@ impl RealDerivativeConfig {
 #[allow(missing_debug_implementations)]
 pub struct BinaryDerivativeFree {
     #[allow(clippy::type_complexity)]
-    inner: UntilProbabilitiesConverged<Pbil<f64, Box<dyn Fn(ArrayView1<bool>) -> f64>>>,
+    inner: UntilProbabilitiesConverged<Pbil<f64, Box<dyn Fn(&[bool]) -> f64>>>,
 }
 
 /// Binary derivative-free optimizer configuration parameters.
@@ -266,7 +265,7 @@ impl StreamingIterator for BinaryDerivativeFree {
 }
 
 impl Optimizer for BinaryDerivativeFree {
-    type Point = Array1<bool>;
+    type Point = Vec<bool>;
 
     fn best_point(&self) -> Self::Point {
         self.inner.it().best_point()
@@ -283,7 +282,7 @@ impl BinaryDerivativeFreeConfig {
     /// - `obj_func`: objective function to minimize
     pub fn start_default_for<F>(len: usize, obj_func: F) -> BinaryDerivativeFree
     where
-        F: Fn(ArrayView1<bool>) -> f64 + 'static,
+        F: Fn(&[bool]) -> f64 + 'static,
     {
         Self::default().start(len, obj_func)
     }
@@ -299,7 +298,7 @@ impl BinaryDerivativeFreeConfig {
     /// - `obj_func`: objective function to minimize
     pub fn start<F>(self, len: usize, obj_func: F) -> BinaryDerivativeFree
     where
-        F: Fn(ArrayView1<bool>) -> f64 + 'static,
+        F: Fn(&[bool]) -> f64 + 'static,
     {
         let (runner_config, config) = self.inner_config(len);
         BinaryDerivativeFree {
@@ -323,7 +322,7 @@ impl BinaryDerivativeFreeConfig {
         rng: &mut SplitMix64,
     ) -> BinaryDerivativeFree
     where
-        F: Fn(ArrayView1<bool>) -> f64 + 'static,
+        F: Fn(&[bool]) -> f64 + 'static,
     {
         let (runner_config, config) = self.inner_config(len);
         BinaryDerivativeFree {

@@ -1,6 +1,4 @@
 use super::types::*;
-use ndarray::{prelude::*, Data};
-use ndarray_rand::RandomExt;
 use rand::{
     distributions::{Bernoulli, Standard},
     prelude::SeedableRng,
@@ -19,10 +17,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Ready {
-    probabilities: Array1<Probability>,
+    probabilities: Vec<Probability>,
     rng: Xoshiro256PlusPlus,
-    distrs: Array1<Bernoulli>,
-    sample: Array1<bool>,
+    distrs: Vec<Bernoulli>,
+    sample: Vec<bool>,
 }
 
 /// PBIL state for sampling
@@ -31,12 +29,12 @@ pub struct Ready {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Sampling<B> {
-    probabilities: Array1<Probability>,
+    probabilities: Vec<Probability>,
     rng: Xoshiro256PlusPlus,
-    distrs: Array1<Bernoulli>,
-    best_sample: Array1<bool>,
+    distrs: Vec<Bernoulli>,
+    best_sample: Vec<bool>,
     best_value: B,
-    sample: Array1<bool>,
+    sample: Vec<bool>,
     samples_generated: usize,
 }
 
@@ -44,7 +42,7 @@ pub struct Sampling<B> {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Mutating {
-    probabilities: Array1<Probability>,
+    probabilities: Vec<Probability>,
     rng: Xoshiro256PlusPlus,
 }
 
@@ -56,7 +54,7 @@ impl Ready {
     /// - `num_bits`: number of bits in each sample
     pub(super) fn initial(num_bits: usize) -> Self {
         Self::new(
-            Array::from_elem(num_bits, Probability::default()),
+            [Probability::default()].repeat(num_bits),
             Xoshiro256PlusPlus::from_entropy(),
         )
     }
@@ -72,17 +70,19 @@ impl Ready {
         R: Rng,
     {
         Self::new(
-            Array::from_elem(num_bits, Probability::default()),
+            [Probability::default()].repeat(num_bits),
             Xoshiro256PlusPlus::from_rng(rng).expect("RNG should initialize"),
         )
     }
 
     /// Return custom initial state.
-    pub(super) fn new(probabilities: Array1<Probability>, mut rng: Xoshiro256PlusPlus) -> Self {
-        let distrs =
-            probabilities.map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"));
+    pub(super) fn new(probabilities: Vec<Probability>, mut rng: Xoshiro256PlusPlus) -> Self {
+        let distrs = probabilities
+            .iter()
+            .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
+            .collect::<Vec<_>>();
         Self {
-            sample: distrs.map(|d| rng.sample(d)),
+            sample: distrs.iter().map(|d| rng.sample(d)).collect(),
             probabilities,
             rng,
             distrs,
@@ -95,9 +95,11 @@ impl Ready {
     pub(super) fn to_sampling<B>(mut self, value: B) -> Sampling<B> {
         let distrs = self
             .probabilities
-            .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"));
+            .iter()
+            .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
+            .collect::<Vec<_>>();
         Sampling {
-            sample: distrs.map(|d| self.rng.sample(d)),
+            sample: distrs.iter().map(|d| self.rng.sample(d)).collect(),
             probabilities: self.probabilities,
             rng: self.rng,
             distrs,
@@ -108,12 +110,12 @@ impl Ready {
     }
 
     /// Return probabilities.
-    pub fn probabilities(&self) -> &Array1<Probability> {
+    pub fn probabilities(&self) -> &[Probability] {
         &self.probabilities
     }
 
     /// Return sample to evaluate.
-    pub fn sample(&self) -> &Array1<bool> {
+    pub fn sample(&self) -> &[bool] {
         &self.sample
     }
 }
@@ -130,7 +132,7 @@ impl<B> Sampling<B> {
             (self.best_sample, self.best_value)
         };
         Sampling {
-            sample: self.distrs.map(|d| self.rng.sample(d)),
+            sample: self.distrs.iter().map(|d| self.rng.sample(d)).collect(),
             probabilities: self.probabilities,
             rng: self.rng,
             distrs: self.distrs,
@@ -186,12 +188,12 @@ impl<B> Sampling<B> {
     }
 
     /// Return probabilities.
-    pub fn probabilities(&self) -> &Array1<Probability> {
+    pub fn probabilities(&self) -> &[Probability] {
         &self.probabilities
     }
 
     /// Return sample to evaluate.
-    pub fn sample(&self) -> &Array1<bool> {
+    pub fn sample(&self) -> &[bool] {
         &self.sample
     }
 }
@@ -210,43 +212,34 @@ impl Mutating {
         adjust_rate: MutationAdjustRate,
     ) -> Ready {
         let distr: Bernoulli = chance.into();
-        self.probabilities.zip_mut_with(
-            &Array::random_using(self.probabilities.len(), distr, &mut self.rng),
-            |p, mutate| {
-                if *mutate {
-                    // `Standard` distribution excludes `1`,
-                    // but it more efficient
-                    // than `Uniform::new_inclusive(0., 1.)`.
-                    // This operation is safe
-                    // because Probability is closed under `adjust`
-                    // with rate in [0,1].
-                    *p = unsafe {
-                        Probability::new_unchecked(adjust(
-                            adjust_rate.into(),
-                            f64::from(*p),
-                            self.rng.sample(Standard),
-                        ))
-                    }
+        self.probabilities.iter_mut().for_each(|p| {
+            if self.rng.sample(distr) {
+                // `Standard` distribution excludes `1`,
+                // but it more efficient
+                // than `Uniform::new_inclusive(0., 1.)`.
+                // This operation is safe
+                // because Probability is closed under `adjust`
+                // with rate in [0,1].
+                *p = unsafe {
+                    Probability::new_unchecked(adjust(
+                        adjust_rate.into(),
+                        f64::from(*p),
+                        self.rng.sample(Standard),
+                    ))
                 }
-            },
-        );
+            }
+        });
         Ready::new(self.probabilities, self.rng)
     }
 
     /// Return probabilities.
-    pub fn probabilities(&self) -> &Array1<Probability> {
+    pub fn probabilities(&self) -> &[Probability] {
         &self.probabilities
     }
 }
 
-fn adjust_probabilities<S>(
-    probabilities: &mut Array1<Probability>,
-    adjust_rate: f64,
-    sample: ArrayBase<S, Ix1>,
-) where
-    S: Data<Elem = bool>,
-{
-    probabilities.zip_mut_with(&sample, |p, b| {
+fn adjust_probabilities(probabilities: &mut [Probability], adjust_rate: f64, sample: Vec<bool>) {
+    probabilities.iter_mut().zip(&sample).for_each(|(p, b)| {
         // This operation is safe
         // because Probability is closed under `adjust`
         // with rate in [0,1].
@@ -279,12 +272,12 @@ mod tests {
         adjust_rate: AdjustRate,
     ) {
         let state = Ready::new(
-            initial_probabilities.into(),
+            initial_probabilities,
             Xoshiro256PlusPlus::seed_from_u64(seed),
         );
-        let value = f(state.sample().view());
+        let value = f(state.sample());
         let state = state.to_sampling(value);
-        let value = f(state.sample().view());
+        let value = f(state.sample());
         prop_assert!(are_valid(
             state.to_ready(adjust_rate, value).probabilities()
         ));
@@ -298,7 +291,7 @@ mod tests {
         mutation_adjust_rate: MutationAdjustRate,
     ) {
         let state = (Mutating {
-            probabilities: initial_probabilities.into(),
+            probabilities: initial_probabilities,
             rng: Xoshiro256PlusPlus::seed_from_u64(seed),
         })
         .to_ready(mutation_chance, mutation_adjust_rate);
@@ -324,11 +317,11 @@ mod tests {
     arbitrary_from_bounded!(f64, MutationChance);
     arbitrary_from_bounded!(f64, MutationAdjustRate);
 
-    fn f(point: ArrayView1<bool>) -> usize {
+    fn f(point: &[bool]) -> usize {
         point.iter().filter(|x| **x).count()
     }
 
-    fn are_valid(probabilities: &Array1<Probability>) -> bool {
+    fn are_valid(probabilities: &[Probability]) -> bool {
         probabilities
             .iter()
             .all(|p| Probability::try_from(f64::from(*p)).is_ok())

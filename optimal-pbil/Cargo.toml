@@ -11,15 +11,13 @@ categories = ["science", "mathematics"]
 license = "MIT"
 
 [features]
-serde = ["dep:serde", "ndarray/serde", "rand/serde1", "rand_xoshiro/serde1"]
+serde = ["dep:serde", "rand/serde1", "rand_xoshiro/serde1"]
 
 [dependencies]
 default-for = { path = "../default-for" }
 derive-bounded = { path = "../derive-bounded" }
 derive-getters = "0.3.0"
 derive_more = "0.99.17"
-ndarray = "0.15.6"
-ndarray-rand = "0.14.0"
 num-traits = "0.2.16"
 once_cell = "1.18.0"
 optimal-core = { path = "../optimal-core" }

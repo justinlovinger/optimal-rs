@@ -9,7 +9,6 @@
 //! # Examples
 //!
 //! ```
-//! use ndarray::prelude::*;
 //! use optimal_pbil::*;
 //!
 //! println!(
@@ -28,7 +27,6 @@ use std::fmt::Debug;
 use default_for::DefaultFor;
 use derive_getters::Getters;
 use derive_more::IsVariant;
-use ndarray::prelude::*;
 use once_cell::sync::OnceCell;
 pub use optimal_core::prelude::*;
 use rand_xoshiro::{SplitMix64, Xoshiro256PlusPlus};
@@ -47,11 +45,11 @@ pub struct MismatchedLengthError;
 /// A type containing an array of probabilities.
 pub trait Probabilities {
     /// Return probabilities.
-    fn probabilities(&self) -> &Array1<Probability>;
+    fn probabilities(&self) -> &[Probability];
 }
 
 impl<B, F> Probabilities for Pbil<B, F> {
-    fn probabilities(&self) -> &Array1<Probability> {
+    fn probabilities(&self) -> &[Probability] {
         self.state().probabilities()
     }
 }
@@ -147,11 +145,11 @@ impl<B, F> Pbil<B, F> {
 
 impl<B, F> Pbil<B, F>
 where
-    F: Fn(ArrayView1<bool>) -> B,
+    F: Fn(&[bool]) -> B,
 {
     /// Return value of the best point discovered.
     pub fn best_point_value(&self) -> B {
-        (self.obj_func)(self.best_point().view())
+        (self.obj_func)(&self.best_point())
     }
 
     /// Return evaluation of current state,
@@ -168,7 +166,7 @@ where
 impl<B, F> StreamingIterator for Pbil<B, F>
 where
     B: PartialOrd,
-    F: Fn(ArrayView1<bool>) -> B,
+    F: Fn(&[bool]) -> B,
 {
     type Item = Self;
 
@@ -207,7 +205,7 @@ where
 }
 
 impl<B, F> Optimizer for Pbil<B, F> {
-    type Point = Array1<bool>;
+    type Point = Vec<bool>;
 
     fn best_point(&self) -> Self::Point {
         self.state.best_point()
@@ -286,7 +284,7 @@ impl Config {
     /// - `obj_func`: objective function to minimize
     pub fn start_default_for<B, F>(num_bits: usize, obj_func: F) -> Pbil<B, F>
     where
-        F: Fn(ArrayView1<bool>) -> B,
+        F: Fn(&[bool]) -> B,
     {
         Self::default_for(num_bits).start(num_bits, obj_func)
     }
@@ -302,7 +300,7 @@ impl Config {
     /// - `obj_func`: objective function to minimize
     pub fn start<B, F>(self, num_bits: usize, obj_func: F) -> Pbil<B, F>
     where
-        F: Fn(ArrayView1<bool>) -> B,
+        F: Fn(&[bool]) -> B,
     {
         Pbil::new(State::Ready(Ready::initial(num_bits)), self, obj_func)
     }
@@ -318,7 +316,7 @@ impl Config {
     /// - `rng`: source of randomness
     pub fn start_using<B, F>(self, num_bits: usize, obj_func: F, rng: &mut SplitMix64) -> Pbil<B, F>
     where
-        F: Fn(ArrayView1<bool>) -> B,
+        F: Fn(&[bool]) -> B,
     {
         Pbil::new(
             State::Ready(Ready::initial_using(num_bits, rng)),
@@ -337,7 +335,7 @@ impl Config {
     /// - `state`: PBIL state to start from
     pub fn start_from<B, F>(self, obj_func: F, state: State<B>) -> Pbil<B, F>
     where
-        F: Fn(ArrayView1<bool>) -> B,
+        F: Fn(&[bool]) -> B,
     {
         Pbil::new(state, self, obj_func)
     }
@@ -345,7 +343,7 @@ impl Config {
 
 impl<B> State<B> {
     /// Return custom initial state.
-    pub fn new(probabilities: Array1<Probability>, rng: Xoshiro256PlusPlus) -> Self {
+    pub fn new(probabilities: Vec<Probability>, rng: Xoshiro256PlusPlus) -> Self {
         Self::Ready(Ready::new(probabilities, rng))
     }
 
@@ -355,22 +353,25 @@ impl<B> State<B> {
     }
 
     /// Return data to be evaluated.
-    pub fn evaluatee(&self) -> Option<ArrayView1<bool>> {
+    pub fn evaluatee(&self) -> Option<&[bool]> {
         match self {
-            State::Ready(s) => Some(s.sample().into()),
-            State::Sampling(s) => Some(s.sample().into()),
+            State::Ready(s) => Some(s.sample()),
+            State::Sampling(s) => Some(s.sample()),
             State::Mutating(_) => None,
         }
     }
 
     /// Return the best point discovered.
-    pub fn best_point(&self) -> Array1<bool> {
-        self.probabilities().map(|p| f64::from(*p) >= 0.5)
+    pub fn best_point(&self) -> Vec<bool> {
+        self.probabilities()
+            .iter()
+            .map(|p| f64::from(*p) >= 0.5)
+            .collect()
     }
 }
 
 impl<B> Probabilities for State<B> {
-    fn probabilities(&self) -> &Array1<Probability> {
+    fn probabilities(&self) -> &[Probability] {
         match &self {
             State::Ready(s) => s.probabilities(),
             State::Sampling(s) => s.probabilities(),
