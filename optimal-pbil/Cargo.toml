@@ -11,7 +11,7 @@ categories = ["science", "mathematics"]
 license = "MIT"
 
 [features]
-serde = ["dep:serde", "ndarray/serde", "rand_xoshiro/serde1"]
+serde = ["dep:serde", "ndarray/serde", "rand/serde1", "rand_xoshiro/serde1"]
 
 [dependencies]
 default-for = { path = "../default-for" }

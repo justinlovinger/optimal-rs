@@ -15,12 +15,14 @@ use std::{
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// PBIL state ready to start a new iteration.
+/// PBIL state ready to start sampling.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Ready {
     probabilities: Array1<Probability>,
     rng: Xoshiro256PlusPlus,
+    distrs: Array1<Bernoulli>,
+    sample: Array1<bool>,
 }
 
 /// PBIL state for sampling
@@ -28,10 +30,14 @@ pub struct Ready {
 /// based on samples.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Sampling {
+pub struct Sampling<B> {
     probabilities: Array1<Probability>,
     rng: Xoshiro256PlusPlus,
-    samples: Array2<bool>,
+    distrs: Array1<Bernoulli>,
+    best_sample: Array1<bool>,
+    best_value: B,
+    sample: Array1<bool>,
+    samples_generated: usize,
 }
 
 /// PBIL state for mutating probabilities.
@@ -49,10 +55,10 @@ impl Ready {
     ///
     /// - `num_bits`: number of bits in each sample
     pub(super) fn initial(num_bits: usize) -> Self {
-        Self {
-            probabilities: Array::from_elem(num_bits, Probability::default()),
-            rng: Xoshiro256PlusPlus::from_entropy(),
-        }
+        Self::new(
+            Array::from_elem(num_bits, Probability::default()),
+            Xoshiro256PlusPlus::from_entropy(),
+        )
     }
 
     /// Return recommended initial state.
@@ -65,43 +71,75 @@ impl Ready {
     where
         R: Rng,
     {
-        Self {
-            probabilities: Array::from_elem(num_bits, Probability::default()),
-            rng: Xoshiro256PlusPlus::from_rng(rng).expect("RNG should initialize"),
-        }
+        Self::new(
+            Array::from_elem(num_bits, Probability::default()),
+            Xoshiro256PlusPlus::from_rng(rng).expect("RNG should initialize"),
+        )
     }
 
     /// Return custom initial state.
-    pub(super) fn new(probabilities: Array1<Probability>, rng: Xoshiro256PlusPlus) -> Self {
-        Self { probabilities, rng }
-    }
-
-    /// Step to a 'Sampling' state
-    /// by generating samples.
-    #[allow(clippy::wrong_self_convention)]
-    pub(super) fn to_sampling(mut self, num_samples: NumSamples) -> Sampling {
-        Sampling {
-            samples: self.samples(num_samples),
-            probabilities: self.probabilities,
-            rng: self.rng,
+    pub(super) fn new(probabilities: Array1<Probability>, mut rng: Xoshiro256PlusPlus) -> Self {
+        let distrs =
+            probabilities.map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"));
+        Self {
+            sample: distrs.map(|d| rng.sample(d)),
+            probabilities,
+            rng,
+            distrs,
         }
     }
 
-    fn samples(&mut self, num_samples: NumSamples) -> Array2<bool> {
-        self.probabilities
-            .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
-            .broadcast((num_samples.into(), self.probabilities.len()))
-            .unwrap()
-            .map(|distr| self.rng.sample(distr))
+    /// Step to a 'Sampling' state
+    /// by evaluating the first sample.
+    #[allow(clippy::wrong_self_convention)]
+    pub(super) fn to_sampling<B>(mut self, value: B) -> Sampling<B> {
+        let distrs = self
+            .probabilities
+            .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"));
+        Sampling {
+            sample: distrs.map(|d| self.rng.sample(d)),
+            probabilities: self.probabilities,
+            rng: self.rng,
+            distrs,
+            best_sample: self.sample,
+            best_value: value,
+            samples_generated: 2, // This includes `sample` and `best_sample`.
+        }
     }
 
     /// Return probabilities.
     pub fn probabilities(&self) -> &Array1<Probability> {
         &self.probabilities
     }
+
+    /// Return sample to evaluate.
+    pub fn sample(&self) -> &Array1<bool> {
+        &self.sample
+    }
 }
 
-impl Sampling {
+impl<B> Sampling<B> {
+    #[allow(clippy::wrong_self_convention)]
+    pub(super) fn to_sampling(mut self, value: B) -> Sampling<B>
+    where
+        B: PartialOrd,
+    {
+        let (best_sample, best_value) = if value > self.best_value {
+            (self.sample, value)
+        } else {
+            (self.best_sample, self.best_value)
+        };
+        Sampling {
+            sample: self.distrs.map(|d| self.rng.sample(d)),
+            probabilities: self.probabilities,
+            rng: self.rng,
+            distrs: self.distrs,
+            best_sample,
+            best_value,
+            samples_generated: self.samples_generated + 1,
+        }
+    }
+
     /// Step to 'Mutating' state
     /// by adjusting probabilities
     /// towards the best sample.
@@ -111,20 +149,16 @@ impl Sampling {
     /// - `point_values`: value of each sample,
     ///    each element corresponding to a row of `samples`.
     #[allow(clippy::wrong_self_convention)]
-    pub(super) fn to_mutating<A, S>(
-        mut self,
-        adjust_rate: AdjustRate,
-        sample_values: ArrayBase<S, Ix1>,
-    ) -> Mutating
+    pub(super) fn to_mutating(mut self, adjust_rate: AdjustRate, value: B) -> Mutating
     where
-        A: Debug + PartialOrd,
-        S: Data<Elem = A>,
+        B: PartialOrd,
     {
-        adjust_probabilities(
-            &mut self.probabilities,
-            adjust_rate.into(),
-            best_sample(&self.samples, sample_values),
-        );
+        let best_sample = if value > self.best_value {
+            self.sample
+        } else {
+            self.best_sample
+        };
+        adjust_probabilities(&mut self.probabilities, adjust_rate.into(), best_sample);
         Mutating {
             probabilities: self.probabilities,
             rng: self.rng,
@@ -139,16 +173,16 @@ impl Sampling {
     /// - `point_values`: value of each sample,
     ///    each element corresponding to a row of `samples`.
     #[allow(clippy::wrong_self_convention)]
-    pub fn to_ready<A, S>(self, adjust_rate: AdjustRate, sample_values: ArrayBase<S, Ix1>) -> Ready
+    pub(super) fn to_ready(self, adjust_rate: AdjustRate, value: B) -> Ready
     where
-        A: Debug + PartialOrd,
-        S: Data<Elem = A>,
+        B: PartialOrd,
     {
-        let x = self.to_mutating(adjust_rate, sample_values);
-        Ready {
-            probabilities: x.probabilities,
-            rng: x.rng,
-        }
+        let x = self.to_mutating(adjust_rate, value);
+        Ready::new(x.probabilities, x.rng)
+    }
+
+    pub(super) fn samples_generated(&self) -> usize {
+        self.samples_generated
     }
 
     /// Return probabilities.
@@ -156,9 +190,9 @@ impl Sampling {
         &self.probabilities
     }
 
-    /// Return samples to evaluate.
-    pub fn samples(&self) -> &Array2<bool> {
-        &self.samples
+    /// Return sample to evaluate.
+    pub fn sample(&self) -> &Array1<bool> {
+        &self.sample
     }
 }
 
@@ -196,38 +230,13 @@ impl Mutating {
                 }
             },
         );
-        Ready {
-            probabilities: self.probabilities,
-            rng: self.rng,
-        }
+        Ready::new(self.probabilities, self.rng)
     }
 
     /// Return probabilities.
     pub fn probabilities(&self) -> &Array1<Probability> {
         &self.probabilities
     }
-}
-
-fn best_sample<A, S1, S2>(
-    points: &ArrayBase<S1, Ix2>,
-    point_values: ArrayBase<S2, Ix1>,
-) -> ArrayView1<bool>
-where
-    A: Debug + PartialOrd,
-    S1: Data<Elem = bool>,
-    S2: Data<Elem = A>,
-{
-    points.row(
-        point_values
-            .iter()
-            .enumerate()
-            .min_by(|(_, x), (_, y)| {
-                x.partial_cmp(y)
-                    .unwrap_or_else(|| panic!("Cannot compare {x:?} with {y:?}"))
-            })
-            .map(|(i, _)| i)
-            .expect("should have samples"),
-    )
 }
 
 fn adjust_probabilities<S>(
@@ -259,7 +268,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ndarray::{Data, RemoveAxis};
     use num_traits::bounds::{LowerBounded, UpperBounded};
     use proptest::{prelude::*, test_runner::FileFailurePersistence};
     use test_strategy::proptest;
@@ -268,17 +276,17 @@ mod tests {
     fn probabilities_are_valid_after_adjusting(
         initial_probabilities: Vec<Probability>,
         seed: u64,
-        num_samples: NumSamples,
         adjust_rate: AdjustRate,
     ) {
         let state = Ready::new(
             initial_probabilities.into(),
             Xoshiro256PlusPlus::seed_from_u64(seed),
-        )
-        .to_sampling(num_samples);
-        let point_values = f(state.samples().view());
+        );
+        let value = f(state.sample().view());
+        let state = state.to_sampling(value);
+        let value = f(state.sample().view());
         prop_assert!(are_valid(
-            state.to_ready(adjust_rate, point_values).probabilities()
+            state.to_ready(adjust_rate, value).probabilities()
         ));
     }
 
@@ -316,22 +324,8 @@ mod tests {
     arbitrary_from_bounded!(f64, MutationChance);
     arbitrary_from_bounded!(f64, MutationAdjustRate);
 
-    impl Arbitrary for NumSamples {
-        type Parameters = ();
-        type Strategy = BoxedStrategy<Self>;
-        fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
-            (NumSamples::min_value().into()..100)
-                .prop_map(|x| x.try_into().unwrap())
-                .boxed()
-        }
-    }
-
-    fn f<S, D>(bss: ArrayBase<S, D>) -> Array<u64, D::Smaller>
-    where
-        S: Data<Elem = bool>,
-        D: Dimension + RemoveAxis,
-    {
-        bss.fold_axis(Axis(bss.ndim() - 1), 0, |acc, b| acc + *b as u64)
+    fn f(point: ArrayView1<bool>) -> usize {
+        point.iter().filter(|x| **x).count()
     }
 
     fn are_valid(probabilities: &Array1<Probability>) -> bool {

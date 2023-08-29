@@ -234,7 +234,8 @@ impl RealDerivativeConfig {
 /// A generic binary derivative-free optimizer.
 #[allow(missing_debug_implementations)]
 pub struct BinaryDerivativeFree {
-    inner: UntilProbabilitiesConverged<Pbil<f64, OverRows<bool, f64>>>,
+    #[allow(clippy::type_complexity)]
+    inner: UntilProbabilitiesConverged<Pbil<f64, Box<dyn Fn(ArrayView1<bool>) -> f64>>>,
 }
 
 /// Binary derivative-free optimizer configuration parameters.
@@ -302,7 +303,7 @@ impl BinaryDerivativeFreeConfig {
     {
         let (runner_config, config) = self.inner_config(len);
         BinaryDerivativeFree {
-            inner: runner_config.start(config.start(len, over_rows(obj_func))),
+            inner: runner_config.start(config.start(len, Box::new(obj_func))),
         }
     }
 
@@ -326,7 +327,7 @@ impl BinaryDerivativeFreeConfig {
     {
         let (runner_config, config) = self.inner_config(len);
         BinaryDerivativeFree {
-            inner: runner_config.start(config.start_using(len, over_rows(obj_func), rng)),
+            inner: runner_config.start(config.start_using(len, Box::new(obj_func), rng)),
         }
     }
 
@@ -394,12 +395,6 @@ impl BinaryDerivativeFreeConfig {
             },
         )
     }
-}
-
-type OverRows<A, B> = Box<dyn Fn(ArrayView2<A>) -> Array1<B>>;
-
-fn over_rows<A, B>(f: impl Fn(ArrayView1<A>) -> B + 'static) -> OverRows<A, B> {
-    Box::new(move |xs| xs.map_axis(Axis(1), &f))
 }
 
 fn asymptotic_log_like(to: f64, from: usize) -> f64 {

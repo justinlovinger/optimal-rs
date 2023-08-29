@@ -11,9 +11,7 @@ use optimal_pbil::*;
 println!(
     "{:?}",
     UntilProbabilitiesConvergedConfig::default()
-        .start(Config::start_default_for(16, |points| {
-            points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
-        }))
+        .start(Config::start_default_for(16, |point| point.iter().filter(|x| **x).count()))
         .argmin()
 );
 ```

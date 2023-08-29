@@ -15,9 +15,7 @@
 //! println!(
 //!     "{:?}",
 //!     UntilProbabilitiesConvergedConfig::default()
-//!         .start(Config::start_default_for(16, |points| {
-//!             points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
-//!         }))
+//!         .start(Config::start_default_for(16, |point| point.iter().filter(|x| **x).count()))
 //!         .argmin()
 //! );
 //! ```
@@ -121,7 +119,7 @@ pub struct Pbil<B, F> {
     config: Config,
 
     /// State of optimizer.
-    state: State,
+    state: State<B>,
 
     /// Objective function to minimize.
     obj_func: F,
@@ -132,7 +130,7 @@ pub struct Pbil<B, F> {
 }
 
 impl<B, F> Pbil<B, F> {
-    fn new(state: State, config: Config, obj_func: F) -> Self {
+    fn new(state: State<B>, config: Config, obj_func: F) -> Self {
         Self {
             config,
             obj_func,
@@ -142,26 +140,18 @@ impl<B, F> Pbil<B, F> {
     }
 
     /// Return configuration, state, and problem parameters.
-    pub fn into_inner(self) -> (Config, State, F) {
+    pub fn into_inner(self) -> (Config, State<B>, F) {
         (self.config, self.state, self.obj_func)
     }
 }
 
 impl<B, F> Pbil<B, F>
 where
-    F: Fn(ArrayView2<bool>) -> Array1<B>,
+    F: Fn(ArrayView1<bool>) -> B,
 {
     /// Return value of the best point discovered.
     pub fn best_point_value(&self) -> B {
-        (self.obj_func)(
-            self.best_point()
-                .view()
-                .into_shape((1, self.state().num_bits()))
-                .unwrap(),
-        )
-        .into_iter()
-        .next()
-        .unwrap()
+        (self.obj_func)(self.best_point().view())
     }
 
     /// Return evaluation of current state,
@@ -177,8 +167,8 @@ where
 
 impl<B, F> StreamingIterator for Pbil<B, F>
 where
-    B: Debug + PartialOrd,
-    F: Fn(ArrayView2<bool>) -> Array1<B>,
+    B: PartialOrd,
+    F: Fn(ArrayView1<bool>) -> B,
 {
     type Item = Self;
 
@@ -188,16 +178,20 @@ where
             .take()
             .unwrap_or_else(|| self.evaluate());
         replace_with::replace_with_or_abort(&mut self.state, |state| match state {
-            State::Ready(s) => State::Sampling(s.to_sampling(self.config.num_samples)),
+            // `evaluation.unwrap_unchecked()` is safe
+            // because we always have a sample to evaluate
+            // when it is called.
+            State::Ready(s) => {
+                State::Sampling(s.to_sampling(unsafe { evaluation.unwrap_unchecked() }))
+            }
             State::Sampling(s) => {
-                if self.config.mutation_chance.is_zero() {
-                    State::Ready(s.to_ready(self.config.adjust_rate, unsafe {
-                        evaluation.unwrap_unchecked()
-                    }))
+                let value = unsafe { evaluation.unwrap_unchecked() };
+                if s.samples_generated() < self.config.num_samples.into_inner() {
+                    State::Sampling(s.to_sampling(value))
+                } else if self.config.mutation_chance.is_zero() {
+                    State::Ready(s.to_ready(self.config.adjust_rate, value))
                 } else {
-                    State::Mutating(s.to_mutating(self.config.adjust_rate, unsafe {
-                        evaluation.unwrap_unchecked()
-                    }))
+                    State::Mutating(s.to_mutating(self.config.adjust_rate, value))
                 }
             }
             State::Mutating(s) => State::Ready(s.to_ready(
@@ -241,18 +235,18 @@ pub struct Config {
 /// PBIL state.
 #[derive(Clone, Debug, PartialEq, IsVariant)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum State {
-    /// Ready to start a new iteration.
+pub enum State<B> {
+    /// Ready to start sampling.
     Ready(Ready),
     /// For sampling
     /// and adjusting probabilities
     /// based on samples.
-    Sampling(Sampling),
+    Sampling(Sampling<B>),
     /// For mutating probabilities.
     Mutating(Mutating),
 }
 
-type Evaluation<B> = Option<Array1<B>>;
+type Evaluation<B> = Option<B>;
 
 impl Config {
     /// Return a new PBIL configuration.
@@ -292,7 +286,7 @@ impl Config {
     /// - `obj_func`: objective function to minimize
     pub fn start_default_for<B, F>(num_bits: usize, obj_func: F) -> Pbil<B, F>
     where
-        F: Fn(ArrayView2<bool>) -> Array1<B>,
+        F: Fn(ArrayView1<bool>) -> B,
     {
         Self::default_for(num_bits).start(num_bits, obj_func)
     }
@@ -308,7 +302,7 @@ impl Config {
     /// - `obj_func`: objective function to minimize
     pub fn start<B, F>(self, num_bits: usize, obj_func: F) -> Pbil<B, F>
     where
-        F: Fn(ArrayView2<bool>) -> Array1<B>,
+        F: Fn(ArrayView1<bool>) -> B,
     {
         Pbil::new(State::Ready(Ready::initial(num_bits)), self, obj_func)
     }
@@ -324,7 +318,7 @@ impl Config {
     /// - `rng`: source of randomness
     pub fn start_using<B, F>(self, num_bits: usize, obj_func: F, rng: &mut SplitMix64) -> Pbil<B, F>
     where
-        F: Fn(ArrayView2<bool>) -> Array1<B>,
+        F: Fn(ArrayView1<bool>) -> B,
     {
         Pbil::new(
             State::Ready(Ready::initial_using(num_bits, rng)),
@@ -341,15 +335,15 @@ impl Config {
     ///
     /// - `obj_func`: objective function to minimize
     /// - `state`: PBIL state to start from
-    pub fn start_from<B, F>(self, obj_func: F, state: State) -> Pbil<B, F>
+    pub fn start_from<B, F>(self, obj_func: F, state: State<B>) -> Pbil<B, F>
     where
-        F: Fn(ArrayView2<bool>) -> Array1<B>,
+        F: Fn(ArrayView1<bool>) -> B,
     {
         Pbil::new(state, self, obj_func)
     }
 }
 
-impl State {
+impl<B> State<B> {
     /// Return custom initial state.
     pub fn new(probabilities: Array1<Probability>, rng: Xoshiro256PlusPlus) -> Self {
         Self::Ready(Ready::new(probabilities, rng))
@@ -361,10 +355,10 @@ impl State {
     }
 
     /// Return data to be evaluated.
-    pub fn evaluatee(&self) -> Option<ArrayView2<bool>> {
+    pub fn evaluatee(&self) -> Option<ArrayView1<bool>> {
         match self {
-            State::Ready(_) => None,
-            State::Sampling(s) => Some(s.samples().into()),
+            State::Ready(s) => Some(s.sample().into()),
+            State::Sampling(s) => Some(s.sample().into()),
             State::Mutating(_) => None,
         }
     }
@@ -375,7 +369,7 @@ impl State {
     }
 }
 
-impl Probabilities for State {
+impl<B> Probabilities for State<B> {
     fn probabilities(&self) -> &Array1<Probability> {
         match &self {
             State::Ready(s) => s.probabilities(),
@@ -397,9 +391,7 @@ mod tests {
             mutation_chance: MutationChance::new(0.0).unwrap(),
             mutation_adjust_rate: MutationAdjustRate::default(),
         }
-        .start(16, |points| {
-            points.map_axis(Axis(1), |bits| bits.iter().filter(|x| **x).count())
-        })
+        .start(16, |point| point.iter().filter(|x| **x).count())
         .inspect(|x| assert!(!x.state().is_mutating()))
         .nth(100);
     }
