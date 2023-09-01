@@ -21,8 +21,7 @@
 
 mod state_machine;
 mod types;
-
-use std::fmt::Debug;
+mod until_probabilities_converged;
 
 use default_for::DefaultFor;
 use derive_getters::Getters;
@@ -33,7 +32,7 @@ use rand::prelude::*;
 use rand_xoshiro::{SplitMix64, Xoshiro256PlusPlus};
 
 use self::state_machine::DynState;
-pub use self::types::*;
+pub use self::{types::*, until_probabilities_converged::*};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -43,73 +42,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
 #[error("problem length does not match state length")]
 pub struct MismatchedLengthError;
-
-/// A type containing an array of probabilities.
-pub trait Probabilities {
-    /// Return probabilities.
-    fn probabilities(&self) -> &[Probability];
-}
-
-impl<B, F> Probabilities for Pbil<B, F> {
-    fn probabilities(&self) -> &[Probability] {
-        self.state().probabilities()
-    }
-}
-
-/// PBIL runner
-/// to check for converged probabilities.
-#[derive(Clone, Debug, Getters)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct UntilProbabilitiesConverged<I> {
-    config: UntilProbabilitiesConvergedConfig,
-    it: I,
-}
-
-/// Config for PBIL runner
-/// to check for converged probabilities.
-#[derive(Clone, Debug, Default, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct UntilProbabilitiesConvergedConfig {
-    /// Probability convergence parameter.
-    pub threshold: ProbabilityThreshold,
-}
-
-impl UntilProbabilitiesConvergedConfig {
-    /// Return this runner
-    /// wrapping the given iterator.
-    pub fn start<I>(self, it: I) -> UntilProbabilitiesConverged<I> {
-        UntilProbabilitiesConverged { config: self, it }
-    }
-}
-
-impl<I> UntilProbabilitiesConverged<I> {
-    /// Return configuration and iterator.
-    pub fn into_inner(self) -> (UntilProbabilitiesConvergedConfig, I) {
-        (self.config, self.it)
-    }
-}
-
-impl<I> StreamingIterator for UntilProbabilitiesConverged<I>
-where
-    I: StreamingIterator + Probabilities,
-{
-    type Item = I::Item;
-
-    fn advance(&mut self) {
-        self.it.advance()
-    }
-
-    fn get(&self) -> Option<&Self::Item> {
-        self.it.get()
-    }
-
-    fn is_done(&self) -> bool {
-        self.it.is_done()
-            || self.it.probabilities().iter().all(|p| {
-                p > &self.config.threshold.upper_bound() || p < &self.config.threshold.lower_bound()
-            })
-    }
-}
 
 /// A running PBIL optimizer.
 #[derive(Clone, Debug, Getters)]
