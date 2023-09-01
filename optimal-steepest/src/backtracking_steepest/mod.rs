@@ -51,7 +51,8 @@ use rand::{
     prelude::*,
 };
 
-pub use self::{state_machine::*, types::*};
+use self::state_machine::DynState;
+pub use self::types::*;
 
 pub use super::StepSize;
 
@@ -121,9 +122,9 @@ where
     }
 
     fn evaluate(&self) -> Evaluation<A> {
-        match &self.state {
-            State::Ready(x) => Evaluation::ValueAndDerivatives((self.obj_func_d)(x.point())),
-            State::Searching(x) => Evaluation::Value((self.obj_func)(x.point())),
+        match &self.state.inner {
+            DynState::Ready(x) => Evaluation::ValueAndDerivatives((self.obj_func_d)(x.point())),
+            DynState::Searching(x) => Evaluation::Value((self.obj_func)(x.point())),
         }
     }
 }
@@ -142,9 +143,9 @@ where
             .evaluation_cache
             .take()
             .unwrap_or_else(|| self.evaluate());
-        replace_with::replace_with_or_abort(&mut self.state, |state| {
+        replace_with::replace_with_or_abort(&mut self.state.inner, |state| {
             match state {
-                State::Ready(x) => {
+                DynState::Ready(x) => {
                     let (point_value, point_derivatives) = match evaluation {
                         Evaluation::ValueAndDerivatives(x) => x,
                         // `unreachable_unchecked` is safe if this method is safe,
@@ -152,9 +153,14 @@ where
                         // for `State::Ready`.
                         _ => unsafe { unreachable_unchecked() },
                     };
-                    x.step_from_evaluated(&self.config, point_value, point_derivatives)
+                    DynState::Searching(x.to_searching(
+                        self.config.initial_step_size_incr_rate,
+                        self.config.c_1,
+                        point_value,
+                        point_derivatives,
+                    ))
                 }
-                State::Searching(x) => {
+                DynState::Searching(x) => {
                     let point_value = match evaluation {
                         Evaluation::Value(x) => x,
                         // `unreachable_unchecked` is safe if this method is safe,
@@ -162,7 +168,11 @@ where
                         // for `State::Searching`.
                         _ => unsafe { unreachable_unchecked() },
                     };
-                    x.step_from_evaluated(&self.config, point_value)
+                    if x.is_sufficient_decrease(point_value) {
+                        DynState::Ready(x.to_ready())
+                    } else {
+                        DynState::Searching(x.to_searching(self.config.backtracking_rate))
+                    }
                 }
             }
         });
@@ -195,6 +205,13 @@ pub struct Config<A> {
     pub backtracking_rate: BacktrackingRate<A>,
     /// Rate to increase step size before starting each line search.
     pub initial_step_size_incr_rate: IncrRate<A>,
+}
+
+/// Backtracking steepest descent state.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct State<A> {
+    inner: DynState<A>,
 }
 
 /// A backtracking steepest descent evaluation.
@@ -329,5 +346,49 @@ impl<A> Config<A> {
                 .collect(),
             StepSize::new(A::one()).unwrap(),
         )
+    }
+}
+
+impl<A> State<A> {
+    /// Return an initial state.
+    pub fn new(point: Vec<A>, initial_step_size: StepSize<A>) -> Self {
+        Self {
+            inner: DynState::new(point, initial_step_size),
+        }
+    }
+
+    /// Return data to be evaluated.
+    pub fn evaluatee(&self) -> &[A] {
+        match &self.inner {
+            DynState::Ready(x) => x.point(),
+            DynState::Searching(x) => x.point(),
+        }
+    }
+
+    /// Return the best point discovered.
+    pub fn best_point(&self) -> &[A] {
+        match &self.inner {
+            DynState::Ready(x) => x.best_point(),
+            DynState::Searching(x) => x.best_point(),
+        }
+    }
+
+    /// Return the value of the best point discovered,
+    /// if possible
+    /// without evaluating.
+    pub fn stored_best_point_value(&self) -> Option<&A> {
+        match &self.inner {
+            DynState::Ready(_) => None,
+            DynState::Searching(x) => Some(x.point_value()),
+        }
+    }
+
+    /// Return length of point in this state.
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        match &self.inner {
+            DynState::Ready(x) => x.point().len(),
+            DynState::Searching(x) => x.point().len(),
+        }
     }
 }

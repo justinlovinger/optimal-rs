@@ -9,7 +9,7 @@ pub use optimal_core::prelude::*;
 
 use crate::StepSize;
 
-use super::Config;
+use super::types::*;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -17,18 +17,24 @@ use serde::{Deserialize, Serialize};
 /// Backtracking steepest descent state.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum State<A> {
+pub enum DynState<A> {
     /// Ready to begin line search.
-    Ready(Ready<A>),
+    Ready(State<A, Ready<A>>),
     /// Line searching.
-    Searching(Searching<A>),
+    Searching(State<A, Searching<A>>),
+}
+
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct State<A, T> {
+    point: Vec<A>,
+    inner: T,
 }
 
 /// Ready to begin line search.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Ready<A> {
-    point: Vec<A>,
     last_step_size: A,
 }
 
@@ -36,7 +42,6 @@ pub struct Ready<A> {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Searching<A> {
-    point: Vec<A>,
     point_value: A,
     step_direction: Vec<A>,
     c_1_times_point_derivatives_dot_step_direction: A,
@@ -44,66 +49,37 @@ pub struct Searching<A> {
     point_at_step: Vec<A>,
 }
 
-impl<A> State<A> {
-    /// Return data to be evaluated.
-    pub fn evaluatee(&self) -> &[A] {
-        match self {
-            State::Ready(x) => x.point(),
-            State::Searching(x) => x.point(),
-        }
-    }
-
-    /// Return the best point discovered.
-    pub fn best_point(&self) -> &[A] {
-        match self {
-            State::Ready(x) => x.best_point(),
-            State::Searching(x) => x.best_point(),
-        }
-    }
-
-    /// Return the value of the best point discovered,
-    /// if possible
-    /// without evaluating.
-    pub fn stored_best_point_value(&self) -> Option<&A> {
-        match self {
-            State::Ready(_) => None,
-            State::Searching(x) => Some(&x.point_value),
-        }
-    }
-
+impl<A> DynState<A> {
     /// Return an initial state.
     pub fn new(point: Vec<A>, initial_step_size: StepSize<A>) -> Self {
-        Self::Ready(Ready {
+        DynState::Ready(State {
             point,
-            last_step_size: initial_step_size.0,
+            inner: Ready {
+                last_step_size: initial_step_size.0,
+            },
         })
-    }
-
-    /// Return length of point in this state.
-    #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize {
-        match self {
-            Self::Ready(x) => x.point.len(),
-            Self::Searching(x) => x.point.len(),
-        }
     }
 }
 
-impl<A> Ready<A> {
-    pub(super) fn point(&self) -> &[A] {
-        self.best_point()
+impl<A, T> State<A, T> {
+    pub fn best_point(&self) -> &[A] {
+        &self.point
     }
+}
 
-    pub(super) fn best_point(&self) -> &[A] {
+impl<A> State<A, Ready<A>> {
+    pub fn point(&self) -> &[A] {
         &self.point
     }
 
-    pub(super) fn step_from_evaluated(
+    #[allow(clippy::wrong_self_convention)]
+    pub fn to_searching(
         self,
-        config: &Config<A>,
+        initial_step_size_incr_rate: IncrRate<A>,
+        c_1: SufficientDecreaseParameter<A>,
         point_value: A,
         point_derivatives: Vec<A>,
-    ) -> State<A>
+    ) -> State<A, Searching<A>>
     where
         A: 'static
             + Clone
@@ -117,52 +93,72 @@ impl<A> Ready<A> {
         f64: AsPrimitive<A>,
     {
         let step_direction = point_derivatives.iter().map(|x| -*x).collect::<Vec<_>>();
-        let step_size = config.initial_step_size_incr_rate * self.last_step_size;
-        State::Searching(Searching {
-            point_at_step: descend(&self.point, step_size, &step_direction),
+        let step_size = initial_step_size_incr_rate * self.inner.last_step_size;
+        State {
+            inner: Searching {
+                point_at_step: descend(&self.point, step_size, &step_direction),
+                point_value,
+                c_1_times_point_derivatives_dot_step_direction: c_1.into_inner()
+                    * point_derivatives
+                        .into_iter()
+                        .zip(step_direction.iter().copied())
+                        .map(|(x, y)| x * y)
+                        .sum(),
+                step_direction,
+                step_size,
+            },
             point: self.point,
-            point_value,
-            c_1_times_point_derivatives_dot_step_direction: config.c_1.into_inner()
-                * point_derivatives
-                    .into_iter()
-                    .zip(step_direction.iter().copied())
-                    .map(|(x, y)| x * y)
-                    .sum(),
-            step_direction,
-            step_size,
-        })
+        }
     }
 }
 
-impl<A> Searching<A> {
-    pub(super) fn best_point(&self) -> &[A] {
-        &self.point
-    }
-
+impl<A> State<A, Searching<A>> {
     #[allow(clippy::misnamed_getters)]
-    pub(super) fn point(&self) -> &[A] {
-        &self.point_at_step
+    pub fn point(&self) -> &[A] {
+        &self.inner.point_at_step
     }
 
-    pub(super) fn step_from_evaluated(mut self, config: &Config<A>, point_value: A) -> State<A>
+    pub fn point_value(&self) -> &A {
+        &self.inner.point_value
+    }
+
+    pub fn is_sufficient_decrease(&self, point_value: A) -> bool
+    where
+        A: Copy + PartialOrd + Add<Output = A> + Mul<Output = A>,
+    {
+        is_sufficient_decrease(
+            self.inner.point_value,
+            self.inner.step_size,
+            self.inner.c_1_times_point_derivatives_dot_step_direction,
+            point_value,
+        )
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn to_ready(self) -> State<A, Ready<A>>
     where
         A: Clone + Copy + PartialOrd + Add<Output = A> + Mul<Output = A>,
     {
-        if is_sufficient_decrease(
-            self.point_value,
-            self.step_size,
-            self.c_1_times_point_derivatives_dot_step_direction,
-            point_value,
-        ) {
-            State::Ready(Ready {
-                point: self.point_at_step,
-                last_step_size: self.step_size,
-            })
-        } else {
-            self.step_size = config.backtracking_rate.into_inner() * self.step_size;
-            self.point_at_step = descend(&self.point, self.step_size, &self.step_direction);
-            State::Searching(self)
+        State {
+            point: self.inner.point_at_step,
+            inner: Ready {
+                last_step_size: self.inner.step_size,
+            },
         }
+    }
+
+    #[allow(clippy::wrong_self_convention)]
+    pub fn to_searching(mut self, backtracking_rate: BacktrackingRate<A>) -> Self
+    where
+        A: Clone + Copy + PartialOrd + Add<Output = A> + Mul<Output = A>,
+    {
+        self.inner.step_size = backtracking_rate.into_inner() * self.inner.step_size;
+        self.inner.point_at_step = descend(
+            &self.point,
+            self.inner.step_size,
+            &self.inner.step_direction,
+        );
+        self
     }
 }
 

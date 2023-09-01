@@ -29,9 +29,11 @@ use derive_getters::Getters;
 use derive_more::IsVariant;
 use once_cell::sync::OnceCell;
 pub use optimal_core::prelude::*;
+use rand::prelude::*;
 use rand_xoshiro::{SplitMix64, Xoshiro256PlusPlus};
 
-pub use self::{state_machine::*, types::*};
+use self::state_machine::DynState;
+pub use self::types::*;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -175,24 +177,24 @@ where
             .evaluation_cache
             .take()
             .unwrap_or_else(|| self.evaluate());
-        replace_with::replace_with_or_abort(&mut self.state, |state| match state {
+        replace_with::replace_with_or_abort(&mut self.state.inner, |state| match state {
             // `evaluation.unwrap_unchecked()` is safe
             // because we always have a sample to evaluate
             // when it is called.
-            State::Ready(s) => {
-                State::Sampling(s.to_sampling(unsafe { evaluation.unwrap_unchecked() }))
+            DynState::Ready(s) => {
+                DynState::Sampling(s.to_sampling(unsafe { evaluation.unwrap_unchecked() }))
             }
-            State::Sampling(s) => {
+            DynState::Sampling(s) => {
                 let value = unsafe { evaluation.unwrap_unchecked() };
                 if s.samples_generated() < self.config.num_samples.into_inner() {
-                    State::Sampling(s.to_sampling(value))
+                    DynState::Sampling(s.to_sampling(value))
                 } else if self.config.mutation_chance.is_zero() {
-                    State::Ready(s.to_ready(self.config.adjust_rate, value))
+                    DynState::Ready(s.to_ready(self.config.adjust_rate, value))
                 } else {
-                    State::Mutating(s.to_mutating(self.config.adjust_rate, value))
+                    DynState::Mutating(s.to_mutating(self.config.adjust_rate, value))
                 }
             }
-            State::Mutating(s) => State::Ready(s.to_ready(
+            DynState::Mutating(s) => DynState::Ready(s.to_ready(
                 self.config.mutation_chance,
                 self.config.mutation_adjust_rate,
             )),
@@ -231,17 +233,23 @@ pub struct Config {
 }
 
 /// PBIL state.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct State<B> {
+    inner: DynState<B>,
+}
+
 #[derive(Clone, Debug, PartialEq, IsVariant)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum State<B> {
+pub enum StateKind {
     /// Ready to start sampling.
-    Ready(Ready),
+    Ready,
     /// For sampling
     /// and adjusting probabilities
     /// based on samples.
-    Sampling(Sampling<B>),
+    Sampling,
     /// For mutating probabilities.
-    Mutating(Mutating),
+    Mutating,
 }
 
 type Evaluation<B> = Option<B>;
@@ -280,13 +288,13 @@ impl Config {
     ///
     /// # Arguments
     ///
-    /// - `num_bits`: number of bits in each point
+    /// - `len`: number of bits in each point
     /// - `obj_func`: objective function to minimize
-    pub fn start_default_for<B, F>(num_bits: usize, obj_func: F) -> Pbil<B, F>
+    pub fn start_default_for<B, F>(len: usize, obj_func: F) -> Pbil<B, F>
     where
         F: Fn(&[bool]) -> B,
     {
-        Self::default_for(num_bits).start(num_bits, obj_func)
+        Self::default_for(len).start(len, obj_func)
     }
 
     /// Return this optimizer
@@ -296,13 +304,13 @@ impl Config {
     ///
     /// # Arguments
     ///
-    /// - `num_bits`: number of bits in each point
+    /// - `len`: number of bits in each point
     /// - `obj_func`: objective function to minimize
-    pub fn start<B, F>(self, num_bits: usize, obj_func: F) -> Pbil<B, F>
+    pub fn start<B, F>(self, len: usize, obj_func: F) -> Pbil<B, F>
     where
         F: Fn(&[bool]) -> B,
     {
-        Pbil::new(State::Ready(Ready::initial(num_bits)), self, obj_func)
+        Pbil::new(State::initial(len), self, obj_func)
     }
 
     /// Return this optimizer
@@ -311,18 +319,14 @@ impl Config {
     ///
     /// # Arguments
     ///
-    /// - `num_bits`: number of bits in each point
+    /// - `len`: number of bits in each point
     /// - `obj_func`: objective function to minimize
     /// - `rng`: source of randomness
-    pub fn start_using<B, F>(self, num_bits: usize, obj_func: F, rng: &mut SplitMix64) -> Pbil<B, F>
+    pub fn start_using<B, F>(self, len: usize, obj_func: F, rng: &mut SplitMix64) -> Pbil<B, F>
     where
         F: Fn(&[bool]) -> B,
     {
-        Pbil::new(
-            State::Ready(Ready::initial_using(num_bits, rng)),
-            self,
-            obj_func,
-        )
+        Pbil::new(State::initial_using(len, rng), self, obj_func)
     }
 
     /// Return this optimizer
@@ -342,22 +346,53 @@ impl Config {
 }
 
 impl<B> State<B> {
+    /// Return recommended initial state.
+    ///
+    /// # Arguments
+    ///
+    /// - `len`: number of bits in each sample
+    fn initial(len: usize) -> Self {
+        Self::new(
+            [Probability::default()].repeat(len),
+            Xoshiro256PlusPlus::from_entropy(),
+        )
+    }
+
+    /// Return recommended initial state.
+    ///
+    /// # Arguments
+    ///
+    /// - `len`: number of bits in each sample
+    /// - `rng`: source of randomness
+    fn initial_using<R>(len: usize, rng: R) -> Self
+    where
+        R: Rng,
+    {
+        Self::new(
+            [Probability::default()].repeat(len),
+            Xoshiro256PlusPlus::from_rng(rng).expect("RNG should initialize"),
+        )
+    }
+
     /// Return custom initial state.
     pub fn new(probabilities: Vec<Probability>, rng: Xoshiro256PlusPlus) -> Self {
-        Self::Ready(Ready::new(probabilities, rng))
+        Self {
+            inner: DynState::new(probabilities, rng),
+        }
     }
 
     /// Return number of bits being optimized.
-    pub fn num_bits(&self) -> usize {
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
         self.probabilities().len()
     }
 
     /// Return data to be evaluated.
     pub fn evaluatee(&self) -> Option<&[bool]> {
-        match self {
-            State::Ready(s) => Some(s.sample()),
-            State::Sampling(s) => Some(s.sample()),
-            State::Mutating(_) => None,
+        match &self.inner {
+            DynState::Ready(s) => Some(s.sample()),
+            DynState::Sampling(s) => Some(s.sample()),
+            DynState::Mutating(_) => None,
         }
     }
 
@@ -368,14 +403,23 @@ impl<B> State<B> {
             .map(|p| f64::from(*p) >= 0.5)
             .collect()
     }
+
+    /// Return kind of state of inner state-machine.
+    pub fn kind(&self) -> StateKind {
+        match self.inner {
+            DynState::Ready(_) => StateKind::Ready,
+            DynState::Sampling(_) => StateKind::Sampling,
+            DynState::Mutating(_) => StateKind::Mutating,
+        }
+    }
 }
 
 impl<B> Probabilities for State<B> {
     fn probabilities(&self) -> &[Probability] {
-        match &self {
-            State::Ready(s) => s.probabilities(),
-            State::Sampling(s) => s.probabilities(),
-            State::Mutating(s) => s.probabilities(),
+        match &self.inner {
+            DynState::Ready(s) => s.probabilities(),
+            DynState::Sampling(s) => s.probabilities(),
+            DynState::Mutating(s) => s.probabilities(),
         }
     }
 }
@@ -393,7 +437,7 @@ mod tests {
             mutation_adjust_rate: MutationAdjustRate::default(),
         }
         .start(16, |point| point.iter().filter(|x| **x).count())
-        .inspect(|x| assert!(!x.state().is_mutating()))
+        .inspect(|x| assert!(!x.state().kind().is_mutating()))
         .nth(100);
     }
 }

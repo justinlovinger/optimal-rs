@@ -1,8 +1,6 @@
-use super::types::*;
 use rand::{
     distributions::{Bernoulli, Standard},
-    prelude::SeedableRng,
-    Rng,
+    prelude::*,
 };
 use rand_xoshiro::Xoshiro256PlusPlus;
 use std::{
@@ -10,15 +8,31 @@ use std::{
     ops::{Add, Mul, Sub},
 };
 
+use super::types::*;
+
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum DynState<B> {
+    Ready(State<Ready>),
+    Sampling(State<Sampling<B>>),
+    Mutating(State<Mutating>),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct State<T> {
+    probabilities: Vec<Probability>,
+    rng: Xoshiro256PlusPlus,
+    inner: T,
+}
 
 /// PBIL state ready to start sampling.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Ready {
-    probabilities: Vec<Probability>,
-    rng: Xoshiro256PlusPlus,
     distrs: Vec<Bernoulli>,
     sample: Vec<bool>,
 }
@@ -29,8 +43,6 @@ pub struct Ready {
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Sampling<B> {
-    probabilities: Vec<Probability>,
-    rng: Xoshiro256PlusPlus,
     distrs: Vec<Bernoulli>,
     best_sample: Vec<bool>,
     best_value: B,
@@ -41,104 +53,93 @@ pub struct Sampling<B> {
 /// PBIL state for mutating probabilities.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Mutating {
-    probabilities: Vec<Probability>,
-    rng: Xoshiro256PlusPlus,
+pub struct Mutating;
+
+impl<B> DynState<B> {
+    pub fn new(probabilities: Vec<Probability>, rng: Xoshiro256PlusPlus) -> Self {
+        Self::Ready(State::<Ready>::new(probabilities, rng))
+    }
 }
 
-impl Ready {
-    /// Return recommended initial state.
-    ///
-    /// # Arguments
-    ///
-    /// - `num_bits`: number of bits in each sample
-    pub(super) fn initial(num_bits: usize) -> Self {
-        Self::new(
-            [Probability::default()].repeat(num_bits),
-            Xoshiro256PlusPlus::from_entropy(),
-        )
+impl<T> State<T> {
+    /// Return probabilities.
+    pub fn probabilities(&self) -> &[Probability] {
+        &self.probabilities
     }
+}
 
-    /// Return recommended initial state.
-    ///
-    /// # Arguments
-    ///
-    /// - `num_bits`: number of bits in each sample
-    /// - `rng`: source of randomness
-    pub(super) fn initial_using<R>(num_bits: usize, rng: R) -> Self
-    where
-        R: Rng,
-    {
-        Self::new(
-            [Probability::default()].repeat(num_bits),
-            Xoshiro256PlusPlus::from_rng(rng).expect("RNG should initialize"),
-        )
-    }
-
+impl State<Ready> {
     /// Return custom initial state.
-    pub(super) fn new(probabilities: Vec<Probability>, mut rng: Xoshiro256PlusPlus) -> Self {
+    fn new(probabilities: Vec<Probability>, mut rng: Xoshiro256PlusPlus) -> Self {
         let distrs = probabilities
             .iter()
             .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
             .collect::<Vec<_>>();
         Self {
-            sample: distrs.iter().map(|d| rng.sample(d)).collect(),
+            inner: Ready {
+                sample: distrs.iter().map(|d| rng.sample(d)).collect(),
+                distrs,
+            },
             probabilities,
             rng,
-            distrs,
         }
     }
 
     /// Step to a 'Sampling' state
     /// by evaluating the first sample.
     #[allow(clippy::wrong_self_convention)]
-    pub(super) fn to_sampling<B>(mut self, value: B) -> Sampling<B> {
+    pub fn to_sampling<B>(mut self, value: B) -> State<Sampling<B>> {
         let distrs = self
             .probabilities
             .iter()
             .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
             .collect::<Vec<_>>();
-        Sampling {
-            sample: distrs.iter().map(|d| self.rng.sample(d)).collect(),
+        State {
+            inner: Sampling {
+                sample: distrs.iter().map(|d| self.rng.sample(d)).collect(),
+                distrs,
+                best_sample: self.inner.sample,
+                best_value: value,
+                samples_generated: 2, // This includes `sample` and `best_sample`.
+            },
             probabilities: self.probabilities,
             rng: self.rng,
-            distrs,
-            best_sample: self.sample,
-            best_value: value,
-            samples_generated: 2, // This includes `sample` and `best_sample`.
         }
-    }
-
-    /// Return probabilities.
-    pub fn probabilities(&self) -> &[Probability] {
-        &self.probabilities
     }
 
     /// Return sample to evaluate.
     pub fn sample(&self) -> &[bool] {
-        &self.sample
+        &self.inner.sample
     }
 }
 
-impl<B> Sampling<B> {
+impl<B> State<Sampling<B>> {
     #[allow(clippy::wrong_self_convention)]
-    pub(super) fn to_sampling(mut self, value: B) -> Sampling<B>
+    pub fn to_sampling(mut self, value: B) -> Self
     where
         B: PartialOrd,
     {
-        let (best_sample, best_value) = if value > self.best_value {
-            (self.sample, value)
+        let (best_sample, best_value) = if value > self.inner.best_value {
+            (self.inner.sample, value)
         } else {
-            (self.best_sample, self.best_value)
+            (self.inner.best_sample, self.inner.best_value)
         };
-        Sampling {
-            sample: self.distrs.iter().map(|d| self.rng.sample(d)).collect(),
+
+        Self {
+            inner: Sampling {
+                sample: self
+                    .inner
+                    .distrs
+                    .iter()
+                    .map(|d| self.rng.sample(d))
+                    .collect(),
+                distrs: self.inner.distrs,
+                best_sample,
+                best_value,
+                samples_generated: self.inner.samples_generated + 1,
+            },
             probabilities: self.probabilities,
             rng: self.rng,
-            distrs: self.distrs,
-            best_sample,
-            best_value,
-            samples_generated: self.samples_generated + 1,
         }
     }
 
@@ -151,17 +152,19 @@ impl<B> Sampling<B> {
     /// - `point_values`: value of each sample,
     ///    each element corresponding to a row of `samples`.
     #[allow(clippy::wrong_self_convention)]
-    pub(super) fn to_mutating(mut self, adjust_rate: AdjustRate, value: B) -> Mutating
+    pub fn to_mutating(mut self, adjust_rate: AdjustRate, value: B) -> State<Mutating>
     where
         B: PartialOrd,
     {
-        let best_sample = if value > self.best_value {
-            self.sample
+        let best_sample = if value > self.inner.best_value {
+            self.inner.sample
         } else {
-            self.best_sample
+            self.inner.best_sample
         };
         adjust_probabilities(&mut self.probabilities, adjust_rate.into(), best_sample);
-        Mutating {
+
+        State {
+            inner: Mutating,
             probabilities: self.probabilities,
             rng: self.rng,
         }
@@ -175,30 +178,25 @@ impl<B> Sampling<B> {
     /// - `point_values`: value of each sample,
     ///    each element corresponding to a row of `samples`.
     #[allow(clippy::wrong_self_convention)]
-    pub(super) fn to_ready(self, adjust_rate: AdjustRate, value: B) -> Ready
+    pub fn to_ready(self, adjust_rate: AdjustRate, value: B) -> State<Ready>
     where
         B: PartialOrd,
     {
-        let x = self.to_mutating(adjust_rate, value);
-        Ready::new(x.probabilities, x.rng)
+        let state = self.to_mutating(adjust_rate, value);
+        State::<Ready>::new(state.probabilities, state.rng)
     }
 
-    pub(super) fn samples_generated(&self) -> usize {
-        self.samples_generated
-    }
-
-    /// Return probabilities.
-    pub fn probabilities(&self) -> &[Probability] {
-        &self.probabilities
+    pub fn samples_generated(&self) -> usize {
+        self.inner.samples_generated
     }
 
     /// Return sample to evaluate.
     pub fn sample(&self) -> &[bool] {
-        &self.sample
+        &self.inner.sample
     }
 }
 
-impl Mutating {
+impl State<Mutating> {
     /// Step to 'Ready' state
     /// by randomly mutating probabilities.
     ///
@@ -206,11 +204,11 @@ impl Mutating {
     /// adjust each probability towards a random probability
     /// at rate `adjust_rate`.
     #[allow(clippy::wrong_self_convention)]
-    pub(super) fn to_ready(
+    pub fn to_ready(
         mut self,
         chance: MutationChance,
         adjust_rate: MutationAdjustRate,
-    ) -> Ready {
+    ) -> State<Ready> {
         let distr: Bernoulli = chance.into();
         self.probabilities.iter_mut().for_each(|p| {
             if self.rng.sample(distr) {
@@ -229,12 +227,7 @@ impl Mutating {
                 }
             }
         });
-        Ready::new(self.probabilities, self.rng)
-    }
-
-    /// Return probabilities.
-    pub fn probabilities(&self) -> &[Probability] {
-        &self.probabilities
+        State::<Ready>::new(self.probabilities, self.rng)
     }
 }
 
@@ -271,16 +264,15 @@ mod tests {
         seed: u64,
         adjust_rate: AdjustRate,
     ) {
-        let state = Ready::new(
+        let state = State::<Ready>::new(
             initial_probabilities,
             Xoshiro256PlusPlus::seed_from_u64(seed),
         );
         let value = f(state.sample());
         let state = state.to_sampling(value);
         let value = f(state.sample());
-        prop_assert!(are_valid(
-            state.to_ready(adjust_rate, value).probabilities()
-        ));
+        let state = state.to_ready(adjust_rate, value);
+        prop_assert!(are_valid(state.probabilities()));
     }
 
     #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
@@ -290,10 +282,11 @@ mod tests {
         mutation_chance: MutationChance,
         mutation_adjust_rate: MutationAdjustRate,
     ) {
-        let state = (Mutating {
+        let state = State {
+            inner: Mutating,
             probabilities: initial_probabilities,
             rng: Xoshiro256PlusPlus::seed_from_u64(seed),
-        })
+        }
         .to_ready(mutation_chance, mutation_adjust_rate);
         prop_assert!(are_valid(state.probabilities()));
     }
