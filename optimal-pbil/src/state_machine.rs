@@ -149,8 +149,7 @@ impl<B> State<Sampling<B>> {
     ///
     /// # Arguments
     ///
-    /// - `point_values`: value of each sample,
-    ///    each element corresponding to a row of `samples`.
+    /// - `value`: value of sample.
     #[allow(clippy::wrong_self_convention)]
     pub fn to_mutating(mut self, adjust_rate: AdjustRate, value: B) -> State<Mutating>
     where
@@ -175,8 +174,7 @@ impl<B> State<Sampling<B>> {
     ///
     /// # Arguments
     ///
-    /// - `point_values`: value of each sample,
-    ///    each element corresponding to a row of `samples`.
+    /// - `value`: value of sample.
     #[allow(clippy::wrong_self_convention)]
     pub fn to_ready(self, adjust_rate: AdjustRate, value: B) -> State<Ready>
     where
