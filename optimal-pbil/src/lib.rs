@@ -19,7 +19,7 @@
 //! );
 //! ```
 
-mod states;
+mod state_machine;
 mod types;
 
 use std::fmt::Debug;
@@ -31,7 +31,7 @@ use once_cell::sync::OnceCell;
 pub use optimal_core::prelude::*;
 use rand_xoshiro::{SplitMix64, Xoshiro256PlusPlus};
 
-pub use self::{states::*, types::*};
+pub use self::{state_machine::*, types::*};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
