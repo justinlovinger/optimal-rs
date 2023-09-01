@@ -154,6 +154,7 @@ pub struct State<B> {
     inner: DynState<B>,
 }
 
+/// PBIL state kind.
 #[derive(Clone, Debug, PartialEq, IsVariant)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StateKind {

@@ -14,13 +14,10 @@ use super::types::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// Backtracking steepest descent state.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DynState<A> {
-    /// Ready to begin line search.
     Ready(State<A, Ready<A>>),
-    /// Line searching.
     Searching(State<A, Searching<A>>),
 }
 

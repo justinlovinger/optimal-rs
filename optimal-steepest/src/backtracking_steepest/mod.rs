@@ -101,6 +101,16 @@ pub struct State<A> {
     inner: DynState<A>,
 }
 
+/// Backtracking steepest descent state kind.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum StateKind {
+    /// Ready to begin line search.
+    Ready,
+    /// Line searching.
+    Searching,
+}
+
 /// A backtracking steepest descent evaluation.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -357,6 +367,15 @@ impl<A> State<A> {
         }
     }
 
+    /// Return length of point in this state.
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
+        match &self.inner {
+            DynState::Ready(x) => x.point().len(),
+            DynState::Searching(x) => x.point().len(),
+        }
+    }
+
     /// Return data to be evaluated.
     pub fn evaluatee(&self) -> &[A] {
         match &self.inner {
@@ -383,12 +402,11 @@ impl<A> State<A> {
         }
     }
 
-    /// Return length of point in this state.
-    #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize {
+    /// Return kind of state of inner state-machine.
+    pub fn kind(&self) -> StateKind {
         match &self.inner {
-            DynState::Ready(x) => x.point().len(),
-            DynState::Searching(x) => x.point().len(),
+            DynState::Ready(_) => StateKind::Ready,
+            DynState::Searching(_) => StateKind::Searching,
         }
     }
 }
