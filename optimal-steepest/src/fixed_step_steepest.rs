@@ -54,6 +54,16 @@ pub struct FixedStepSteepest<A, FD> {
     evaluation_cache: OnceCell<Point<A>>,
 }
 
+/// Fixed step size steepest descent configuration parameters.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Config<A> {
+    /// Length of each step.
+    pub step_size: StepSize<A>,
+}
+
+type Point<A> = Vec<A>;
+
 impl<A, FD> FixedStepSteepest<A, FD> {
     fn new(state: Point<A>, config: Config<A>, obj_func_d: FD) -> Self {
         Self {
@@ -118,16 +128,6 @@ where
         self.state.clone()
     }
 }
-
-/// Fixed step size steepest descent configuration parameters.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config<A> {
-    /// Length of each step.
-    pub step_size: StepSize<A>,
-}
-
-type Point<A> = Vec<A>;
 
 impl<A> Config<A> {
     /// Return a new 'Config'.

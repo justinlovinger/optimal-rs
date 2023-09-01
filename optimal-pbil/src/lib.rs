@@ -129,6 +129,46 @@ pub struct Pbil<B, F> {
     evaluation_cache: OnceCell<Evaluation<B>>,
 }
 
+/// PBIL configuration parameters.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Config {
+    /// Number of samples generated
+    /// during steps.
+    pub num_samples: NumSamples,
+    /// Degree to adjust probabilities towards best point
+    /// during steps.
+    pub adjust_rate: AdjustRate,
+    /// Probability for each probability to mutate,
+    /// independently.
+    pub mutation_chance: MutationChance,
+    /// Degree to adjust probability towards random value
+    /// when mutating.
+    pub mutation_adjust_rate: MutationAdjustRate,
+}
+
+/// PBIL state.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct State<B> {
+    inner: DynState<B>,
+}
+
+#[derive(Clone, Debug, PartialEq, IsVariant)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum StateKind {
+    /// Ready to start sampling.
+    Ready,
+    /// For sampling
+    /// and adjusting probabilities
+    /// based on samples.
+    Sampling,
+    /// For mutating probabilities.
+    Mutating,
+}
+
+type Evaluation<B> = Option<B>;
+
 impl<B, F> Pbil<B, F> {
     fn new(state: State<B>, config: Config, obj_func: F) -> Self {
         Self {
@@ -213,46 +253,6 @@ impl<B, F> Optimizer for Pbil<B, F> {
         self.state.best_point()
     }
 }
-
-/// PBIL configuration parameters.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config {
-    /// Number of samples generated
-    /// during steps.
-    pub num_samples: NumSamples,
-    /// Degree to adjust probabilities towards best point
-    /// during steps.
-    pub adjust_rate: AdjustRate,
-    /// Probability for each probability to mutate,
-    /// independently.
-    pub mutation_chance: MutationChance,
-    /// Degree to adjust probability towards random value
-    /// when mutating.
-    pub mutation_adjust_rate: MutationAdjustRate,
-}
-
-/// PBIL state.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct State<B> {
-    inner: DynState<B>,
-}
-
-#[derive(Clone, Debug, PartialEq, IsVariant)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum StateKind {
-    /// Ready to start sampling.
-    Ready,
-    /// For sampling
-    /// and adjusting probabilities
-    /// based on samples.
-    Sampling,
-    /// For mutating probabilities.
-    Mutating,
-}
-
-type Evaluation<B> = Option<B>;
 
 impl Config {
     /// Return a new PBIL configuration.

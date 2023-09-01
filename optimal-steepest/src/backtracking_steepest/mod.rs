@@ -81,6 +81,36 @@ pub struct BacktrackingSteepest<A, F, FD> {
     evaluation_cache: OnceCell<Evaluation<A>>,
 }
 
+/// Backtracking steepest descent configuration parameters.
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Config<A> {
+    /// The sufficient decrease parameter,
+    /// `c_1`.
+    pub c_1: SufficientDecreaseParameter<A>,
+    /// Rate to decrease step size while line searching.
+    pub backtracking_rate: BacktrackingRate<A>,
+    /// Rate to increase step size before starting each line search.
+    pub initial_step_size_incr_rate: IncrRate<A>,
+}
+
+/// Backtracking steepest descent state.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct State<A> {
+    inner: DynState<A>,
+}
+
+/// A backtracking steepest descent evaluation.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum Evaluation<A> {
+    /// An objective value.
+    Value(A),
+    /// An objective value and point derivatives.
+    ValueAndDerivatives((A, Vec<A>)),
+}
+
 impl<A, F, FD> BacktrackingSteepest<A, F, FD> {
     fn new(state: State<A>, config: Config<A>, obj_func: F, obj_func_d: FD) -> Self {
         Self {
@@ -192,36 +222,6 @@ where
     fn best_point(&self) -> Self::Point {
         self.state.best_point().into()
     }
-}
-
-/// Backtracking steepest descent configuration parameters.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config<A> {
-    /// The sufficient decrease parameter,
-    /// `c_1`.
-    pub c_1: SufficientDecreaseParameter<A>,
-    /// Rate to decrease step size while line searching.
-    pub backtracking_rate: BacktrackingRate<A>,
-    /// Rate to increase step size before starting each line search.
-    pub initial_step_size_incr_rate: IncrRate<A>,
-}
-
-/// Backtracking steepest descent state.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct State<A> {
-    inner: DynState<A>,
-}
-
-/// A backtracking steepest descent evaluation.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Evaluation<A> {
-    /// An objective value.
-    Value(A),
-    /// An objective value and point derivatives.
-    ValueAndDerivatives((A, Vec<A>)),
 }
 
 impl<A> Config<A> {
