@@ -32,6 +32,8 @@
 //! }
 //! ```
 
+mod types;
+
 use std::{
     fmt::Debug,
     hint::unreachable_unchecked,
@@ -39,23 +41,16 @@ use std::{
     ops::{Add, Div, Mul, Neg, RangeInclusive, Sub},
 };
 
-use derive_bounded::{
-    derive_into_inner, derive_new_from_bounded_partial_ord,
-    derive_new_from_lower_bounded_partial_ord,
-};
 use derive_getters::Getters;
-use derive_more::Display;
-use num_traits::{
-    bounds::{LowerBounded, UpperBounded},
-    real::Real,
-    AsPrimitive, One,
-};
+use num_traits::{real::Real, AsPrimitive, One};
 use once_cell::sync::OnceCell;
 pub use optimal_core::prelude::*;
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
     prelude::*,
 };
+
+pub use self::types::*;
 
 pub use super::StepSize;
 
@@ -215,7 +210,7 @@ pub enum State<A> {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Ready<A> {
-    point: Point<A>,
+    point: Vec<A>,
     last_step_size: A,
 }
 
@@ -223,12 +218,12 @@ pub struct Ready<A> {
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Searching<A> {
-    point: Point<A>,
+    point: Vec<A>,
     point_value: A,
     step_direction: Vec<A>,
     c_1_times_point_derivatives_dot_step_direction: A,
     step_size: A,
-    point_at_step: Point<A>,
+    point_at_step: Vec<A>,
 }
 
 /// A backtracking steepest descent evaluation.
@@ -396,7 +391,7 @@ impl<A> State<A> {
 
 impl<A> State<A> {
     /// Return an initial state.
-    pub fn new(point: Point<A>, initial_step_size: StepSize<A>) -> Self {
+    pub fn new(point: Vec<A>, initial_step_size: StepSize<A>) -> Self {
         Self::Ready(Ready {
             point,
             last_step_size: initial_step_size.0,
@@ -414,11 +409,11 @@ impl<A> State<A> {
 }
 
 impl<A> Ready<A> {
-    fn point(&self) -> &Point<A> {
+    fn point(&self) -> &[A] {
         self.best_point()
     }
 
-    fn best_point(&self) -> &Point<A> {
+    fn best_point(&self) -> &[A] {
         &self.point
     }
 
@@ -446,7 +441,7 @@ impl<A> Ready<A> {
             point_at_step: descend(&self.point, step_size, &step_direction),
             point: self.point,
             point_value,
-            c_1_times_point_derivatives_dot_step_direction: config.c_1.0
+            c_1_times_point_derivatives_dot_step_direction: config.c_1.into_inner()
                 * point_derivatives
                     .into_iter()
                     .zip(step_direction.iter().copied())
@@ -459,12 +454,12 @@ impl<A> Ready<A> {
 }
 
 impl<A> Searching<A> {
-    fn best_point(&self) -> &Point<A> {
+    fn best_point(&self) -> &[A] {
         &self.point
     }
 
     #[allow(clippy::misnamed_getters)]
-    fn point(&self) -> &Point<A> {
+    fn point(&self) -> &[A] {
         &self.point_at_step
     }
 
@@ -483,14 +478,14 @@ impl<A> Searching<A> {
                 last_step_size: self.step_size,
             })
         } else {
-            self.step_size = config.backtracking_rate.0 * self.step_size;
+            self.step_size = config.backtracking_rate.into_inner() * self.step_size;
             self.point_at_step = descend(&self.point, self.step_size, &self.step_direction);
             State::Searching(self)
         }
     }
 }
 
-fn descend<A>(point: &Point<A>, step_size: A, step_direction: &[A]) -> Point<A>
+fn descend<A>(point: &[A], step_size: A, step_direction: &[A]) -> Vec<A>
 where
     A: Clone + Add<Output = A> + Mul<Output = A>,
 {
@@ -516,117 +511,3 @@ where
 {
     new_point_value <= point_value + step_size * c_1_times_point_derivatives_dot_step_direction
 }
-
-/// The sufficient decrease parameter,
-/// `c_1`.
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct SufficientDecreaseParameter<A>(A);
-
-derive_new_from_bounded_partial_ord!(SufficientDecreaseParameter<A: Real>);
-derive_into_inner!(SufficientDecreaseParameter<A>);
-
-impl<A> Default for SufficientDecreaseParameter<A>
-where
-    A: 'static + Copy,
-    f64: AsPrimitive<A>,
-{
-    fn default() -> Self {
-        Self(0.5.as_())
-    }
-}
-
-impl<A> LowerBounded for SufficientDecreaseParameter<A>
-where
-    A: Real,
-{
-    fn min_value() -> Self {
-        Self(A::epsilon())
-    }
-}
-
-impl<A> UpperBounded for SufficientDecreaseParameter<A>
-where
-    A: Real,
-{
-    fn max_value() -> Self {
-        Self(A::one() - A::epsilon())
-    }
-}
-
-/// Rate to decrease step size while line searching.
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct BacktrackingRate<A>(A);
-
-derive_new_from_bounded_partial_ord!(BacktrackingRate<A: Real>);
-derive_into_inner!(BacktrackingRate<A>);
-
-impl<A> Default for BacktrackingRate<A>
-where
-    A: 'static + Copy,
-    f64: AsPrimitive<A>,
-{
-    fn default() -> Self {
-        Self(0.5.as_())
-    }
-}
-
-impl<A> LowerBounded for BacktrackingRate<A>
-where
-    A: Real,
-{
-    fn min_value() -> Self {
-        Self(A::epsilon())
-    }
-}
-
-impl<A> UpperBounded for BacktrackingRate<A>
-where
-    A: Real,
-{
-    fn max_value() -> Self {
-        Self(A::one() - A::epsilon())
-    }
-}
-
-/// Rate to increase step size before starting each line search.
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct IncrRate<A>(A);
-
-derive_new_from_lower_bounded_partial_ord!(IncrRate<A: Real>);
-derive_into_inner!(IncrRate<A>);
-
-impl<A> IncrRate<A>
-where
-    A: 'static + Copy + One + Sub<Output = A> + Div<Output = A>,
-    f64: AsPrimitive<A>,
-{
-    /// Return increase rate slightly more than one step up from backtracking rate.
-    pub fn from_backtracking_rate(x: BacktrackingRate<A>) -> IncrRate<A> {
-        Self(2.0.as_() / x.into_inner() - A::one())
-    }
-}
-
-impl<A> LowerBounded for IncrRate<A>
-where
-    A: Real,
-{
-    fn min_value() -> Self {
-        Self(A::one() + A::epsilon())
-    }
-}
-
-impl<A> Mul<A> for IncrRate<A>
-where
-    A: Mul<Output = A>,
-{
-    type Output = A;
-
-    fn mul(self, rhs: A) -> Self::Output {
-        self.0 * rhs
-    }
-}
-
-type Point<A> = Vec<A>;
