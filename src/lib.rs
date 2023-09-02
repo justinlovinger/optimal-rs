@@ -85,6 +85,8 @@ use optimal_steepest::backtracking_steepest::{self, BacktrackingSteepest};
 use rand_xoshiro::SplitMix64;
 
 /// A generic binary derivative-free optimizer.
+///
+/// The specific optimizer is subject to change.
 #[allow(missing_debug_implementations)]
 pub struct RealDerivative {
     // This should wrap a runner
@@ -103,12 +105,14 @@ pub struct RealDerivative {
 /// Binary derivative-free optimizer configuration parameters.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct RealDerivativeConfig {
-    /// A scaling factor
+    /// A factor
     /// increasing quality of results
     /// at the cost of potentially increased time.
-    /// Values above 0 favor increased optimality.
+    /// Values above 0 favor increased quality.
     /// Values below 0 favor increased speed.
-    pub optimality: i32,
+    /// Not all values necessarily have an effect,
+    /// depending on underlying optimizer.
+    pub level: i32,
 }
 
 impl StreamingIterator for RealDerivative {
@@ -231,6 +235,8 @@ impl RealDerivativeConfig {
 }
 
 /// A generic binary derivative-free optimizer.
+///
+/// The specific optimizer is subject to change.
 #[allow(missing_debug_implementations)]
 pub struct BinaryDerivativeFree {
     #[allow(clippy::type_complexity)]
@@ -240,12 +246,14 @@ pub struct BinaryDerivativeFree {
 /// Binary derivative-free optimizer configuration parameters.
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct BinaryDerivativeFreeConfig {
-    /// A scaling factor
+    /// A factor
     /// increasing quality of results
     /// at the cost of potentially increased time.
-    /// Values above 0 favor increased optimality.
+    /// Values above 0 favor increased quality.
     /// Values below 0 favor increased speed.
-    pub optimality: i32,
+    /// Not all values necessarily have an effect,
+    /// depending on underlying optimizer.
+    pub level: i32,
 }
 
 impl StreamingIterator for BinaryDerivativeFree {
@@ -332,7 +340,7 @@ impl BinaryDerivativeFreeConfig {
 
     fn inner_config(self, len: usize) -> (UntilProbabilitiesConvergedConfig, optimal_pbil::Config) {
         // These numbers are approximate at best.
-        let (threshold, num_samples, adjust_rate) = match self.optimality {
+        let (threshold, num_samples, adjust_rate) = match self.level {
             x if x > 0 => {
                 let x = x as usize + 1;
                 (
