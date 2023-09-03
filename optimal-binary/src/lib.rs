@@ -1,6 +1,9 @@
 use num_traits::{pow, One, Zero};
 use std::ops::{Add, Div, Mul, RangeInclusive, Sub};
 
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
+
 /// Reduce innermost axis
 /// to numbers within range.
 /// Leftmost is least significant.
@@ -26,7 +29,13 @@ use std::ops::{Add, Div, Mul, RangeInclusive, Sub};
 /// assert_eq!(ToRealLE::new(1.0..=4.0, 2).decode([false, true]), 3.);
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(
+    feature = "serde",
+    serde(bound(deserialize = "T: One + Add<Output = T> + Deserialize<'de>"))
+)]
 pub struct ToRealLE<T> {
+    #[cfg_attr(feature = "serde", serde(skip))]
     to_int: ToIntLE<T>,
     start: T,
     a: Option<T>,
@@ -87,7 +96,9 @@ impl<T> ToRealLE<T> {
 /// assert_eq!(to_int_le.decode([false, false, true]), 4_u8);
 /// ```
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize))]
 pub struct ToIntLE<T> {
+    #[cfg_attr(feature = "serde", serde(skip))]
     two: T,
 }
 
@@ -97,6 +108,19 @@ where
 {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, T> Deserialize<'de> for ToIntLE<T>
+where
+    T: One + Add<Output = T>,
+{
+    fn deserialize<D>(_deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Ok(Self::new())
     }
 }
 

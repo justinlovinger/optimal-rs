@@ -10,7 +10,11 @@ keywords = ["optimization", "binary"]
 categories = ["science", "mathematics"]
 license = "MIT"
 
+[features]
+serde = ["dep:serde"]
+
 [dependencies]
 num-traits = "0.2.16"
+serde = { version = "1.0.185", features = ["derive"], optional = true }
 
 [dev-dependencies]
