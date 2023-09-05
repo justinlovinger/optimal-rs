@@ -119,7 +119,7 @@ impl<B> State<Sampling<B>> {
     where
         B: PartialOrd,
     {
-        let (best_sample, best_value) = if value > self.inner.best_value {
+        let (best_sample, best_value) = if value < self.inner.best_value {
             (self.inner.sample, value)
         } else {
             (self.inner.best_sample, self.inner.best_value)
