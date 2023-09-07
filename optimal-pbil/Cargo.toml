@@ -19,8 +19,8 @@ derive-bounded = { path = "../derive-bounded" }
 derive-getters = "0.3.0"
 derive_more = "0.99.17"
 num-traits = "0.2.16"
-once_cell = "1.18.0"
 optimal-core = { path = "../optimal-core" }
+partial-min-max = "0.4.0"
 rand = "0.8.5"
 rand_xoshiro = "0.6.0"
 replace_with = "0.1.7"

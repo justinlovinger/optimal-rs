@@ -1,6 +1,6 @@
 #![allow(clippy::needless_doctest_main)]
 
-//! Fixed step size steepest descent,
+//! Fixed-step-size steepest descent,
 //! a very simple derivative optimizer.
 //!
 //! # Examples
@@ -21,40 +21,40 @@
 //! );
 //! ```
 
+mod state_machine;
+
 use std::ops::{Mul, RangeInclusive, SubAssign};
 
-use derive_getters::Getters;
-use once_cell::sync::OnceCell;
+use derive_getters::{Dissolve, Getters};
 pub use optimal_core::prelude::*;
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
     prelude::*,
 };
 
+use self::state_machine::*;
+
 pub use super::StepSize;
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
-/// A running fixed step size steepest descent optimizer.
-#[derive(Clone, Debug, Getters)]
+/// A running fixed-step-size steepest descent optimizer.
+#[derive(Clone, Debug, Getters, Dissolve)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[dissolve(rename = "into_parts")]
 pub struct FixedStepSteepest<A, FD> {
     /// Optimizer configuration.
     config: Config<A>,
 
     /// State of optimizer.
-    state: Point<A>,
+    state: State<A>,
 
     /// Derivative of objective function to minimize.
     obj_func_d: FD,
-
-    #[getter(skip)]
-    #[cfg_attr(feature = "serde", serde(skip))]
-    evaluation_cache: OnceCell<Point<A>>,
 }
 
-/// Fixed step size steepest descent configuration parameters.
+/// Fixed-step-size steepest descent configuration parameters.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config<A> {
@@ -62,36 +62,32 @@ pub struct Config<A> {
     pub step_size: StepSize<A>,
 }
 
-type Point<A> = Vec<A>;
+/// Fixed-step-size steepest descent state.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct State<A>(DynState<A>);
+
+/// Fixed-step-size steepest descent state kind.
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum StateKind {
+    /// Iteration started.
+    Started,
+    /// Point differentiated.
+    Evaluated,
+    /// Step taken from differentiation.
+    Stepped,
+    /// Iteration finished.
+    Finished,
+}
 
 impl<A, FD> FixedStepSteepest<A, FD> {
-    fn new(state: Point<A>, config: Config<A>, obj_func_d: FD) -> Self {
+    fn new(state: State<A>, config: Config<A>, obj_func_d: FD) -> Self {
         Self {
             config,
             obj_func_d,
             state,
-            evaluation_cache: OnceCell::new(),
         }
-    }
-
-    /// Return configuration, state, and problem parameters.
-    pub fn into_inner(self) -> (Config<A>, Point<A>, FD) {
-        (self.config, self.state, self.obj_func_d)
-    }
-}
-
-impl<A, FD> FixedStepSteepest<A, FD>
-where
-    FD: Fn(&[A]) -> Vec<A>,
-{
-    /// Return evaluation of current state,
-    /// evaluating and caching if necessary.
-    pub fn evaluation(&self) -> &[A] {
-        self.evaluation_cache.get_or_init(|| self.evaluate())
-    }
-
-    fn evaluate(&self) -> Vec<A> {
-        (self.obj_func_d)(&self.state)
     }
 }
 
@@ -103,14 +99,14 @@ where
     type Item = Self;
 
     fn advance(&mut self) {
-        let evaluation = self
-            .evaluation_cache
-            .take()
-            .unwrap_or_else(|| self.evaluate());
-        self.state
-            .iter_mut()
-            .zip(&evaluation)
-            .for_each(|(x, d)| *x -= self.config.step_size.clone() * d.clone());
+        replace_with::replace_with_or_abort(&mut self.state.0, |state| match state {
+            DynState::Started(x) => DynState::Evaluated(x.into_evaluated(&self.obj_func_d)),
+            DynState::Evaluated(x) => {
+                DynState::Stepped(x.into_stepped(self.config.step_size.clone()))
+            }
+            DynState::Stepped(x) => DynState::Finished(x.into_finished()),
+            DynState::Finished(x) => DynState::Started(x.into_started()),
+        });
     }
 
     fn get(&self) -> Option<&Self::Item> {
@@ -125,7 +121,12 @@ where
     type Point = Vec<A>;
 
     fn best_point(&self) -> Self::Point {
-        self.state.clone()
+        match &self.state.0 {
+            DynState::Started(x) => x.point.clone(),
+            DynState::Evaluated(x) => x.point.x().clone(),
+            DynState::Stepped(x) => x.point.clone(),
+            DynState::Finished(x) => x.point.clone(),
+        }
     }
 }
 
@@ -191,7 +192,7 @@ impl<A> Config<A> {
     ///
     /// - `obj_func_d`: derivative of objective function to minimize
     /// - `state`: initial point to start from
-    pub fn start_from<FD>(self, obj_func_d: FD, state: Point<A>) -> FixedStepSteepest<A, FD>
+    pub fn start_from<FD>(self, obj_func_d: FD, state: State<A>) -> FixedStepSteepest<A, FD>
     where
         FD: Fn(&[A]) -> Vec<A>,
     {
@@ -202,17 +203,66 @@ impl<A> Config<A> {
         &self,
         initial_bounds: impl IntoIterator<Item = RangeInclusive<A>>,
         rng: &mut R,
-    ) -> Point<A>
+    ) -> State<A>
     where
         A: SampleUniform,
         R: Rng,
     {
-        initial_bounds
-            .into_iter()
-            .map(|range| {
-                let (start, end) = range.into_inner();
-                Uniform::new_inclusive(start, end).sample(rng)
-            })
-            .collect()
+        State(DynState::new(
+            initial_bounds
+                .into_iter()
+                .map(|range| {
+                    let (start, end) = range.into_inner();
+                    Uniform::new_inclusive(start, end).sample(rng)
+                })
+                .collect(),
+        ))
+    }
+}
+
+impl<A> State<A> {
+    /// Return an initial state.
+    pub fn new(point: Vec<A>) -> Self {
+        Self(DynState::new(point))
+    }
+
+    /// Return data to be evaluated.
+    pub fn evaluatee(&self) -> Option<&[A]> {
+        match &self.0 {
+            DynState::Started(x) => Some(&x.point),
+            DynState::Evaluated(_) => None,
+            DynState::Stepped(_) => None,
+            DynState::Finished(_) => None,
+        }
+    }
+
+    /// Return result of evaluation.
+    pub fn evaluation(&self) -> Option<&[A]> {
+        match &self.0 {
+            DynState::Started(_) => None,
+            DynState::Evaluated(x) => Some(x.point.value()),
+            DynState::Stepped(_) => None,
+            DynState::Finished(_) => None,
+        }
+    }
+
+    /// Return the best point discovered.
+    pub fn best_point(&self) -> &[A] {
+        match &self.0 {
+            DynState::Started(x) => &x.point,
+            DynState::Evaluated(x) => x.point.x(),
+            DynState::Stepped(x) => &x.point,
+            DynState::Finished(x) => &x.point,
+        }
+    }
+
+    /// Return kind of state of inner state-machine.
+    pub fn kind(&self) -> StateKind {
+        match &self.0 {
+            DynState::Started(_) => StateKind::Started,
+            DynState::Evaluated(_) => StateKind::Evaluated,
+            DynState::Stepped(_) => StateKind::Stepped,
+            DynState::Finished(_) => StateKind::Finished,
+        }
     }
 }

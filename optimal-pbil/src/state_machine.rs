@@ -1,3 +1,4 @@
+use partial_min_max::min;
 use rand::{
     distributions::{Bernoulli, Standard},
     prelude::*,
@@ -8,6 +9,8 @@ use std::{
     ops::{Add, Mul, Sub},
 };
 
+use self::{sampleable::Sampleable, valued::Valued};
+
 use super::types::*;
 
 #[cfg(feature = "serde")]
@@ -16,25 +19,46 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DynState<B> {
-    Ready(State<Ready>),
-    Sampling(State<Sampling<B>>),
-    Mutating(State<Mutating>),
+    Started(Started),
+    SampledFirst(SampledFirst),
+    EvaluatedFirst(EvaluatedFirst<B>),
+    Sampled(Sampled<B>),
+    Evaluated(Evaluated<B>),
+    Compared(Compared<B>),
+    Adjusted(Adjusted),
+    Mutated(Mutated),
+    Finished(Finished),
 }
 
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct State<T> {
-    probabilities: Vec<Probability>,
-    rng: Xoshiro256PlusPlus,
-    inner: T,
+pub struct Started {
+    pub probabilities: Vec<Probability>,
+    pub rng: Xoshiro256PlusPlus,
 }
 
 /// PBIL state ready to start sampling.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Ready {
-    distrs: Vec<Bernoulli>,
-    sample: Vec<bool>,
+pub struct InitializedSampling {
+    pub probabilities: Sampleable,
+    pub rng: Xoshiro256PlusPlus,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SampledFirst {
+    pub probabilities: Sampleable,
+    pub rng: Xoshiro256PlusPlus,
+    pub sample: Vec<bool>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct EvaluatedFirst<B> {
+    pub probabilities: Sampleable,
+    pub rng: Xoshiro256PlusPlus,
+    pub sample: Valued<Vec<bool>, B>,
 }
 
 /// PBIL state for sampling
@@ -42,174 +66,251 @@ pub struct Ready {
 /// based on samples.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Sampling<B> {
-    distrs: Vec<Bernoulli>,
-    best_sample: Vec<bool>,
-    best_value: B,
-    sample: Vec<bool>,
-    samples_generated: usize,
+pub struct Sampled<B> {
+    pub probabilities: Sampleable,
+    pub rng: Xoshiro256PlusPlus,
+    pub samples_generated: usize,
+    pub best_sample: Valued<Vec<bool>, B>,
+    pub sample: Vec<bool>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Evaluated<B> {
+    pub probabilities: Sampleable,
+    pub rng: Xoshiro256PlusPlus,
+    pub samples_generated: usize,
+    pub best_sample: Valued<Vec<bool>, B>,
+    pub sample: Valued<Vec<bool>, B>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Compared<B> {
+    pub probabilities: Sampleable,
+    pub rng: Xoshiro256PlusPlus,
+    pub samples_generated: usize,
+    pub best_sample: Valued<Vec<bool>, B>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Adjusted {
+    pub probabilities: Vec<Probability>,
+    pub rng: Xoshiro256PlusPlus,
 }
 
 /// PBIL state for mutating probabilities.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Mutating;
+pub struct Mutated {
+    pub probabilities: Vec<Probability>,
+    pub rng: Xoshiro256PlusPlus,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Finished {
+    pub probabilities: Vec<Probability>,
+    pub rng: Xoshiro256PlusPlus,
+}
 
 impl<B> DynState<B> {
     pub fn new(probabilities: Vec<Probability>, rng: Xoshiro256PlusPlus) -> Self {
-        Self::Ready(State::<Ready>::new(probabilities, rng))
+        Self::Started(Started::new(probabilities, rng))
     }
 }
 
-impl<T> State<T> {
-    /// Return probabilities.
-    pub fn probabilities(&self) -> &[Probability] {
-        &self.probabilities
+impl Started {
+    fn new(probabilities: Vec<Probability>, rng: Xoshiro256PlusPlus) -> Self {
+        Self { probabilities, rng }
+    }
+
+    pub fn into_initialized_sampling(self) -> InitializedSampling {
+        InitializedSampling::new(self.probabilities, self.rng)
     }
 }
 
-impl State<Ready> {
-    /// Return custom initial state.
-    fn new(probabilities: Vec<Probability>, mut rng: Xoshiro256PlusPlus) -> Self {
-        let distrs = probabilities
-            .iter()
-            .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
-            .collect::<Vec<_>>();
+impl InitializedSampling {
+    fn new(probabilities: Vec<Probability>, rng: Xoshiro256PlusPlus) -> Self {
         Self {
-            inner: Ready {
-                sample: distrs.iter().map(|d| rng.sample(d)).collect(),
-                distrs,
-            },
+            probabilities: Sampleable::new(probabilities),
+            rng,
+        }
+    }
+
+    pub fn into_sampled_first(self) -> SampledFirst {
+        SampledFirst::new(self.probabilities, self.rng)
+    }
+}
+
+impl SampledFirst {
+    fn new(probabilities: Sampleable, mut rng: Xoshiro256PlusPlus) -> Self {
+        Self {
+            sample: probabilities.sample(&mut rng),
             probabilities,
             rng,
         }
     }
 
-    /// Step to a 'Sampling' state
-    /// by evaluating the first sample.
-    #[allow(clippy::wrong_self_convention)]
-    pub fn to_sampling<B>(mut self, value: B) -> State<Sampling<B>> {
-        let distrs = self
-            .probabilities
-            .iter()
-            .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
-            .collect::<Vec<_>>();
-        State {
-            inner: Sampling {
-                sample: distrs.iter().map(|d| self.rng.sample(d)).collect(),
-                distrs,
-                best_sample: self.inner.sample,
-                best_value: value,
-                samples_generated: 2, // This includes `sample` and `best_sample`.
-            },
-            probabilities: self.probabilities,
-            rng: self.rng,
-        }
-    }
-
-    /// Return sample to evaluate.
-    pub fn sample(&self) -> &[bool] {
-        &self.inner.sample
+    pub fn into_evaluated_first<B>(self, f: impl FnOnce(&[bool]) -> B) -> EvaluatedFirst<B> {
+        EvaluatedFirst::new(self.probabilities, self.rng, self.sample, f)
     }
 }
 
-impl<B> State<Sampling<B>> {
-    #[allow(clippy::wrong_self_convention)]
-    pub fn to_sampling(mut self, value: B) -> Self
-    where
-        B: PartialOrd,
-    {
-        let (best_sample, best_value) = if value < self.inner.best_value {
-            (self.inner.sample, value)
-        } else {
-            (self.inner.best_sample, self.inner.best_value)
-        };
-
+impl<B> EvaluatedFirst<B> {
+    fn new(
+        probabilities: Sampleable,
+        rng: Xoshiro256PlusPlus,
+        sample: Vec<bool>,
+        f: impl FnOnce(&[bool]) -> B,
+    ) -> Self {
         Self {
-            inner: Sampling {
-                sample: self
-                    .inner
-                    .distrs
-                    .iter()
-                    .map(|d| self.rng.sample(d))
-                    .collect(),
-                distrs: self.inner.distrs,
-                best_sample,
-                best_value,
-                samples_generated: self.inner.samples_generated + 1,
-            },
-            probabilities: self.probabilities,
-            rng: self.rng,
+            probabilities,
+            rng,
+            sample: Valued::new(sample, f),
         }
     }
 
-    /// Step to 'Mutating' state
-    /// by adjusting probabilities
-    /// towards the best sample.
-    ///
-    /// # Arguments
-    ///
-    /// - `value`: value of sample.
-    #[allow(clippy::wrong_self_convention)]
-    pub fn to_mutating(mut self, adjust_rate: AdjustRate, value: B) -> State<Mutating>
-    where
-        B: PartialOrd,
-    {
-        let best_sample = if value > self.inner.best_value {
-            self.inner.sample
-        } else {
-            self.inner.best_sample
-        };
-        adjust_probabilities(&mut self.probabilities, adjust_rate.into(), best_sample);
-
-        State {
-            inner: Mutating,
-            probabilities: self.probabilities,
-            rng: self.rng,
-        }
-    }
-
-    /// Step to 'Ready' state,
-    /// skipping 'Mutating'.
-    ///
-    /// # Arguments
-    ///
-    /// - `value`: value of sample.
-    #[allow(clippy::wrong_self_convention)]
-    pub fn to_ready(self, adjust_rate: AdjustRate, value: B) -> State<Ready>
-    where
-        B: PartialOrd,
-    {
-        let state = self.to_mutating(adjust_rate, value);
-        State::<Ready>::new(state.probabilities, state.rng)
-    }
-
-    pub fn samples_generated(&self) -> usize {
-        self.inner.samples_generated
-    }
-
-    /// Return sample to evaluate.
-    pub fn sample(&self) -> &[bool] {
-        &self.inner.sample
+    pub fn into_sampled(self) -> Sampled<B> {
+        Sampled::new(self.probabilities, self.rng, 1, self.sample)
     }
 }
 
-impl State<Mutating> {
-    /// Step to 'Ready' state
+impl<B> Sampled<B> {
+    fn new(
+        probabilities: Sampleable,
+        mut rng: Xoshiro256PlusPlus,
+        samples_generated: usize,
+        best_sample: Valued<Vec<bool>, B>,
+    ) -> Self {
+        Self {
+            sample: probabilities.sample(&mut rng),
+            probabilities,
+            rng,
+            best_sample,
+            samples_generated: samples_generated + 1,
+        }
+    }
+
+    pub fn into_evaluated(self, f: impl FnOnce(&[bool]) -> B) -> Evaluated<B> {
+        Evaluated::new(
+            self.probabilities,
+            self.rng,
+            self.samples_generated,
+            self.best_sample,
+            self.sample,
+            f,
+        )
+    }
+}
+
+impl<B> Evaluated<B> {
+    fn new(
+        probabilities: Sampleable,
+        rng: Xoshiro256PlusPlus,
+        samples_generated: usize,
+        best_sample: Valued<Vec<bool>, B>,
+        sample: Vec<bool>,
+        f: impl FnOnce(&[bool]) -> B,
+    ) -> Self {
+        Self {
+            probabilities,
+            rng,
+            samples_generated,
+            best_sample,
+            sample: Valued::new(sample, f),
+        }
+    }
+
+    pub fn into_compared(self) -> Compared<B>
+    where
+        B: PartialOrd,
+    {
+        Compared::new(
+            self.probabilities,
+            self.rng,
+            self.samples_generated,
+            self.best_sample,
+            self.sample,
+        )
+    }
+}
+
+impl<B> Compared<B> {
+    fn new(
+        probabilities: Sampleable,
+        rng: Xoshiro256PlusPlus,
+        samples_generated: usize,
+        best_sample: Valued<Vec<bool>, B>,
+        sample: Valued<Vec<bool>, B>,
+    ) -> Self
+    where
+        B: PartialOrd,
+    {
+        Self {
+            probabilities,
+            rng,
+            samples_generated,
+            best_sample: min(sample, best_sample),
+        }
+    }
+
+    pub fn into_sampled(self) -> Sampled<B> {
+        Sampled::new(
+            self.probabilities,
+            self.rng,
+            self.samples_generated,
+            self.best_sample,
+        )
+    }
+
+    pub fn into_adjusted(self, adjust_rate: AdjustRate) -> Adjusted {
+        Adjusted::new(
+            adjust_rate,
+            self.probabilities.into_probabilities(),
+            self.rng,
+            self.best_sample.into_parts().0,
+        )
+    }
+}
+
+impl Adjusted {
+    fn new(
+        adjust_rate: AdjustRate,
+        mut probabilities: Vec<Probability>,
+        rng: Xoshiro256PlusPlus,
+        best_sample: Vec<bool>,
+    ) -> Self {
+        adjust_probabilities(&mut probabilities, adjust_rate.into(), best_sample);
+        Self { probabilities, rng }
+    }
+
+    pub fn into_mutated(self, chance: MutationChance, adjust_rate: MutationAdjustRate) -> Mutated {
+        Mutated::new(chance, adjust_rate, self.probabilities, self.rng)
+    }
+
+    pub fn into_finished(self) -> Finished {
+        Finished::new(self.probabilities, self.rng)
+    }
+}
+
+impl Mutated {
+    /// Step to 'Mutated' state
     /// by randomly mutating probabilities.
     ///
     /// With chance `chance`,
     /// adjust each probability towards a random probability
     /// at rate `adjust_rate`.
-    #[allow(clippy::wrong_self_convention)]
-    pub fn to_ready(
-        mut self,
+    pub fn new(
         chance: MutationChance,
         adjust_rate: MutationAdjustRate,
-    ) -> State<Ready> {
+        mut probabilities: Vec<Probability>,
+        mut rng: Xoshiro256PlusPlus,
+    ) -> Self {
         let distr: Bernoulli = chance.into();
-        self.probabilities.iter_mut().for_each(|p| {
-            if self.rng.sample(distr) {
+        probabilities.iter_mut().for_each(|p| {
+            if rng.sample(distr) {
                 // `Standard` distribution excludes `1`,
                 // but it more efficient
                 // than `Uniform::new_inclusive(0., 1.)`.
@@ -220,12 +321,26 @@ impl State<Mutating> {
                     Probability::new_unchecked(adjust(
                         adjust_rate.into(),
                         f64::from(*p),
-                        self.rng.sample(Standard),
+                        rng.sample(Standard),
                     ))
                 }
             }
         });
-        State::<Ready>::new(self.probabilities, self.rng)
+        Self { probabilities, rng }
+    }
+
+    pub fn into_finished(self) -> Finished {
+        Finished::new(self.probabilities, self.rng)
+    }
+}
+
+impl Finished {
+    pub fn new(probabilities: Vec<Probability>, rng: Xoshiro256PlusPlus) -> Self {
+        Self { probabilities, rng }
+    }
+
+    pub fn into_started(self) -> Started {
+        Started::new(self.probabilities, self.rng)
     }
 }
 
@@ -249,6 +364,89 @@ where
     x + rate * (y - x)
 }
 
+mod sampleable {
+    use rand::{distributions::Bernoulli, prelude::*};
+
+    use crate::Probability;
+
+    #[cfg(feature = "serde")]
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Clone, Debug, PartialEq)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct Sampleable {
+        probabilities: Vec<Probability>,
+        distrs: Vec<Bernoulli>,
+    }
+
+    impl Sampleable {
+        pub fn new(probabilities: Vec<Probability>) -> Self {
+            Self {
+                distrs: probabilities
+                    .iter()
+                    .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
+                    .collect::<Vec<_>>(),
+                probabilities,
+            }
+        }
+
+        pub fn probabilities(&self) -> &[Probability] {
+            &self.probabilities
+        }
+
+        pub fn into_probabilities(self) -> Vec<Probability> {
+            self.probabilities
+        }
+    }
+
+    impl Distribution<Vec<bool>> for Sampleable {
+        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec<bool> {
+            self.distrs.iter().map(|d| rng.sample(d)).collect()
+        }
+    }
+}
+
+mod valued {
+    use std::borrow::Borrow;
+
+    use derive_getters::{Dissolve, Getters};
+
+    #[cfg(feature = "serde")]
+    use serde::{Deserialize, Serialize};
+
+    #[derive(Clone, Debug, PartialEq, Eq, Dissolve, Getters)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    #[dissolve(rename = "into_parts")]
+    pub struct Valued<T, B> {
+        x: T,
+        value: B,
+    }
+
+    impl<T, B> Valued<T, B> {
+        pub fn new<Borrowed, F>(x: T, f: F) -> Self
+        where
+            Borrowed: ?Sized,
+            T: Borrow<Borrowed>,
+            F: FnOnce(&Borrowed) -> B,
+        {
+            Self {
+                value: f(x.borrow()),
+                x,
+            }
+        }
+    }
+
+    impl<T, B> PartialOrd for Valued<T, B>
+    where
+        T: PartialEq,
+        B: PartialOrd,
+    {
+        fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+            self.value.partial_cmp(&other.value)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -262,15 +460,17 @@ mod tests {
         seed: u64,
         adjust_rate: AdjustRate,
     ) {
-        let state = State::<Ready>::new(
+        let state = InitializedSampling::new(
             initial_probabilities,
             Xoshiro256PlusPlus::seed_from_u64(seed),
         );
-        let value = f(state.sample());
-        let state = state.to_sampling(value);
-        let value = f(state.sample());
-        let state = state.to_ready(adjust_rate, value);
-        prop_assert!(are_valid(state.probabilities()));
+        let state = state.into_sampled_first();
+        let state = state.into_evaluated_first(f).into_sampled();
+        let state = state
+            .into_evaluated(f)
+            .into_compared()
+            .into_adjusted(adjust_rate);
+        prop_assert!(are_valid(&state.probabilities));
     }
 
     #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
@@ -280,13 +480,13 @@ mod tests {
         mutation_chance: MutationChance,
         mutation_adjust_rate: MutationAdjustRate,
     ) {
-        let state = State {
-            inner: Mutating,
-            probabilities: initial_probabilities,
-            rng: Xoshiro256PlusPlus::seed_from_u64(seed),
-        }
-        .to_ready(mutation_chance, mutation_adjust_rate);
-        prop_assert!(are_valid(state.probabilities()));
+        let state = Mutated::new(
+            mutation_chance,
+            mutation_adjust_rate,
+            initial_probabilities,
+            Xoshiro256PlusPlus::seed_from_u64(seed),
+        );
+        prop_assert!(are_valid(&state.probabilities));
     }
 
     macro_rules! arbitrary_from_bounded {

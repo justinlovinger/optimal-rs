@@ -37,14 +37,12 @@ mod types;
 
 use std::{
     fmt::Debug,
-    hint::unreachable_unchecked,
     iter::Sum,
     ops::{Div, RangeInclusive, Sub},
 };
 
-use derive_getters::Getters;
+use derive_getters::{Dissolve, Getters};
 use num_traits::{real::Real, AsPrimitive, One};
-use once_cell::sync::OnceCell;
 pub use optimal_core::prelude::*;
 use rand::{
     distributions::uniform::{SampleUniform, Uniform},
@@ -60,8 +58,9 @@ pub use super::StepSize;
 use serde::{Deserialize, Serialize};
 
 /// A running fixed step size steepest descent optimizer.
-#[derive(Clone, Debug, Getters)]
+#[derive(Clone, Debug, Getters, Dissolve)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[dissolve(rename = "into_parts")]
 pub struct BacktrackingSteepest<A, F, FD> {
     /// Optimizer configuration.
     config: Config<A>,
@@ -75,10 +74,6 @@ pub struct BacktrackingSteepest<A, F, FD> {
     /// Function returning value and partial derivatives
     /// of objective function to minimize.
     obj_func_d: FD,
-
-    #[getter(skip)]
-    #[cfg_attr(feature = "serde", serde(skip))]
-    evaluation_cache: OnceCell<Evaluation<A>>,
 }
 
 /// Backtracking steepest descent configuration parameters.
@@ -97,28 +92,39 @@ pub struct Config<A> {
 /// Backtracking steepest descent state.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct State<A> {
-    inner: DynState<A>,
-}
+pub struct State<A>(DynState<A>);
 
 /// Backtracking steepest descent state kind.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StateKind {
-    /// Ready to begin line search.
-    Ready,
-    /// Line searching.
-    Searching,
+    /// Iteration started.
+    Started,
+    /// Point evaluated and differentiated.
+    Evaluated,
+    /// Prepared to line search.
+    InitializedSearching,
+    /// Took a line-search step.
+    FakeStepped,
+    /// Evaluated a line-search step.
+    FakeStepEvaluated,
+    /// Decremented step size for next line-search iteration.
+    StepSizeDecremented,
+    /// Finished line-search and took a real step.
+    Stepped,
+    /// Iteration finished.
+    Finished,
+    /// Incremented step size for next iteration.
+    StepSizeIncremented,
 }
 
 /// A backtracking steepest descent evaluation.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum Evaluation<A> {
+pub enum Evaluation<'a, A> {
     /// An objective value.
-    Value(A),
+    Value(&'a A),
     /// An objective value and point derivatives.
-    ValueAndDerivatives((A, Vec<A>)),
+    ValueAndDerivatives((&'a A, &'a [A])),
 }
 
 impl<A, F, FD> BacktrackingSteepest<A, F, FD> {
@@ -128,13 +134,7 @@ impl<A, F, FD> BacktrackingSteepest<A, F, FD> {
             obj_func,
             obj_func_d,
             state,
-            evaluation_cache: OnceCell::new(),
         }
-    }
-
-    /// Return configuration, state, and problem parameters.
-    pub fn into_inner(self) -> (Config<A>, State<A>, F, FD) {
-        (self.config, self.state, self.obj_func, self.obj_func_d)
     }
 }
 
@@ -154,19 +154,6 @@ where
             .cloned()
             .unwrap_or_else(|| (self.obj_func)(self.state.best_point()))
     }
-
-    /// Return evaluation of current state,
-    /// evaluating and caching if necessary.
-    pub fn evaluation(&self) -> &Evaluation<A> {
-        self.evaluation_cache.get_or_init(|| self.evaluate())
-    }
-
-    fn evaluate(&self) -> Evaluation<A> {
-        match &self.state.inner {
-            DynState::Ready(x) => Evaluation::ValueAndDerivatives((self.obj_func_d)(x.point())),
-            DynState::Searching(x) => Evaluation::Value((self.obj_func)(x.point())),
-        }
-    }
 }
 
 impl<A, F, FD> StreamingIterator for BacktrackingSteepest<A, F, FD>
@@ -179,42 +166,30 @@ where
     type Item = Self;
 
     fn advance(&mut self) {
-        let evaluation = self
-            .evaluation_cache
-            .take()
-            .unwrap_or_else(|| self.evaluate());
-        replace_with::replace_with_or_abort(&mut self.state.inner, |state| {
-            match state {
-                DynState::Ready(x) => {
-                    let (point_value, point_derivatives) = match evaluation {
-                        Evaluation::ValueAndDerivatives(x) => x,
-                        // `unreachable_unchecked` is safe if this method is safe,
-                        // because `evaluate` always returns `ValueAndDerivatives`
-                        // for `State::Ready`.
-                        _ => unsafe { unreachable_unchecked() },
-                    };
-                    DynState::Searching(x.to_searching(
-                        self.config.initial_step_size_incr_rate,
-                        self.config.c_1,
-                        point_value,
-                        point_derivatives,
-                    ))
-                }
-                DynState::Searching(x) => {
-                    let point_value = match evaluation {
-                        Evaluation::Value(x) => x,
-                        // `unreachable_unchecked` is safe if this method is safe,
-                        // because `evaluate` always returns `Value`
-                        // for `State::Searching`.
-                        _ => unsafe { unreachable_unchecked() },
-                    };
-                    if x.is_sufficient_decrease(point_value) {
-                        DynState::Ready(x.to_ready())
-                    } else {
-                        DynState::Searching(x.to_searching(self.config.backtracking_rate))
-                    }
+        replace_with::replace_with_or_abort(&mut self.state.0, |state| match state {
+            DynState::Started(x) => DynState::Evaluated(x.into_evaluated(&self.obj_func_d)),
+            DynState::Evaluated(x) => {
+                DynState::InitializedSearching(x.into_initialized_searching(self.config.c_1))
+            }
+            DynState::InitializedSearching(x) => DynState::FakeStepped(x.into_fake_stepped()),
+            DynState::FakeStepped(x) => {
+                DynState::FakeStepEvaluated(x.into_fake_step_evaluated(&self.obj_func))
+            }
+            DynState::FakeStepEvaluated(x) => {
+                if x.is_sufficient_decrease() {
+                    DynState::Stepped(x.into_stepped())
+                } else {
+                    DynState::StepSizeDecremented(
+                        x.into_step_size_decremented(self.config.backtracking_rate),
+                    )
                 }
             }
+            DynState::StepSizeDecremented(x) => DynState::FakeStepped(x.into_fake_stepped()),
+            DynState::Stepped(x) => DynState::Finished(x.into_finished()),
+            DynState::Finished(x) => DynState::StepSizeIncremented(
+                x.into_step_size_incremented(self.config.initial_step_size_incr_rate),
+            ),
+            DynState::StepSizeIncremented(x) => DynState::Started(x.into_started()),
         });
     }
 
@@ -362,33 +337,70 @@ impl<A> Config<A> {
 impl<A> State<A> {
     /// Return an initial state.
     pub fn new(point: Vec<A>, initial_step_size: StepSize<A>) -> Self {
-        Self {
-            inner: DynState::new(point, initial_step_size),
-        }
+        Self(DynState::new(point, initial_step_size))
     }
 
     /// Return length of point in this state.
     #[allow(clippy::len_without_is_empty)]
     pub fn len(&self) -> usize {
-        match &self.inner {
-            DynState::Ready(x) => x.point().len(),
-            DynState::Searching(x) => x.point().len(),
+        match &self.0 {
+            DynState::Started(x) => x.point.len(),
+            DynState::Evaluated(x) => x.point.x().len(),
+            DynState::InitializedSearching(x) => x.line_search.point().len(),
+            DynState::FakeStepped(x) => x.line_search().point().len(),
+            DynState::FakeStepEvaluated(x) => x.line_search().point().len(),
+            DynState::StepSizeDecremented(x) => x.line_search.point().len(),
+            DynState::Stepped(x) => x.point.len(),
+            DynState::Finished(x) => x.point.len(),
+            DynState::StepSizeIncremented(x) => x.point.len(),
         }
     }
 
     /// Return data to be evaluated.
-    pub fn evaluatee(&self) -> &[A] {
-        match &self.inner {
-            DynState::Ready(x) => x.point(),
-            DynState::Searching(x) => x.point(),
+    pub fn evaluatee(&self) -> Option<&[A]> {
+        match &self.0 {
+            DynState::Started(x) => Some(&x.point),
+            DynState::Evaluated(_) => None,
+            DynState::InitializedSearching(_) => None,
+            DynState::FakeStepped(x) => Some(x.point_at_step()),
+            DynState::FakeStepEvaluated(_) => None,
+            DynState::StepSizeDecremented(_) => None,
+            DynState::Stepped(_) => None,
+            DynState::Finished(_) => None,
+            DynState::StepSizeIncremented(_) => None,
+        }
+    }
+
+    /// Return result of evaluation.
+    pub fn evaluation(&self) -> Option<Evaluation<A>> {
+        match &self.0 {
+            DynState::Started(_) => None,
+            DynState::Evaluated(x) => {
+                let (value, derivatives) = x.point.value();
+                Some(Evaluation::ValueAndDerivatives((value, derivatives)))
+            }
+            DynState::InitializedSearching(_) => None,
+            DynState::FakeStepped(_) => None,
+            DynState::FakeStepEvaluated(x) => Some(Evaluation::Value(x.point_at_step().value())),
+            DynState::StepSizeDecremented(_) => None,
+            DynState::Stepped(_) => None,
+            DynState::Finished(_) => None,
+            DynState::StepSizeIncremented(_) => None,
         }
     }
 
     /// Return the best point discovered.
     pub fn best_point(&self) -> &[A] {
-        match &self.inner {
-            DynState::Ready(x) => x.best_point(),
-            DynState::Searching(x) => x.best_point(),
+        match &self.0 {
+            DynState::Started(x) => &x.point,
+            DynState::Evaluated(x) => x.point.x(),
+            DynState::InitializedSearching(x) => x.line_search.point(),
+            DynState::FakeStepped(x) => x.line_search().point(),
+            DynState::FakeStepEvaluated(x) => x.line_search().point(),
+            DynState::StepSizeDecremented(x) => x.line_search.point(),
+            DynState::Stepped(x) => &x.point,
+            DynState::Finished(x) => &x.point,
+            DynState::StepSizeIncremented(x) => &x.point,
         }
     }
 
@@ -396,17 +408,34 @@ impl<A> State<A> {
     /// if possible
     /// without evaluating.
     pub fn stored_best_point_value(&self) -> Option<&A> {
-        match &self.inner {
-            DynState::Ready(_) => None,
-            DynState::Searching(x) => Some(x.point_value()),
+        match &self.0 {
+            DynState::Started(_) => None,
+            DynState::Evaluated(x) => {
+                let (value, _) = x.point.value();
+                Some(value)
+            }
+            DynState::InitializedSearching(x) => Some(x.line_search.value()),
+            DynState::FakeStepped(x) => Some(x.line_search().value()),
+            DynState::FakeStepEvaluated(x) => Some(x.line_search().value()),
+            DynState::StepSizeDecremented(x) => Some(x.line_search.value()),
+            DynState::Stepped(_) => None,
+            DynState::Finished(_) => None,
+            DynState::StepSizeIncremented(_) => None,
         }
     }
 
     /// Return kind of state of inner state-machine.
     pub fn kind(&self) -> StateKind {
-        match &self.inner {
-            DynState::Ready(_) => StateKind::Ready,
-            DynState::Searching(_) => StateKind::Searching,
+        match &self.0 {
+            DynState::Started(_) => StateKind::Started,
+            DynState::Evaluated(_) => StateKind::Evaluated,
+            DynState::InitializedSearching(_) => StateKind::InitializedSearching,
+            DynState::FakeStepped(_) => StateKind::FakeStepped,
+            DynState::FakeStepEvaluated(_) => StateKind::FakeStepEvaluated,
+            DynState::StepSizeDecremented(_) => StateKind::StepSizeDecremented,
+            DynState::Stepped(_) => StateKind::Stepped,
+            DynState::Finished(_) => StateKind::Finished,
+            DynState::StepSizeIncremented(_) => StateKind::StepSizeIncremented,
         }
     }
 }

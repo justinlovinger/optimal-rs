@@ -191,12 +191,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "once_cell"
-version = "1.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dd8b5dd2ae5ed71462c540258bedcb51965123ad7e7ccf4b9a8cafaa4a63576d"
-
-[[package]]
 name = "optimal"
 version = "0.1.0"
 dependencies = [
@@ -236,8 +230,8 @@ dependencies = [
  "derive-getters",
  "derive_more",
  "num-traits",
- "once_cell",
  "optimal-core",
+ "partial-min-max",
  "proptest",
  "rand",
  "rand_xoshiro",
@@ -257,7 +251,6 @@ dependencies = [
  "derive-getters",
  "derive_more",
  "num-traits",
- "once_cell",
  "optimal-core",
  "proptest",
  "rand",
@@ -267,6 +260,12 @@ dependencies = [
  "test-strategy",
  "thiserror",
 ]
+
+[[package]]
+name = "partial-min-max"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6448add382c60bbbc64f9dab41309a12ec530c05191601042f911356ac09758c"
 
 [[package]]
 name = "paste"
