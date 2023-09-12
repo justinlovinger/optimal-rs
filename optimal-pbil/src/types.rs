@@ -69,6 +69,16 @@ derive_into_inner!(AdjustRate(f64));
 derive_try_from_from_new!(AdjustRate(f64));
 derive_from_str_from_try_into!(AdjustRate(f64));
 
+impl Eq for AdjustRate {}
+
+#[allow(clippy::derive_ord_xor_partial_ord)]
+impl Ord for AdjustRate {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // `f64` has total ordering for the the range of values allowed by this type.
+        unsafe { self.partial_cmp(other).unwrap_unchecked() }
+    }
+}
+
 /// Probability for each probability to mutate,
 /// independently.
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Into)]
@@ -112,6 +122,16 @@ derive_into_inner!(MutationChance(f64));
 derive_try_from_from_new!(MutationChance(f64));
 derive_from_str_from_try_into!(MutationChance(f64));
 
+impl Eq for MutationChance {}
+
+#[allow(clippy::derive_ord_xor_partial_ord)]
+impl Ord for MutationChance {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // `f64` has total ordering for the the range of values allowed by this type.
+        unsafe { self.partial_cmp(other).unwrap_unchecked() }
+    }
+}
+
 impl MutationChance {
     pub fn is_zero(&self) -> bool {
         self.0 == 0.0
@@ -148,6 +168,16 @@ derive_new_from_bounded_float!(MutationAdjustRate(f64));
 derive_into_inner!(MutationAdjustRate(f64));
 derive_try_from_from_new!(MutationAdjustRate(f64));
 derive_from_str_from_try_into!(MutationAdjustRate(f64));
+
+impl Eq for MutationAdjustRate {}
+
+#[allow(clippy::derive_ord_xor_partial_ord)]
+impl Ord for MutationAdjustRate {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // `f64` has total ordering for the the range of values allowed by this type.
+        unsafe { self.partial_cmp(other).unwrap_unchecked() }
+    }
+}
 
 /// Probability for a sampled bit to be true.
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Into)]
@@ -190,10 +220,20 @@ derive_into_inner!(Probability(f64));
 derive_try_from_from_new!(Probability(f64));
 derive_from_str_from_try_into!(Probability(f64));
 
+impl Eq for Probability {}
+
+#[allow(clippy::derive_ord_xor_partial_ord)]
+impl Ord for Probability {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // `f64` has total ordering for the the range of values allowed by this type.
+        unsafe { self.partial_cmp(other).unwrap_unchecked() }
+    }
+}
+
 /// PBIL can be considered done
 /// when all probabilities are above this threshold
 /// or below the inverse.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ProbabilityThreshold {
     ub: Probability,
@@ -264,6 +304,25 @@ impl Default for ProbabilityThreshold {
             ub: Probability(0.75),
             lb: Probability(0.25),
         }
+    }
+}
+
+// `lb` is fully dependent on `ub`.
+impl PartialEq for ProbabilityThreshold {
+    fn eq(&self, other: &Self) -> bool {
+        self.ub.eq(&other.ub)
+    }
+}
+impl Eq for ProbabilityThreshold {}
+impl PartialOrd for ProbabilityThreshold {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.ub.partial_cmp(&other.ub)
+    }
+}
+impl Ord for ProbabilityThreshold {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        // `f64` has total ordering for the the range of values allowed by this type.
+        unsafe { self.partial_cmp(other).unwrap_unchecked() }
     }
 }
 

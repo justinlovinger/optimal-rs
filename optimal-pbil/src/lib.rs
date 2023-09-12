@@ -58,7 +58,7 @@ pub struct Pbil<B, F> {
 }
 
 /// PBIL configuration parameters.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Config {
     /// Number of samples generated
