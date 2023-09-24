@@ -65,6 +65,7 @@ pub struct Config<A> {
 /// Fixed-step-size steepest descent state.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct State<A>(DynState<A>);
 
 /// Fixed-step-size steepest descent state kind.

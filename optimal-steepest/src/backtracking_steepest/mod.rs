@@ -92,6 +92,7 @@ pub struct Config<A> {
 /// Backtracking steepest descent state.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct State<A>(DynState<A>);
 
 /// Backtracking steepest descent state kind.

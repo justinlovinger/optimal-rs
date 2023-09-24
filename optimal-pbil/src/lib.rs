@@ -78,6 +78,7 @@ pub struct Config {
 /// PBIL state.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct State<B>(DynState<B>);
 
 /// PBIL state kind.

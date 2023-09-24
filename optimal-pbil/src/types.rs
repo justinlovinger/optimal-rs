@@ -235,6 +235,8 @@ impl Ord for Probability {
 /// or below the inverse.
 #[derive(Clone, Copy, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(into = "Probability"))]
+#[cfg_attr(feature = "serde", serde(try_from = "Probability"))]
 pub struct ProbabilityThreshold {
     ub: Probability,
     lb: Probability,

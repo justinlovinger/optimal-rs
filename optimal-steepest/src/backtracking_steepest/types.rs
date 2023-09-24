@@ -18,10 +18,18 @@ pub use optimal_core::prelude::*;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 
+// `#[serde(into = "A")]` and `#[serde(try_from = "A")]` makes more sense
+// than `#[serde(transparent)]`,
+// but as of 2023-09-24,
+// but we cannot `impl<A> From<Foo<A>> for A`
+// and manually implementing `Serialize` and `Deserialize`
+// is not worth the effort.
+
 /// The sufficient decrease parameter,
 /// `c_1`.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct SufficientDecreaseParameter<A>(A);
 
 derive_new_from_bounded_partial_ord!(SufficientDecreaseParameter<A: Real>);
@@ -58,6 +66,7 @@ where
 /// Rate to decrease step size while line searching.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct BacktrackingRate<A>(A);
 
 derive_new_from_bounded_partial_ord!(BacktrackingRate<A: Real>);
@@ -94,6 +103,7 @@ where
 /// Rate to increase step size before starting each line search.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[cfg_attr(feature = "serde", serde(transparent))]
 pub struct IncrRate<A>(A);
 
 derive_new_from_lower_bounded_partial_ord!(IncrRate<A: Real>);
