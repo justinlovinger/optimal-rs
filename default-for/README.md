@@ -1,3 +1,0 @@
-# default-for
-
-License: MIT

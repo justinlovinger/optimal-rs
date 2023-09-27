@@ -1,7 +1,6 @@
 use core::convert::TryFrom;
 use std::f64::EPSILON;
 
-use default_for::DefaultFor;
 use derive_bounded::{
     derive_from_str_from_try_into, derive_into_inner, derive_new_from_bounded_float,
     derive_new_from_lower_bounded, derive_try_from_from_new,
@@ -87,10 +86,10 @@ impl Ord for AdjustRate {
 #[cfg_attr(feature = "serde", serde(try_from = "f64"))]
 pub struct MutationChance(f64);
 
-impl DefaultFor<usize> for MutationChance {
+impl MutationChance {
     /// Return recommended default mutation chance,
     /// average of one mutation per step.
-    fn default_for(num_bits: usize) -> Self {
+    pub fn default_for(num_bits: usize) -> Self {
         if num_bits == 0 {
             Self(1.)
         } else {

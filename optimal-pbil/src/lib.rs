@@ -23,7 +23,6 @@ mod state_machine;
 mod types;
 mod until_probabilities_converged;
 
-use default_for::DefaultFor;
 use derive_getters::{Dissolve, Getters};
 use derive_more::IsVariant;
 pub use optimal_core::prelude::*;
@@ -191,8 +190,9 @@ impl Config {
     }
 }
 
-impl DefaultFor<usize> for Config {
-    fn default_for(num_bits: usize) -> Self {
+impl Config {
+    /// Return default 'Config'.
+    pub fn default_for(num_bits: usize) -> Self {
         Self {
             num_samples: NumSamples::default(),
             adjust_rate: AdjustRate::default(),
@@ -200,9 +200,7 @@ impl DefaultFor<usize> for Config {
             mutation_adjust_rate: MutationAdjustRate::default(),
         }
     }
-}
 
-impl Config {
     /// Return this optimizer default
     /// running on the given problem.
     ///

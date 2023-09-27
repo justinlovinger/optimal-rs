@@ -14,7 +14,6 @@ license = "MIT"
 serde = ["dep:serde"]
 
 [dependencies]
-default-for = { path = "../default-for" }
 derive-bounded = { path = "../derive-bounded" }
 derive-getters = "0.3.0"
 derive_more = "0.99.17"

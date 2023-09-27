@@ -1,6 +1,5 @@
 [workspace]
 members = [
-  "default-for",
   "derive-bounded",
   "optimal-binary",
   "optimal-core",
