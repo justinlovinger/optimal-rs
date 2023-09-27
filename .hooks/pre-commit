@@ -1,7 +1,8 @@
 #!/bin/sh
 
 cargo readme -o README.md
-cargo readme -r derive-bounded -o README.md
+cargo readme -r derive-num-bounded -o README.md
+cargo readme -r optimal-binary -o README.md
 cargo readme -r optimal-core -o README.md
 cargo readme -r optimal-pbil -o README.md
 cargo readme -r optimal-steepest -o README.md

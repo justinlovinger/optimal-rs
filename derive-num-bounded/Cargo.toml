@@ -1,14 +1,17 @@
 [package]
-name = "derive-bounded"
-version = "0.1.0"
+name = "derive-num-bounded"
+version = "0.0.0"
 edition = "2021"
 authors = ["Justin Lovinger"]
 description = "Macros for implementing bounded number types"
-repository = "https://github.com/justinlovinger/optimal-rs"
+repository = "https://github.com/justinlovinger/optimal-rs/tree/master/derive-num-bounded"
 readme = "README.md"
 keywords = ["macro"]
 categories = ["rust-patterns"]
 license = "MIT"
+
+[badges]
+github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 
 [dependencies]
 paste = "1.0.14"

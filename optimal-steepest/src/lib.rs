@@ -8,8 +8,8 @@ pub mod fixed_step_steepest;
 
 use std::ops::Mul;
 
-use derive_bounded::{derive_into_inner, derive_new_from_lower_bounded_partial_ord};
 use derive_more::Display;
+use derive_num_bounded::{derive_into_inner, derive_new_from_lower_bounded_partial_ord};
 use num_traits::{bounds::LowerBounded, real::Real};
 
 #[cfg(feature = "serde")]

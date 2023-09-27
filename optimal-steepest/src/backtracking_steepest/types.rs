@@ -3,11 +3,11 @@ use std::{
     ops::{Div, Mul, Sub},
 };
 
-use derive_bounded::{
+use derive_more::Display;
+use derive_num_bounded::{
     derive_into_inner, derive_new_from_bounded_partial_ord,
     derive_new_from_lower_bounded_partial_ord,
 };
-use derive_more::Display;
 use num_traits::{
     bounds::{LowerBounded, UpperBounded},
     real::Real,

@@ -1,14 +1,17 @@
 [package]
 name = "optimal-binary"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 authors = ["Justin Lovinger"]
 description = "Utilities for working with binary optimizers"
-repository = "https://github.com/justinlovinger/optimal-rs"
+repository = "https://github.com/justinlovinger/optimal-rs/tree/master/optimal-binary"
 readme = "README.md"
 keywords = ["optimization", "binary"]
 categories = ["science", "mathematics"]
 license = "MIT"
+
+[badges]
+github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 
 [features]
 serde = ["dep:serde"]

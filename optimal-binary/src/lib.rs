@@ -1,3 +1,5 @@
+//! Utilities for working with binary optimizers.
+
 use num_traits::{pow, One, Zero};
 use std::ops::{Add, Div, Mul, RangeInclusive, Sub};
 

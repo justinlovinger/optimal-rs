@@ -1,6 +1,6 @@
 [workspace]
 members = [
-  "derive-bounded",
+  "derive-num-bounded",
   "optimal-binary",
   "optimal-core",
   "optimal-pbil",
@@ -9,7 +9,7 @@ members = [
 
 [package]
 name = "optimal"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 authors = ["Justin Lovinger"]
 description = "Mathematical optimization and machine learning framework and algorithms"
@@ -23,9 +23,9 @@ license = "MIT"
 github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 
 [dependencies]
-optimal-core = { path = "optimal-core" }
-optimal-pbil = { path = "optimal-pbil" }
-optimal-steepest = { path = "optimal-steepest" }
+optimal-core = { path = "optimal-core", version = "0.0.0" }
+optimal-pbil = { path = "optimal-pbil", version = "0.0.0" }
+optimal-steepest = { path = "optimal-steepest", version = "0.0.0" }
 rand_xoshiro = "0.6.0"
 
 [dev-dependencies]

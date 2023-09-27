@@ -1,11 +1,9 @@
 {{badges}}
 
-Note,
-this is currently highly experimental.
-Expect frequent breaking changing
-without proper versioning.
-This notice will change
-when stabilization begins.
+This package is experimental.
+Expect frequent updates to the repository
+with breaking changes
+and infrequent releases.
 
 # {{crate}}
 

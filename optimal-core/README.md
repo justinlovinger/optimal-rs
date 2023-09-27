@@ -1,3 +1,5 @@
+[![Workflow Status](https://github.com/justinlovinger/optimal-rs/workflows/build/badge.svg)](https://github.com/justinlovinger/optimal-rs/actions?query=workflow%3A%22build%22)
+
 # optimal-core
 
 Core traits and types for Optimal.

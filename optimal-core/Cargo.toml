@@ -1,14 +1,17 @@
 [package]
 name = "optimal-core"
-version = "0.1.0"
+version = "0.0.0"
 edition = "2021"
 authors = ["Justin Lovinger"]
 description = "Mathematical optimization and machine learning framework"
-repository = "https://github.com/justinlovinger/optimal-rs"
+repository = "https://github.com/justinlovinger/optimal-rs/tree/master/optimal-core"
 readme = "README.md"
 keywords = ["ai", "machine-learning", "optimization"]
 categories = ["science", "mathematics"]
 license = "MIT"
+
+[badges]
+github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 
 [dependencies]
 blanket = "0.3.0"

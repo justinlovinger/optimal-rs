@@ -1,3 +1,0 @@
-# derive-bounded
-
-License: MIT

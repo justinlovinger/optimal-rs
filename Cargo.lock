@@ -71,14 +71,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6245d59a3e82a7fc217c5828a6692dbc6dfb63a0c8c90495621f7b9d79704a0e"
 
 [[package]]
-name = "derive-bounded"
-version = "0.1.0"
-dependencies = [
- "paste",
- "thiserror",
-]
-
-[[package]]
 name = "derive-getters"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -87,6 +79,14 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "derive-num-bounded"
+version = "0.0.0"
+dependencies = [
+ "paste",
+ "thiserror",
 ]
 
 [[package]]
@@ -188,7 +188,7 @@ dependencies = [
 
 [[package]]
 name = "optimal"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "optimal-core",
  "optimal-pbil",
@@ -198,7 +198,7 @@ dependencies = [
 
 [[package]]
 name = "optimal-binary"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "num-traits",
  "serde",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "optimal-core"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
  "blanket",
  "paste",
@@ -219,10 +219,10 @@ dependencies = [
 
 [[package]]
 name = "optimal-pbil"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
- "derive-bounded",
  "derive-getters",
+ "derive-num-bounded",
  "derive_more",
  "num-traits",
  "optimal-core",
@@ -239,10 +239,10 @@ dependencies = [
 
 [[package]]
 name = "optimal-steepest"
-version = "0.1.0"
+version = "0.0.0"
 dependencies = [
- "derive-bounded",
  "derive-getters",
+ "derive-num-bounded",
  "derive_more",
  "num-traits",
  "optimal-core",

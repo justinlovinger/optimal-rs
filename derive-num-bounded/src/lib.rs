@@ -1,6 +1,8 @@
 #![allow(unused_macros)]
 #![allow(unused_imports)]
 
+//! Macros for implementing bounded number types.
+
 pub use paste;
 pub use thiserror;
 

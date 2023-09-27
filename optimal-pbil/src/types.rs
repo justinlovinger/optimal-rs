@@ -1,11 +1,11 @@
 use core::convert::TryFrom;
 use std::f64::EPSILON;
 
-use derive_bounded::{
+use derive_more::{Display, Into};
+use derive_num_bounded::{
     derive_from_str_from_try_into, derive_into_inner, derive_new_from_bounded_float,
     derive_new_from_lower_bounded, derive_try_from_from_new,
 };
-use derive_more::{Display, Into};
 use num_traits::bounds::{LowerBounded, UpperBounded};
 use rand::distributions::Bernoulli;
 

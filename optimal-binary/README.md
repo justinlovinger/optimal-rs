@@ -5,8 +5,8 @@ Expect frequent updates to the repository
 with breaking changes
 and infrequent releases.
 
-# optimal-steepest
+# optimal-binary
 
-Steepest descent optimizers.
+Utilities for working with binary optimizers.
 
 License: MIT
