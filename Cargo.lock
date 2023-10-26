@@ -191,8 +191,8 @@ name = "optimal"
 version = "0.0.0"
 dependencies = [
  "optimal-core",
+ "optimal-linesearch",
  "optimal-pbil",
- "optimal-steepest",
  "rand_xoshiro",
 ]
 
@@ -218,6 +218,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "optimal-linesearch"
+version = "0.0.0"
+dependencies = [
+ "derive-getters",
+ "derive-num-bounded",
+ "derive_more",
+ "num-traits",
+ "optimal-core",
+ "proptest",
+ "rand",
+ "replace_with",
+ "serde",
+ "streaming-iterator",
+ "test-strategy",
+ "thiserror",
+]
+
+[[package]]
 name = "optimal-pbil"
 version = "0.0.0"
 dependencies = [
@@ -230,24 +248,6 @@ dependencies = [
  "proptest",
  "rand",
  "rand_xoshiro",
- "replace_with",
- "serde",
- "streaming-iterator",
- "test-strategy",
- "thiserror",
-]
-
-[[package]]
-name = "optimal-steepest"
-version = "0.0.0"
-dependencies = [
- "derive-getters",
- "derive-num-bounded",
- "derive_more",
- "num-traits",
- "optimal-core",
- "proptest",
- "rand",
  "replace_with",
  "serde",
  "streaming-iterator",

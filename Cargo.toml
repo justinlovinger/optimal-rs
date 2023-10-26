@@ -4,7 +4,7 @@ members = [
   "optimal-binary",
   "optimal-core",
   "optimal-pbil",
-  "optimal-steepest",
+  "optimal-linesearch",
 ]
 
 [package]
@@ -25,7 +25,7 @@ github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 [dependencies]
 optimal-core = { path = "optimal-core", version = "0.0.0" }
 optimal-pbil = { path = "optimal-pbil", version = "0.0.0" }
-optimal-steepest = { path = "optimal-steepest", version = "0.0.0" }
+optimal-linesearch = { path = "optimal-linesearch", version = "0.0.0" }
 rand_xoshiro = "0.6.0"
 
 [dev-dependencies]

@@ -73,15 +73,18 @@
 use std::{
     fmt::Debug,
     ops::{Add, Mul, RangeInclusive, Sub},
+    sync::Arc,
 };
 
 pub use optimal_core::prelude;
 pub use optimal_core::prelude::*;
+use optimal_linesearch::{
+    backtracking_line_search, incr_prev_initial_step, prelude::*, steepest_descent,
+};
 use optimal_pbil::{
     AdjustRate, MutationAdjustRate, MutationChance, NumSamples, Pbil, Probability,
     ProbabilityThreshold, UntilProbabilitiesConverged, UntilProbabilitiesConvergedConfig,
 };
-use optimal_steepest::backtracking_steepest::{self, BacktrackingSteepest};
 use rand_xoshiro::SplitMix64;
 
 /// A generic binary derivative-free optimizer.
@@ -95,10 +98,18 @@ pub struct RealDerivative {
     // we lack an appropriate runner.
     // A derivative norm stopping criteria would be appropriate.
     #[allow(clippy::type_complexity)]
-    inner: BacktrackingSteepest<
+    inner: backtracking_line_search::BacktrackingLineSearch<
         f64,
+        IndependentStepDirectionInitialStepSize<
+            steepest_descent::SteepestDescent<
+                f64,
+                Arc<Vec<f64>>,
+                (f64, Vec<f64>),
+                Box<dyn Fn(&[f64]) -> (f64, Vec<f64>)>,
+            >,
+            incr_prev_initial_step::IncrPrevStep<f64>,
+        >,
         Box<dyn Fn(&[f64]) -> f64>,
-        Box<dyn Fn(&[f64]) -> (f64, Vec<f64>)>,
     >,
 }
 
@@ -184,11 +195,18 @@ impl RealDerivativeConfig {
         F: Fn(&[f64]) -> f64 + Clone + 'static,
         FD: Fn(&[f64]) -> Vec<f64> + 'static,
     {
+        let (config, initial_step_config) = self.inner_configs(len);
+        let obj_func_ = obj_func.clone();
         RealDerivative {
-            inner: self.inner_config(len).start(
+            inner: config.build(
+                IndependentStepDirectionInitialStepSize::new(
+                    steepest_descent::SteepestDescent::new(Box::new(move |x| {
+                        (obj_func_(x), obj_func_d(x))
+                    })),
+                    initial_step_config.build(),
+                ),
+                Box::new(obj_func),
                 initial_bounds,
-                Box::new(obj_func.clone()),
-                Box::new(move |x| (obj_func(x), obj_func_d(x))),
             ),
         }
     }
@@ -216,21 +234,37 @@ impl RealDerivativeConfig {
         F: Fn(&[f64]) -> f64 + Clone + 'static,
         FD: Fn(&[f64]) -> Vec<f64> + 'static,
     {
+        let (config, initial_step_config) = self.inner_configs(len);
+        let obj_func_ = obj_func.clone();
         RealDerivative {
-            inner: self.inner_config(len).start_using(
+            inner: config.build_using(
+                IndependentStepDirectionInitialStepSize::new(
+                    steepest_descent::SteepestDescent::new(Box::new(move |x| {
+                        (obj_func_(x), obj_func_d(x))
+                    })),
+                    initial_step_config.build(),
+                ),
+                Box::new(obj_func),
                 initial_bounds,
-                Box::new(obj_func.clone()),
-                Box::new(move |x| (obj_func(x), obj_func_d(x))),
                 rng,
             ),
         }
     }
 
-    fn inner_config(self, _len: usize) -> backtracking_steepest::Config<f64> {
+    fn inner_configs(
+        self,
+        _len: usize,
+    ) -> (
+        backtracking_line_search::Config<f64>,
+        incr_prev_initial_step::Config<f64>,
+    ) {
         // With line search,
         // backtracking steepest is always optimal,
         // regardless of parameters.
-        backtracking_steepest::Config::default()
+        let config = backtracking_line_search::Config::default();
+        let initial_step_config =
+            incr_prev_initial_step::Config::from_backtracking_rate(config.backtracking_rate);
+        (config, initial_step_config)
     }
 }
 

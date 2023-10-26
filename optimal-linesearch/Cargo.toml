@@ -1,12 +1,12 @@
 [package]
-name = "optimal-steepest"
+name = "optimal-linesearch"
 version = "0.0.0"
 edition = "2021"
 authors = ["Justin Lovinger"]
-description = "Implementation of steepest descent optimizers"
-repository = "https://github.com/justinlovinger/optimal-rs/tree/master/optimal-steepest"
+description = "Implementation of line-search optimizers"
+repository = "https://github.com/justinlovinger/optimal-rs/tree/master/optimal-linesearch"
 readme = "README.md"
-keywords = ["optimization", "steepest-descent", "line-search"]
+keywords = ["optimization", "gradient-descent", "line-search"]
 categories = ["science", "mathematics"]
 license = "MIT"
 
@@ -24,7 +24,7 @@ num-traits = "0.2.16"
 optimal-core = { path = "../optimal-core", version = "0.0.0" }
 rand = "0.8.5"
 replace_with = "0.1.7"
-serde = { version = "1.0.185", features = ["derive"], optional = true }
+serde = { version = "1.0.185", features = ["derive", "rc"], optional = true }
 streaming-iterator = "0.1.9"
 thiserror = "1.0.47"
 

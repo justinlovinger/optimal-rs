@@ -5,8 +5,11 @@ Expect frequent updates to the repository
 with breaking changes
 and infrequent releases.
 
-# optimal-steepest
+# optimal-linesearch
 
-Steepest descent optimizers.
+Line-search optimizers.
+
+Fixed step-size is included
+for being line-search-like.
 
 License: MIT

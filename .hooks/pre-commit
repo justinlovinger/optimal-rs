@@ -5,7 +5,7 @@ cargo readme -r derive-num-bounded -o README.md
 cargo readme -r optimal-binary -o README.md
 cargo readme -r optimal-core -o README.md
 cargo readme -r optimal-pbil -o README.md
-cargo readme -r optimal-steepest -o README.md
+cargo readme -r optimal-linesearch -o README.md
 
 git add README.md
 git add **/README.md
