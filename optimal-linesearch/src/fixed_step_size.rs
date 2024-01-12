@@ -26,7 +26,7 @@
 //! ```
 
 use std::{
-    ops::{Mul, RangeInclusive, SubAssign},
+    ops::{AddAssign, Mul, RangeInclusive},
     sync::Arc,
 };
 
@@ -177,7 +177,7 @@ impl<A> Config<A> {
 
 impl<A, D> StreamingIterator for FixedStepSize<A, D>
 where
-    A: Clone + SubAssign + Mul<Output = A>,
+    A: Clone + AddAssign + Mul<Output = A>,
     D: StepDirection<Elem = A, Point = Arc<Vec<A>>>,
 {
     type Item = Self;
@@ -195,7 +195,7 @@ where
                     point
                         .iter_mut()
                         .zip(step_direction.step_direction)
-                        .for_each(|(x, d)| *x -= self.config.step_size.clone() * d);
+                        .for_each(|(x, d)| *x += self.config.step_size.clone() * d);
                     State::Stepped { point }
                 }
                 None => State::GettingStepDirection { point },
