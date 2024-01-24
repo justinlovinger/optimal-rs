@@ -2,7 +2,6 @@
 members = [
   "derive-num-bounded",
   "optimal-binary",
-  "optimal-core",
   "optimal-linesearch",
   "optimal-pbil",
 ]

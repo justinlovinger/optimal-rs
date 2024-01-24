@@ -3,7 +3,6 @@
 cargo readme -o README.md
 cargo readme -r derive-num-bounded -o README.md
 cargo readme -r optimal-binary -o README.md
-cargo readme -r optimal-core -o README.md
 cargo readme -r optimal-linesearch -o README.md
 cargo readme -r optimal-pbil -o README.md
 
