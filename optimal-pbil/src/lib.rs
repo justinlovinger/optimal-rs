@@ -194,10 +194,10 @@ mod sampleable {
 mod tests {
     use super::*;
     use num_traits::bounds::{LowerBounded, UpperBounded};
-    use proptest::{prelude::*, test_runner::FileFailurePersistence};
+    use proptest::prelude::*;
     use test_strategy::proptest;
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest()]
     fn probabilities_are_valid_after_adjusting(
         adjust_rate: AdjustRate,
         #[strategy(Vec::<Probability>::arbitrary().prop_flat_map(|xs| (prop::collection::vec(bool::arbitrary(), xs.len()), Just(xs))))]
@@ -208,7 +208,7 @@ mod tests {
         prop_assert!(are_valid(&probabilities));
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest()]
     fn probabilities_are_valid_after_mutating(
         mutation_chance: MutationChance,
         mutation_adjust_rate: MutationAdjustRate,

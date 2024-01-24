@@ -436,7 +436,7 @@ impl TryFrom<Probability> for ProbabilityThreshold {
 
 #[cfg(test)]
 mod tests {
-    use proptest::{prelude::*, test_runner::FileFailurePersistence};
+    use proptest::prelude::*;
     use test_strategy::proptest;
 
     use super::*;
@@ -459,7 +459,7 @@ mod tests {
         );
     }
 
-    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    #[proptest()]
     fn mutation_chance_serializes_correctly(chance: MutationChance) {
         prop_assert!(
             (serde_json::from_str::<MutationChance>(&serde_json::to_string(&chance).unwrap())

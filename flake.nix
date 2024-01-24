@@ -43,6 +43,8 @@
           shellHook = ''
             ln -f .hooks/* .git/hooks/
           '';
+
+          PROPTEST_DISABLE_FAILURE_PERSISTENCE = 1;
         };
     });
 }
