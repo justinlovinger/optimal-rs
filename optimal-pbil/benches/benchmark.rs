@@ -1,30 +1,32 @@
-[![Workflow Status](https://github.com/justinlovinger/optimal-rs/workflows/build/badge.svg)](https://github.com/justinlovinger/optimal-rs/actions?query=workflow%3A%22build%22)
+use std::hint::black_box;
 
-This package is experimental.
-Expect frequent updates to the repository
-with breaking changes
-and infrequent releases.
-
-# optimal-pbil
-
-Population-based incremental learning (PBIL).
-
-## Examples
-
-```rust
+use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use optimal_pbil::*;
 use rand::prelude::*;
 
-fn main() {
-    let len = 2;
+pub fn bench_pbil(c: &mut Criterion) {
+    for len in [10, 100, 1000] {
+        c.bench_function(&format!("pbil count {len}"), |b| {
+            b.iter_batched(
+                || SmallRng::seed_from_u64(0),
+                |rng| run_pbil(black_box(count), black_box(len), black_box(rng)),
+                BatchSize::SmallInput,
+            )
+        });
+    }
+}
 
+fn run_pbil<F, R>(obj_func: F, len: usize, mut rng: R) -> Vec<bool>
+where
+    F: Fn(&[bool]) -> usize,
+    R: Rng,
+{
     let num_samples = NumSamples::default();
     let adjust_rate = AdjustRate::default();
     let mutation_chance = MutationChance::default_for(len);
     let mutation_adjust_rate = MutationAdjustRate::default();
     let threshold = ProbabilityThreshold::default();
 
-    let mut rng = SmallRng::from_entropy();
     let mut probabilities = std::iter::repeat(Probability::default())
         .take(len)
         .collect::<Vec<_>>();
@@ -42,12 +44,12 @@ fn main() {
         );
     }
 
-    println!("{:?}", point_from(&probabilities));
+    point_from(&probabilities)
 }
 
-fn obj_func(point: &[bool]) -> usize {
+fn count(point: &[bool]) -> usize {
     point.iter().filter(|x| **x).count()
 }
-```
 
-License: MIT
+criterion_group!(benches, bench_pbil);
+criterion_main!(benches);

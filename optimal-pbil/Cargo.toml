@@ -13,23 +13,25 @@ license = "MIT"
 [badges]
 github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 
+[[bench]]
+name = "benchmark"
+harness = false
+
 [features]
-serde = ["dep:serde", "rand/serde1", "rand_xoshiro/serde1"]
+serde = ["dep:serde", "rand/serde1"]
 
 [dependencies]
 derive-num-bounded = { path = "../derive-num-bounded", version = "0.0.0" }
-derive-getters = "0.3.0"
 derive_more = "0.99.17"
 num-traits = "0.2.16"
-optimal-core = { path = "../optimal-core", version = "0.0.0" }
-partial-min-max = "0.4.0"
 rand = "0.8.5"
-rand_xoshiro = "0.6.0"
-replace_with = "0.1.7"
 serde = { version = "1.0.185", features = ["derive"], optional = true }
-streaming-iterator = "0.1.9"
 thiserror = "1.0.47"
 
 [dev-dependencies]
+criterion = "0.5.1"
 proptest = "1.2.0"
+rand = { version = "0.8.5", features = ["small_rng"] }
+serde = "1.0.185"
+serde_json = "1.0.111"
 test-strategy = "0.3.1"

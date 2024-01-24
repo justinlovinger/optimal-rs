@@ -1,5 +1,5 @@
 use core::convert::TryFrom;
-use std::f64::EPSILON;
+use std::{f64::EPSILON, fmt};
 
 use derive_more::{Display, Into};
 use derive_num_bounded::{
@@ -7,7 +7,7 @@ use derive_num_bounded::{
     derive_new_from_lower_bounded, derive_try_from_from_new,
 };
 use num_traits::bounds::{LowerBounded, UpperBounded};
-use rand::distributions::Bernoulli;
+use rand::{distributions::Bernoulli, prelude::Distribution};
 
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -80,50 +80,40 @@ impl Ord for AdjustRate {
 
 /// Probability for each probability to mutate,
 /// independently.
-#[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Into)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(into = "f64"))]
-#[cfg_attr(feature = "serde", serde(try_from = "f64"))]
-pub struct MutationChance(f64);
+#[derive(Clone)]
+pub struct MutationChance {
+    chance: f64,
+    distribution: Bernoulli,
+}
 
-impl MutationChance {
-    /// Return recommended default mutation chance,
-    /// average of one mutation per step.
-    pub fn default_for(num_bits: usize) -> Self {
-        if num_bits == 0 {
-            Self(1.)
-        } else {
-            Self(1. / num_bits as f64)
-        }
+/// Error returned when [`MutationChance`] is given an invalid value.
+#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
+pub enum InvalidMutationChanceError {
+    /// Value is NaN.
+    #[error("{0} is NaN")]
+    IsNan(f64),
+    /// Value is below lower bound.
+    #[error("{0} is below lower bound ({})", MutationChance::min_value())]
+    TooLow(f64),
+    /// Value is above upper bound.
+    #[error("{0} is above upper bound ({})", MutationChance::max_value())]
+    TooHigh(f64),
+}
+
+impl fmt::Debug for MutationChance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("MutationChance").field(&self.chance).finish()
     }
 }
 
-impl LowerBounded for MutationChance {
-    fn min_value() -> Self {
-        Self(0.)
+impl fmt::Display for MutationChance {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.chance.fmt(f)
     }
 }
-
-impl UpperBounded for MutationChance {
-    fn max_value() -> Self {
-        Self(1.)
-    }
-}
-
-impl From<MutationChance> for Bernoulli {
-    fn from(x: MutationChance) -> Self {
-        Bernoulli::new(x.into()).unwrap()
-    }
-}
-
-derive_new_from_bounded_float!(MutationChance(f64));
-derive_into_inner!(MutationChance(f64));
-derive_try_from_from_new!(MutationChance(f64));
-derive_from_str_from_try_into!(MutationChance(f64));
 
 impl Eq for MutationChance {}
 
-#[allow(clippy::derive_ord_xor_partial_ord)]
 impl Ord for MutationChance {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // `f64` has total ordering for the the range of values allowed by this type.
@@ -131,9 +121,113 @@ impl Ord for MutationChance {
     }
 }
 
+impl PartialEq for MutationChance {
+    fn eq(&self, other: &Self) -> bool {
+        self.chance.eq(&other.chance)
+    }
+}
+
+impl PartialOrd for MutationChance {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        self.chance.partial_cmp(&other.chance)
+    }
+}
+
+impl From<MutationChance> for f64 {
+    fn from(value: MutationChance) -> Self {
+        value.chance
+    }
+}
+
+impl LowerBounded for MutationChance {
+    fn min_value() -> Self {
+        unsafe { Self::new_unchecked(0.0) }
+    }
+}
+
+impl UpperBounded for MutationChance {
+    fn max_value() -> Self {
+        unsafe { Self::new_unchecked(1.0) }
+    }
+}
+
+impl Distribution<bool> for MutationChance {
+    fn sample<R: rand::Rng + ?Sized>(&self, rng: &mut R) -> bool {
+        self.distribution.sample(rng)
+    }
+}
+
+#[cfg(any(serde, test))]
+impl<'de> serde::Deserialize<'de> for MutationChance {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let chance = f64::deserialize(deserializer)?;
+        match MutationChance::new(chance) {
+            Ok(x) => Ok(x),
+            Err(e) => Err(<D::Error as serde::de::Error>::custom(e)),
+        }
+    }
+}
+
+#[cfg(any(serde, test))]
+impl serde::Serialize for MutationChance {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_f64(self.chance)
+    }
+}
+
+derive_try_from_from_new!(MutationChance(f64));
+derive_from_str_from_try_into!(MutationChance(f64));
+
 impl MutationChance {
+    /// Return a new [`MutationChance`] if given a valid value.
+    pub fn new(value: f64) -> Result<Self, InvalidMutationChanceError> {
+        match (
+            value.partial_cmp(&Self::min_value().chance),
+            value.partial_cmp(&Self::max_value().chance),
+        ) {
+            (None, _) | (_, None) => Err(InvalidMutationChanceError::IsNan(value)),
+            (Some(std::cmp::Ordering::Less), _) => Err(InvalidMutationChanceError::TooLow(value)),
+            (_, Some(std::cmp::Ordering::Greater)) => {
+                Err(InvalidMutationChanceError::TooHigh(value))
+            }
+            _ => Ok(unsafe { Self::new_unchecked(value) }),
+        }
+    }
+
+    /// Return recommended default mutation chance,
+    /// average of one mutation per step.
+    pub fn default_for(len: usize) -> Self {
+        if len == 0 {
+            unsafe { Self::new_unchecked(1.0) }
+        } else {
+            unsafe { Self::new_unchecked(1. / len as f64) }
+        }
+    }
+
+    /// # Safety
+    ///
+    /// Value must be within range.
+    unsafe fn new_unchecked(value: f64) -> Self {
+        Self {
+            chance: value,
+            distribution: Bernoulli::new(value).unwrap(),
+        }
+    }
+
+    /// Unwrap [`MutationChance`] into inner value.
+    pub fn into_inner(self) -> f64 {
+        self.chance
+    }
+
+    /// Return whether no chance to mutate.
     pub fn is_zero(&self) -> bool {
-        self.0 == 0.0
+        self.chance == 0.0
     }
 }
 
@@ -342,6 +436,9 @@ impl TryFrom<Probability> for ProbabilityThreshold {
 
 #[cfg(test)]
 mod tests {
+    use proptest::{prelude::*, test_runner::FileFailurePersistence};
+    use test_strategy::proptest;
+
     use super::*;
 
     #[test]
@@ -358,8 +455,19 @@ mod tests {
     fn mutation_chance_from_str_returns_correct_result() {
         assert_eq!(
             "0.2".parse::<MutationChance>().unwrap(),
-            MutationChance(0.2)
+            MutationChance::new(0.2).unwrap()
         );
+    }
+
+    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    fn mutation_chance_serializes_correctly(chance: MutationChance) {
+        prop_assert!(
+            (serde_json::from_str::<MutationChance>(&serde_json::to_string(&chance).unwrap())
+                .unwrap()
+                .into_inner()
+                - chance.into_inner())
+                < 1e10
+        )
     }
 
     #[test]

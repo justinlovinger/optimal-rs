@@ -3,8 +3,8 @@ members = [
   "derive-num-bounded",
   "optimal-binary",
   "optimal-core",
-  "optimal-pbil",
   "optimal-linesearch",
+  "optimal-pbil",
 ]
 
 [package]
@@ -23,9 +23,8 @@ license = "MIT"
 github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
 
 [dependencies]
-optimal-core = { path = "optimal-core", version = "0.0.0" }
 optimal-pbil = { path = "optimal-pbil", version = "0.0.0" }
 optimal-linesearch = { path = "optimal-linesearch", version = "0.0.0" }
-rand_xoshiro = "0.6.0"
+rand = { version = "0.8.5", features = ["small_rng"] }
 
 [dev-dependencies]

@@ -3,67 +3,88 @@
 
 //! Line-search optimizers.
 //!
-//! Fixed step-size is included
-//! for being line-search-like.
+//! Fixed step-size optimization can also be performed
+//! using this package:
+//!
+//! ```
+//! use optimal_linesearch::{descend, step_direction::steepest_descent, StepSize};
+//!
+//! fn main() {
+//!     let step_size = StepSize::new(0.5).unwrap();
+//!     let mut point = vec![10.0, 10.0];
+//!     for _ in 0..10 {
+//!         point = descend(
+//!             step_size,
+//!             &steepest_descent(&obj_func_d(&point)),
+//!             &point,
+//!         );
+//!     }
+//!     println!("{:?}", point);
+//! }
+//!
+//! fn obj_func_d(point: &[f64]) -> Vec<f64> {
+//!     point.iter().copied().map(|x| 2.0 * x).collect()
+//! }
+//! ```
+//!
+//! See [`backtracking_line_search`] for more sophisticated and effective optimizers.
 
 pub mod backtracking_line_search;
-pub mod fixed_step_size;
-mod initial_step_size;
-mod step_direction;
-mod traits;
+pub mod initial_step_size;
+pub mod step_direction;
 
-use std::ops::Mul;
+use std::ops::{Add, Mul};
 
-use derive_more::Display;
-use derive_num_bounded::{derive_into_inner, derive_new_from_lower_bounded_partial_ord};
-use num_traits::{bounds::LowerBounded, real::Real};
+pub use self::types::*;
 
-pub use self::{initial_step_size::*, step_direction::*, traits::*};
-
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-
-/// Error returned when
-/// problem length does not match state length.
-#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
-#[error("problem length does not match state length")]
-pub struct MismatchedLengthError;
-
-/// Multiplier for each component of a step direction
-/// in derivative optimization.
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct StepSize<A>(A);
-
-derive_new_from_lower_bounded_partial_ord!(StepSize<A: Real>);
-derive_into_inner!(StepSize<A>);
-
-impl<A> LowerBounded for StepSize<A>
+/// Descend in step-direction
+/// by moving `point` `step_size` length in `direction`.
+pub fn descend<A>(step_size: StepSize<A>, direction: &[A], point: &[A]) -> Vec<A>
 where
-    A: Real,
+    A: Clone + Add<Output = A> + Mul<Output = A>,
 {
-    fn min_value() -> Self {
-        Self(A::zero() + A::epsilon())
-    }
+    debug_assert_eq!(direction.len(), point.len());
+    point
+        .iter()
+        .cloned()
+        .zip(direction.iter().cloned())
+        .map(|(x, d)| x + step_size.clone() * d)
+        .collect()
 }
 
-impl<A> Mul<A> for StepSize<A>
-where
-    A: Mul<Output = A>,
-{
-    type Output = A;
+mod types {
+    use std::ops::Mul;
 
-    fn mul(self, rhs: A) -> Self::Output {
-        self.0 * rhs
+    use derive_more::Display;
+    use derive_num_bounded::{derive_into_inner, derive_new_from_lower_bounded_partial_ord};
+    use num_traits::{bounds::LowerBounded, real::Real};
+
+    /// Multiplier for each component of a step-direction
+    /// in derivative optimization.
+    #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, Hash)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    pub struct StepSize<A>(pub(crate) A);
+
+    derive_new_from_lower_bounded_partial_ord!(StepSize<A: Real>);
+    derive_into_inner!(StepSize<A>);
+
+    impl<A> LowerBounded for StepSize<A>
+    where
+        A: Real,
+    {
+        fn min_value() -> Self {
+            Self(A::zero() + A::epsilon())
+        }
     }
-}
 
-/// Useful traits,
-/// types,
-/// and functions
-/// unlikely to conflict with existing definitions.
-pub mod prelude {
-    pub use crate::{initial_step_size::*, step_direction::*, traits::*, StepSize};
-    pub use optimal_core::prelude::*;
-    pub use streaming_iterator::StreamingIterator;
+    impl<A> Mul<A> for StepSize<A>
+    where
+        A: Mul<Output = A>,
+    {
+        type Output = A;
+
+        fn mul(self, rhs: A) -> Self::Output {
+            self.0 * rhs
+        }
+    }
 }

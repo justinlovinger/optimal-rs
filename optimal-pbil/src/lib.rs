@@ -1,8 +1,5 @@
-#![allow(clippy::needless_doctest_main)]
 #![warn(missing_debug_implementations)]
-// `missing_docs` does not work with `IsVariant`,
-// see <https://github.com/JelteF/derive_more/issues/215>.
-// #![warn(missing_docs)]
+#![warn(missing_docs)]
 
 //! Population-based incremental learning (PBIL).
 //!
@@ -10,380 +7,185 @@
 //!
 //! ```
 //! use optimal_pbil::*;
+//! use rand::prelude::*;
 //!
-//! println!(
-//!     "{:?}",
-//!     UntilProbabilitiesConvergedConfig::default()
-//!         .start(Config::start_default_for(16, |point| point.iter().filter(|x| **x).count()))
-//!         .argmin()
-//! );
+//! fn main() {
+//!     let len = 2;
+//!
+//!     let num_samples = NumSamples::default();
+//!     let adjust_rate = AdjustRate::default();
+//!     let mutation_chance = MutationChance::default_for(len);
+//!     let mutation_adjust_rate = MutationAdjustRate::default();
+//!     let threshold = ProbabilityThreshold::default();
+//!
+//!     let mut rng = SmallRng::from_entropy();
+//!     let mut probabilities = std::iter::repeat(Probability::default())
+//!         .take(len)
+//!         .collect::<Vec<_>>();
+//!     while !converged(threshold, &probabilities) {
+//!         adjust_probabilities(
+//!             adjust_rate,
+//!             &Sampleable::new(&probabilities).best_sample(num_samples, &obj_func, &mut rng),
+//!             &mut probabilities,
+//!         );
+//!         mutate_probabilities(
+//!             &mutation_chance,
+//!             mutation_adjust_rate,
+//!             &mut rng,
+//!             &mut probabilities,
+//!         );
+//!     }
+//!
+//!     println!("{:?}", point_from(&probabilities));
+//! }
+//!
+//! fn obj_func(point: &[bool]) -> usize {
+//!     point.iter().filter(|x| **x).count()
+//! }
 //! ```
 
-mod state_machine;
 mod types;
-mod until_probabilities_converged;
 
-use derive_getters::{Dissolve, Getters};
-use derive_more::IsVariant;
-pub use optimal_core::prelude::*;
-use rand::prelude::*;
-use rand_xoshiro::{SplitMix64, Xoshiro256PlusPlus};
+use std::ops::{Add, Mul, Sub};
 
-use self::state_machine::DynState;
-pub use self::{types::*, until_probabilities_converged::*};
+use rand::{distributions::Standard, prelude::*};
 
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
+pub use self::{sampleable::Sampleable, types::*};
 
-/// Error returned when
-/// problem length does not match state length.
-#[derive(Clone, Copy, Debug, thiserror::Error, PartialEq)]
-#[error("problem length does not match state length")]
-pub struct MismatchedLengthError;
-
-/// A running PBIL optimizer.
-#[derive(Clone, Debug, Getters, Dissolve)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[dissolve(rename = "into_parts")]
-pub struct Pbil<B, F> {
-    /// Optimizer configuration.
-    config: Config,
-
-    /// State of optimizer.
-    state: State<B>,
-
-    /// Objective function to minimize.
-    obj_func: F,
-}
-
-/// PBIL configuration parameters.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Config {
-    /// Number of samples generated
-    /// during steps.
-    pub num_samples: NumSamples,
-    /// Degree to adjust probabilities towards best point
-    /// during steps.
-    pub adjust_rate: AdjustRate,
-    /// Probability for each probability to mutate,
-    /// independently.
-    pub mutation_chance: MutationChance,
-    /// Degree to adjust probability towards random value
-    /// when mutating.
-    pub mutation_adjust_rate: MutationAdjustRate,
-}
-
-/// PBIL state.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
-pub struct State<B>(DynState<B>);
-
-/// PBIL state kind.
-#[derive(Clone, Debug, PartialEq, IsVariant)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum StateKind {
-    /// Iteration started.
-    Started,
-    /// Sample generated.
-    Sampled,
-    /// Sample evaluated.
-    Evaluated,
-    /// Samples compared.
-    Compared,
-    /// Probabilities adjusted.
-    Adjusted,
-    /// Probabilities mutated.
-    Mutated,
-    /// Iteration finished.
-    Finished,
-}
-
-impl<B, F> Pbil<B, F> {
-    fn new(state: State<B>, config: Config, obj_func: F) -> Self {
-        Self {
-            config,
-            obj_func,
-            state,
+/// Adjust each probability towards corresponding `sample` bit
+/// at `rate`.
+pub fn adjust_probabilities(rate: AdjustRate, sample: &[bool], probabilities: &mut [Probability]) {
+    probabilities.iter_mut().zip(sample).for_each(|(p, b)| {
+        // This operation is safe
+        // because Probability is closed under `adjust`
+        // with rate in [0,1].
+        *p = unsafe {
+            Probability::new_unchecked(adjust(rate.into(), f64::from(*p), *b as u8 as f64))
         }
-    }
+    });
 }
 
-impl<B, F> Pbil<B, F>
+/// Adjust a number from `x` to `y`
+/// at given rate.
+fn adjust<T>(rate: T, x: T, y: T) -> T
 where
-    F: Fn(&[bool]) -> B,
+    T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Copy,
 {
-    /// Return value of the best point discovered.
-    pub fn best_point_value(&self) -> B {
-        (self.obj_func)(&self.best_point())
-    }
+    x + rate * (y - x)
 }
 
-impl<B, F> StreamingIterator for Pbil<B, F>
-where
-    B: PartialOrd,
-    F: Fn(&[bool]) -> B,
+/// With `chance`,
+/// adjust each probability towards a random probability
+/// at `adjust_rate`.
+pub fn mutate_probabilities<R>(
+    chance: &MutationChance,
+    adjust_rate: MutationAdjustRate,
+    rng: &mut R,
+    probabilities: &mut [Probability],
+) where
+    R: Rng,
 {
-    type Item = Self;
-
-    fn advance(&mut self) {
-        replace_with::replace_with_or_abort(&mut self.state.0, |state| match state {
-            DynState::Started(x) => {
-                DynState::SampledFirst(x.into_initialized_sampling().into_sampled_first())
+    probabilities.iter_mut().for_each(|p| {
+        if rng.sample(chance) {
+            // `Standard` distribution excludes `1`,
+            // but it more efficient
+            // than `Uniform::new_inclusive(0., 1.)`.
+            // This operation is safe
+            // because Probability is closed under `adjust`
+            // with rate in [0,1].
+            *p = unsafe {
+                Probability::new_unchecked(adjust(
+                    adjust_rate.into(),
+                    f64::from(*p),
+                    rng.sample(Standard),
+                ))
             }
-            DynState::SampledFirst(x) => {
-                DynState::EvaluatedFirst(x.into_evaluated_first(&self.obj_func))
+        }
+    });
+}
+
+/// Return whether all probabilities are above the given threshold
+/// or below its inverse.
+pub fn converged(threshold: ProbabilityThreshold, probabilities: &[Probability]) -> bool {
+    probabilities
+        .iter()
+        .all(|p| p > &threshold.upper_bound() || p < &threshold.lower_bound())
+}
+
+/// Estimate the best sample discovered
+/// from a set of probabilities.
+pub fn point_from(probabilities: &[Probability]) -> Vec<bool> {
+    probabilities.iter().map(|p| f64::from(*p) >= 0.5).collect()
+}
+
+mod sampleable {
+    use rand::{distributions::Bernoulli, prelude::*};
+
+    use crate::{NumSamples, Probability};
+
+    #[cfg(feature = "serde")]
+    use serde::{Deserialize, Serialize};
+
+    /// Probabilities prepared to sample.
+    #[derive(Clone, Debug, PartialEq)]
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct Sampleable<P> {
+        probabilities: P,
+        distrs: Vec<Bernoulli>,
+    }
+
+    impl<P> Sampleable<P> {
+        #[allow(missing_docs)]
+        pub fn new(probabilities: P) -> Self
+        where
+            P: AsRef<[Probability]>,
+        {
+            Self {
+                distrs: probabilities
+                    .as_ref()
+                    .iter()
+                    .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
+                    .collect::<Vec<_>>(),
+                probabilities,
             }
-            DynState::EvaluatedFirst(x) => DynState::Sampled(x.into_sampled()),
-            DynState::Sampled(x) => DynState::Evaluated(x.into_evaluated(&self.obj_func)),
-            DynState::Evaluated(x) => DynState::Compared(x.into_compared()),
-            DynState::Compared(x) => {
-                if x.samples_generated < self.config.num_samples.into_inner() {
-                    DynState::Sampled(x.into_sampled())
-                } else {
-                    DynState::Adjusted(x.into_adjusted(self.config.adjust_rate))
-                }
-            }
-            DynState::Adjusted(x) => {
-                if self.config.mutation_chance.into_inner() > 0.0 {
-                    DynState::Mutated(x.into_mutated(
-                        self.config.mutation_chance,
-                        self.config.mutation_adjust_rate,
-                    ))
-                } else {
-                    DynState::Finished(x.into_finished())
-                }
-            }
-            DynState::Mutated(x) => DynState::Finished(x.into_finished()),
-            DynState::Finished(x) => DynState::Started(x.into_started()),
-        });
-    }
-
-    fn get(&self) -> Option<&Self::Item> {
-        Some(self)
-    }
-}
-
-impl<B, F> Optimizer for Pbil<B, F> {
-    type Point = Vec<bool>;
-
-    fn best_point(&self) -> Self::Point {
-        self.state.best_point()
-    }
-}
-
-impl Config {
-    /// Return a new PBIL configuration.
-    pub fn new(
-        num_samples: NumSamples,
-        adjust_rate: AdjustRate,
-        mutation_chance: MutationChance,
-        mutation_adjust_rate: MutationAdjustRate,
-    ) -> Self {
-        Self {
-            num_samples,
-            adjust_rate,
-            mutation_chance,
-            mutation_adjust_rate,
         }
-    }
-}
 
-impl Config {
-    /// Return default 'Config'.
-    pub fn default_for(num_bits: usize) -> Self {
-        Self {
-            num_samples: NumSamples::default(),
-            adjust_rate: AdjustRate::default(),
-            mutation_chance: MutationChance::default_for(num_bits),
-            mutation_adjust_rate: MutationAdjustRate::default(),
+        /// Return the sample that minimizes the objective function
+        /// among `num_samples` samples
+        /// sampled from `probabilities`.
+        pub fn best_sample<F, V, R>(
+            &self,
+            num_samples: NumSamples,
+            obj_func: F,
+            rng: &mut R,
+        ) -> Vec<bool>
+        where
+            F: Fn(&[bool]) -> V,
+            V: PartialOrd,
+            R: Rng,
+        {
+            std::iter::repeat_with(|| self.sample(rng))
+                .take(num_samples.into())
+                .map(|sample| (obj_func(&sample), sample))
+                .min_by(|(value, _), (other, _)| value.partial_cmp(other).unwrap())
+                .map(|(_, sample)| sample)
+                .unwrap()
+        }
+
+        #[allow(missing_docs)]
+        pub fn probabilities(&self) -> &P {
+            &self.probabilities
+        }
+
+        #[allow(missing_docs)]
+        pub fn into_probabilities(self) -> P {
+            self.probabilities
         }
     }
 
-    /// Return this optimizer default
-    /// running on the given problem.
-    ///
-    /// # Arguments
-    ///
-    /// - `len`: number of bits in each point
-    /// - `obj_func`: objective function to minimize
-    pub fn start_default_for<B, F>(len: usize, obj_func: F) -> Pbil<B, F>
-    where
-        F: Fn(&[bool]) -> B,
-    {
-        Self::default_for(len).start(len, obj_func)
-    }
-
-    /// Return this optimizer
-    /// running on the given problem.
-    ///
-    /// This may be nondeterministic.
-    ///
-    /// # Arguments
-    ///
-    /// - `len`: number of bits in each point
-    /// - `obj_func`: objective function to minimize
-    pub fn start<B, F>(self, len: usize, obj_func: F) -> Pbil<B, F>
-    where
-        F: Fn(&[bool]) -> B,
-    {
-        Pbil::new(State::initial(len), self, obj_func)
-    }
-
-    /// Return this optimizer
-    /// running on the given problem
-    /// initialized using `rng`.
-    ///
-    /// # Arguments
-    ///
-    /// - `len`: number of bits in each point
-    /// - `obj_func`: objective function to minimize
-    /// - `rng`: source of randomness
-    pub fn start_using<B, F>(self, len: usize, obj_func: F, rng: &mut SplitMix64) -> Pbil<B, F>
-    where
-        F: Fn(&[bool]) -> B,
-    {
-        Pbil::new(State::initial_using(len, rng), self, obj_func)
-    }
-
-    /// Return this optimizer
-    /// running on the given problem.
-    /// if the given `state` is valid.
-    ///
-    /// # Arguments
-    ///
-    /// - `obj_func`: objective function to minimize
-    /// - `state`: PBIL state to start from
-    pub fn start_from<B, F>(self, obj_func: F, state: State<B>) -> Pbil<B, F>
-    where
-        F: Fn(&[bool]) -> B,
-    {
-        Pbil::new(state, self, obj_func)
-    }
-}
-
-impl<B> State<B> {
-    /// Return recommended initial state.
-    ///
-    /// # Arguments
-    ///
-    /// - `len`: number of bits in each sample
-    fn initial(len: usize) -> Self {
-        Self::new(
-            [Probability::default()].repeat(len),
-            Xoshiro256PlusPlus::from_entropy(),
-        )
-    }
-
-    /// Return recommended initial state.
-    ///
-    /// # Arguments
-    ///
-    /// - `len`: number of bits in each sample
-    /// - `rng`: source of randomness
-    fn initial_using<R>(len: usize, rng: R) -> Self
-    where
-        R: Rng,
-    {
-        Self::new(
-            [Probability::default()].repeat(len),
-            Xoshiro256PlusPlus::from_rng(rng).expect("RNG should initialize"),
-        )
-    }
-
-    /// Return custom initial state.
-    pub fn new(probabilities: Vec<Probability>, rng: Xoshiro256PlusPlus) -> Self {
-        Self(DynState::new(probabilities, rng))
-    }
-
-    /// Return number of bits being optimized.
-    #[allow(clippy::len_without_is_empty)]
-    pub fn len(&self) -> usize {
-        self.probabilities().len()
-    }
-
-    /// Return data to be evaluated.
-    pub fn evaluatee(&self) -> Option<&[bool]> {
-        match &self.0 {
-            DynState::Started(_) => None,
-            DynState::SampledFirst(x) => Some(&x.sample),
-            DynState::EvaluatedFirst(_) => None,
-            DynState::Sampled(x) => Some(&x.sample),
-            DynState::Evaluated(_) => None,
-            DynState::Compared(_) => None,
-            DynState::Adjusted(_) => None,
-            DynState::Mutated(_) => None,
-            DynState::Finished(_) => None,
-        }
-    }
-
-    /// Return result of evaluation.
-    pub fn evaluation(&self) -> Option<&B> {
-        match &self.0 {
-            DynState::Started(_) => None,
-            DynState::SampledFirst(_) => None,
-            DynState::EvaluatedFirst(x) => Some(x.sample.value()),
-            DynState::Sampled(_) => None,
-            DynState::Evaluated(x) => Some(x.sample.value()),
-            DynState::Compared(_) => None,
-            DynState::Adjusted(_) => None,
-            DynState::Mutated(_) => None,
-            DynState::Finished(_) => None,
-        }
-    }
-
-    /// Return sample if stored.
-    pub fn sample(&self) -> Option<&[bool]> {
-        match &self.0 {
-            DynState::Started(_) => None,
-            DynState::SampledFirst(x) => Some(&x.sample),
-            DynState::EvaluatedFirst(x) => Some(x.sample.x()),
-            DynState::Sampled(x) => Some(&x.sample),
-            DynState::Evaluated(x) => Some(x.sample.x()),
-            DynState::Compared(_) => None,
-            DynState::Adjusted(_) => None,
-            DynState::Mutated(_) => None,
-            DynState::Finished(_) => None,
-        }
-    }
-
-    /// Return the best point discovered.
-    pub fn best_point(&self) -> Vec<bool> {
-        self.probabilities()
-            .iter()
-            .map(|p| f64::from(*p) >= 0.5)
-            .collect()
-    }
-
-    /// Return kind of state of inner state-machine.
-    pub fn kind(&self) -> StateKind {
-        match self.0 {
-            DynState::Started(_) => StateKind::Started,
-            DynState::SampledFirst(_) => StateKind::Sampled,
-            DynState::EvaluatedFirst(_) => StateKind::Evaluated,
-            DynState::Sampled(_) => StateKind::Sampled,
-            DynState::Evaluated(_) => StateKind::Evaluated,
-            DynState::Compared(_) => StateKind::Compared,
-            DynState::Adjusted(_) => StateKind::Adjusted,
-            DynState::Mutated(_) => StateKind::Mutated,
-            DynState::Finished(_) => StateKind::Finished,
-        }
-    }
-}
-
-impl<B> Probabilities for State<B> {
-    fn probabilities(&self) -> &[Probability] {
-        match &self.0 {
-            DynState::Started(x) => &x.probabilities,
-            DynState::SampledFirst(x) => x.probabilities.probabilities(),
-            DynState::EvaluatedFirst(x) => x.probabilities.probabilities(),
-            DynState::Sampled(x) => x.probabilities.probabilities(),
-            DynState::Evaluated(x) => x.probabilities.probabilities(),
-            DynState::Compared(x) => x.probabilities.probabilities(),
-            DynState::Adjusted(x) => &x.probabilities,
-            DynState::Mutated(x) => &x.probabilities,
-            DynState::Finished(x) => &x.probabilities,
+    impl<P> Distribution<Vec<bool>> for Sampleable<P> {
+        fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Vec<bool> {
+            self.distrs.iter().map(|d| rng.sample(d)).collect()
         }
     }
 }
@@ -391,17 +193,59 @@ impl<B> Probabilities for State<B> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_traits::bounds::{LowerBounded, UpperBounded};
+    use proptest::{prelude::*, test_runner::FileFailurePersistence};
+    use test_strategy::proptest;
 
-    #[test]
-    fn pbil_should_not_mutate_if_chance_is_zero() {
-        Config {
-            num_samples: NumSamples::default(),
-            adjust_rate: AdjustRate::default(),
-            mutation_chance: MutationChance::new(0.0).unwrap(),
-            mutation_adjust_rate: MutationAdjustRate::default(),
-        }
-        .start(16, |point| point.iter().filter(|x| **x).count())
-        .inspect(|x| assert!(!x.state().kind().is_mutated()))
-        .nth(100);
+    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    fn probabilities_are_valid_after_adjusting(
+        adjust_rate: AdjustRate,
+        #[strategy(Vec::<Probability>::arbitrary().prop_flat_map(|xs| (prop::collection::vec(bool::arbitrary(), xs.len()), Just(xs))))]
+        args: (Vec<bool>, Vec<Probability>),
+    ) {
+        let (sample, mut probabilities) = args;
+        adjust_probabilities(adjust_rate, &sample, &mut probabilities);
+        prop_assert!(are_valid(&probabilities));
+    }
+
+    #[proptest(failure_persistence = Some(Box::new(FileFailurePersistence::Off)))]
+    fn probabilities_are_valid_after_mutating(
+        mutation_chance: MutationChance,
+        mutation_adjust_rate: MutationAdjustRate,
+        seed: u64,
+        mut probabilities: Vec<Probability>,
+    ) {
+        mutate_probabilities(
+            &mutation_chance,
+            mutation_adjust_rate,
+            &mut SmallRng::seed_from_u64(seed),
+            &mut probabilities,
+        );
+        prop_assert!(are_valid(&probabilities));
+    }
+
+    macro_rules! arbitrary_from_bounded {
+        ( $from:ident, $to:ident ) => {
+            impl Arbitrary for $to {
+                type Parameters = ();
+                type Strategy = BoxedStrategy<$to>;
+                fn arbitrary_with(_: Self::Parameters) -> Self::Strategy {
+                    ($from::from($to::min_value())..=$to::max_value().into())
+                        .prop_map(|x| x.try_into().unwrap())
+                        .boxed()
+                }
+            }
+        };
+    }
+
+    arbitrary_from_bounded!(f64, Probability);
+    arbitrary_from_bounded!(f64, AdjustRate);
+    arbitrary_from_bounded!(f64, MutationChance);
+    arbitrary_from_bounded!(f64, MutationAdjustRate);
+
+    fn are_valid(probabilities: &[Probability]) -> bool {
+        probabilities
+            .iter()
+            .all(|p| Probability::try_from(f64::from(*p)).is_ok())
     }
 }
