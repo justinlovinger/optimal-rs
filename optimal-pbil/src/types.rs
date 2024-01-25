@@ -157,7 +157,7 @@ impl Distribution<bool> for MutationChance {
     }
 }
 
-#[cfg(any(serde, test))]
+#[cfg(any(feature = "serde", test))]
 impl<'de> serde::Deserialize<'de> for MutationChance {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -171,7 +171,7 @@ impl<'de> serde::Deserialize<'de> for MutationChance {
     }
 }
 
-#[cfg(any(serde, test))]
+#[cfg(any(feature = "serde", test))]
 impl serde::Serialize for MutationChance {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
