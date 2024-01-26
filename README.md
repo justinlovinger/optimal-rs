@@ -38,15 +38,13 @@ Minimize the "count" problem
 using a derivative-free optimizer:
 
 ```rust
-use optimal::binary_argmin;
+use optimal::Binary;
 
 println!(
     "{:?}",
-    binary_argmin(
-        0,
-        2,
-        |point| point.iter().filter(|x| **x).count() as f64,
-    )
+    Binary::default()
+        .for_(2, |point| point.iter().filter(|x| **x).count() as f64)
+        .argmin()
 );
 ```
 
@@ -54,16 +52,17 @@ Minimize the "sphere" problem
 using a derivative optimizer:
 
 ```rust
-use optimal::real_derivative_argmin;
+use optimal::RealDerivative;
 
 println!(
     "{:?}",
-    real_derivative_argmin(
-        0,
-        std::iter::repeat(-10.0..=10.0).take(2),
-        |point| point.iter().map(|x| x.powi(2)).sum(),
-        |point| point.iter().map(|x| 2.0 * x).collect(),
-    )
+    RealDerivative::default()
+        .for_(
+            std::iter::repeat(-10.0..=10.0).take(2),
+            |point| point.iter().map(|x| x.powi(2)).sum(),
+            |point| point.iter().map(|x| 2.0 * x).collect()
+        )
+        .argmin()
 );
 ```
 

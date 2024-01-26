@@ -21,17 +21,18 @@ harness = false
 serde = ["dep:serde", "rand/serde1"]
 
 [dependencies]
+derive_builder = "0.13.0"
+derive-getters = "0.3.0"
 derive-num-bounded = { path = "../derive-num-bounded", version = "0.0.0" }
 derive_more = "0.99.17"
 num-traits = "0.2.16"
-rand = "0.8.5"
+rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.185", features = ["derive"], optional = true }
 thiserror = "1.0.47"
 
 [dev-dependencies]
 criterion = "0.5.1"
 proptest = "1.2.0"
-rand = { version = "0.8.5", features = ["small_rng"] }
 serde = "1.0.185"
 serde_json = "1.0.111"
 test-strategy = "0.3.1"

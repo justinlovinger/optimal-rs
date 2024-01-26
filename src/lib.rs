@@ -33,15 +33,13 @@
 //! using a derivative-free optimizer:
 //!
 //! ```
-//! use optimal::binary_argmin;
+//! use optimal::Binary;
 //!
 //! println!(
 //!     "{:?}",
-//!     binary_argmin(
-//!         0,
-//!         2,
-//!         |point| point.iter().filter(|x| **x).count() as f64,
-//!     )
+//!     Binary::default()
+//!         .for_(2, |point| point.iter().filter(|x| **x).count() as f64)
+//!         .argmin()
 //! );
 //! ```
 //!
@@ -49,16 +47,17 @@
 //! using a derivative optimizer:
 //!
 //! ```
-//! use optimal::real_derivative_argmin;
+//! use optimal::RealDerivative;
 //!
 //! println!(
 //!     "{:?}",
-//!     real_derivative_argmin(
-//!         0,
-//!         std::iter::repeat(-10.0..=10.0).take(2),
-//!         |point| point.iter().map(|x| x.powi(2)).sum(),
-//!         |point| point.iter().map(|x| 2.0 * x).collect(),
-//!     )
+//!     RealDerivative::default()
+//!         .for_(
+//!             std::iter::repeat(-10.0..=10.0).take(2),
+//!             |point| point.iter().map(|x| x.powi(2)).sum(),
+//!             |point| point.iter().map(|x| 2.0 * x).collect()
+//!         )
+//!         .argmin()
 //! );
 //! ```
 //!
@@ -70,193 +69,188 @@
 
 use std::ops::{Add, Mul, RangeInclusive, Sub};
 
-use optimal_linesearch::{
-    backtracking_line_search::{
-        BacktrackingLineSearch, BacktrackingRate, SufficientDecreaseParameter,
-    },
-    initial_step_size::IncrRate,
-    step_direction::steepest_descent,
-    StepSize,
-};
-use optimal_pbil::{
-    adjust_probabilities, converged, mutate_probabilities, point_from, AdjustRate,
-    MutationAdjustRate, MutationChance, NumSamples, Probability, ProbabilityThreshold, Sampleable,
-};
-use rand::{distributions::Uniform, prelude::*};
+use optimal_linesearch::backtracking_line_search::BacktrackingLineSearchBuilder;
+use optimal_pbil::{types::*, Pbil, PbilStoppingCriteria};
+use rand::prelude::*;
 
-/// Return a point that minimizes the given objective function,
-/// using a derivative-based optimizer.
+/// An optimizer for real-derivative problems.
 ///
 /// The specific optimizer is subject to change.
-///
-/// # Arguments
-///
-/// - `level`: A factor
-///   increasing quality of results
-///   at the cost of potentially increased time.
-///   Values above 0 favor increased quality.
-///   Values below 0 favor increased speed.
-///   Not all values necessarily have an effect,
-///   depending on underlying optimizer.
-/// - `initial_bounds`: Bounds for random initial points.
-///   Length determines length of points.
-/// - `obj_func`: Objective function to minimize.
-/// - `obj_func_d`: Derivative of objective function to minimize.
-pub fn real_derivative_argmin<F, FD>(
-    #[allow(unused_variables)] level: i32,
-    initial_bounds: impl IntoIterator<Item = RangeInclusive<f64>>,
-    obj_func: F,
-    obj_func_d: FD,
-) -> Vec<f64>
-where
-    F: Fn(&[f64]) -> f64,
-    FD: Fn(&[f64]) -> Vec<f64>,
-{
-    real_derivative_argmin_using(
-        level,
-        initial_bounds,
-        obj_func,
-        obj_func_d,
-        &mut SmallRng::from_entropy(),
-    )
+#[derive(Clone, Debug, Default)]
+pub struct RealDerivative {
+    /// A factor
+    /// increasing quality of results
+    /// at the cost of potentially increased time.
+    /// Values above 0 favor increased quality.
+    /// Values below 0 favor increased speed.
+    /// Not all values necessarily have an effect,
+    /// depending on underlying optimizer.
+    pub level: i32,
 }
 
-/// Return a point that minimizes the given objective function,
-/// using a derivative-based optimizer.
-///
-/// The specific optimizer is subject to change.
-///
-/// # Arguments
-///
-/// - `level`: A factor
-///   increasing quality of results
-///   at the cost of potentially increased time.
-///   Values above 0 favor increased quality.
-///   Values below 0 favor increased speed.
-///   Not all values necessarily have an effect,
-///   depending on underlying optimizer.
-/// - `initial_bounds`: Bounds for random initial points.
-///   Length determines length of points.
-/// - `obj_func`: objective function to minimize
-/// - `obj_func_d`: derivative of objective function to minimize
-/// - `rng`: source of randomness
-pub fn real_derivative_argmin_using<F, FD, R>(
-    #[allow(unused_variables)] level: i32,
-    initial_bounds: impl IntoIterator<Item = RangeInclusive<f64>>,
-    obj_func: F,
-    obj_func_d: FD,
-    rng: &mut R,
-) -> Vec<f64>
-where
-    F: Fn(&[f64]) -> f64,
-    FD: Fn(&[f64]) -> Vec<f64>,
-    R: Rng,
-{
-    let c_1 = SufficientDecreaseParameter::default();
-    let backtracking_rate = BacktrackingRate::default();
-    let incr_rate = IncrRate::from_backtracking_rate(backtracking_rate);
-
-    let mut step_size = StepSize::new(1.0).unwrap();
-    let mut point = initial_bounds
-        .into_iter()
-        .map(|range| {
-            let (start, end) = range.into_inner();
-            Uniform::new_inclusive(start, end).sample(rng)
-        })
-        .collect::<Vec<_>>();
-    for _ in 0..100 {
-        let value = obj_func(&point);
-        let derivatives = obj_func_d(&point);
-        let line_search = BacktrackingLineSearch::new(
-            c_1,
-            point,
-            value,
-            &derivatives,
-            steepest_descent(&derivatives),
-        );
-        (step_size, point) = line_search.search(backtracking_rate, &obj_func, step_size);
-        step_size = incr_rate * step_size;
+impl RealDerivative {
+    /// Prepare for a specific problem.
+    pub fn for_<I, F, FD>(
+        self,
+        initial_bounds: I,
+        obj_func: F,
+        obj_func_d: FD,
+    ) -> RealDerivativeFor<I, F, FD>
+    where
+        I: IntoIterator<Item = RangeInclusive<f64>>,
+        F: Fn(&[f64]) -> f64 + Clone + 'static,
+        FD: Fn(&[f64]) -> Vec<f64> + 'static,
+    {
+        RealDerivativeFor {
+            agnostic: self,
+            initial_bounds,
+            obj_func,
+            obj_func_d,
+        }
     }
-    point
 }
 
-/// Return a point that minimizes the given objective function,
-/// using a derivative-based optimizer.
-///
-/// The specific optimizer is subject to change.
-///
-/// # Arguments
-///
-/// - `level`: A factor
-///   increasing quality of results
-///   at the cost of potentially increased time.
-///   Values above 0 favor increased quality.
-///   Values below 0 favor increased speed.
-///   Not all values necessarily have an effect,
-///   depending on underlying optimizer.
-/// - `len`: number of elements in each point.
-/// - `obj_func`: Objective function to minimize.
-pub fn binary_argmin<F>(level: i32, len: usize, obj_func: F) -> Vec<bool>
-where
-    F: Fn(&[bool]) -> f64,
-{
-    binary_argmin_using(level, len, obj_func, &mut SmallRng::from_entropy())
+/// An optimizer for a specific real-derivative problem.
+#[derive(Clone, Debug)]
+pub struct RealDerivativeFor<I, F, FD> {
+    #[allow(dead_code)]
+    agnostic: RealDerivative,
+    /// `initial_bounds`: Bounds for random initial points.
+    /// Length determines length of points.
+    initial_bounds: I,
+    /// Objective function to minimize.
+    obj_func: F,
+    /// Derivative of objective function to minimize.
+    obj_func_d: FD,
 }
 
-/// Return a point that minimizes the given objective function,
-/// using a derivative-based optimizer.
-///
-/// The specific optimizer is subject to change.
-///
-/// # Arguments
-///
-/// - `level`: A factor
-///   increasing quality of results
-///   at the cost of potentially increased time.
-///   Values above 0 favor increased quality.
-///   Values below 0 favor increased speed.
-///   Not all values necessarily have an effect,
-///   depending on underlying optimizer.
-/// - `len`: number of elements in each point.
-/// - `obj_func`: objective function to minimize
-/// - `rng`: source of randomness
-pub fn binary_argmin_using<F, R>(level: i32, len: usize, obj_func: F, rng: &mut R) -> Vec<bool>
-where
-    F: Fn(&[bool]) -> f64,
-    R: Rng,
-{
-    let (num_samples, adjust_rate, mutation_chance, mutation_adjust_rate, threshold) =
-        pbil_config(level, len);
-
-    let mut probabilities = std::iter::repeat(Probability::default())
-        .take(len)
-        .collect::<Vec<_>>();
-    while !converged(threshold, &probabilities) {
-        adjust_probabilities(
-            adjust_rate,
-            &Sampleable::new(&probabilities).best_sample(num_samples, &obj_func, rng),
-            &mut probabilities,
-        );
-        mutate_probabilities(
-            &mutation_chance,
-            mutation_adjust_rate,
-            rng,
-            &mut probabilities,
-        );
+impl<I, F, FD> RealDerivativeFor<I, F, FD> {
+    /// Use a specific source of randomness.
+    pub fn with<R>(self, rng: R) -> RealDerivativeWith<I, F, FD, R>
+    where
+        R: Rng,
+    {
+        RealDerivativeWith { problem: self, rng }
     }
-    point_from(&probabilities)
+
+    /// Return a point that attempts to minimize the given objective function.
+    pub fn argmin(self) -> Vec<f64>
+    where
+        I: IntoIterator<Item = RangeInclusive<f64>>,
+        F: Fn(&[f64]) -> f64 + Clone + 'static,
+        FD: Fn(&[f64]) -> Vec<f64> + 'static,
+    {
+        self.with(SmallRng::from_entropy()).argmin()
+    }
 }
 
-fn pbil_config(
-    level: i32,
+/// An optimizer for a specific real-derivative problem
+/// with a specific source of randomness.
+#[derive(Clone, Debug)]
+pub struct RealDerivativeWith<I, F, FD, R> {
+    problem: RealDerivativeFor<I, F, FD>,
+    /// Source of randomness.
+    rng: R,
+}
+
+impl<I, F, FD, R> RealDerivativeWith<I, F, FD, R> {
+    /// Return a point that attempts to minimize the given objective function.
+    pub fn argmin(self) -> Vec<f64>
+    where
+        I: IntoIterator<Item = RangeInclusive<f64>>,
+        F: Fn(&[f64]) -> f64 + Clone + 'static,
+        FD: Fn(&[f64]) -> Vec<f64> + 'static,
+        R: Rng,
+    {
+        BacktrackingLineSearchBuilder::default()
+            .build()
+            .for_(self.problem.obj_func, self.problem.obj_func_d)
+            .random_using(self.problem.initial_bounds, self.rng)
+            .argmin()
+    }
+}
+
+/// An optimizer for binary problems.
+///
+/// The specific optimizer is subject to change.
+#[derive(Clone, Debug, Default)]
+pub struct Binary {
+    /// A factor
+    /// increasing quality of results
+    /// at the cost of potentially increased time.
+    /// Values above 0 favor increased quality.
+    /// Values below 0 favor increased speed.
+    /// Not all values necessarily have an effect,
+    /// depending on underlying optimizer.
+    pub level: i32,
+}
+
+impl Binary {
+    /// Prepare for a specific problem.
+    pub fn for_<F>(self, len: usize, obj_func: F) -> BinaryFor<F>
+    where
+        F: Fn(&[bool]) -> f64,
+    {
+        BinaryFor {
+            agnostic: self,
+            len,
+            obj_func,
+        }
+    }
+}
+
+/// An optimizer for a specific binary problem.
+#[derive(Clone, Debug)]
+pub struct BinaryFor<F> {
+    agnostic: Binary,
+    /// number of elements in each point.
     len: usize,
-) -> (
-    NumSamples,
-    AdjustRate,
-    MutationChance,
-    MutationAdjustRate,
-    ProbabilityThreshold,
-) {
+    /// Objective function to minimize.
+    obj_func: F,
+}
+
+impl<F> BinaryFor<F> {
+    /// Use a specific source of randomness.
+    pub fn with<R>(self, rng: R) -> BinaryWith<F, R>
+    where
+        R: Rng,
+    {
+        BinaryWith { problem: self, rng }
+    }
+
+    /// Return a point that attempts to minimize the given objective function.
+    pub fn argmin(self) -> Vec<bool>
+    where
+        F: Fn(&[bool]) -> f64,
+    {
+        self.with(SmallRng::from_entropy()).argmin()
+    }
+}
+
+/// An optimizer for a specific binary problem
+/// with a specific source of randomness.
+#[derive(Clone, Debug)]
+pub struct BinaryWith<F, R> {
+    problem: BinaryFor<F>,
+    /// Source of randomness.
+    rng: R,
+}
+
+impl<F, R> BinaryWith<F, R> {
+    /// Return a point that attempts to minimize the given objective function.
+    pub fn argmin(self) -> Vec<bool>
+    where
+        F: Fn(&[bool]) -> f64,
+        R: Rng,
+    {
+        pbil_config(self.problem.agnostic.level, self.problem.len)
+            .for_(self.problem.len, self.problem.obj_func)
+            .with(self.rng)
+            .argmin()
+    }
+}
+
+fn pbil_config(level: i32, len: usize) -> Pbil {
     // These numbers are approximate at best.
     let (threshold, num_samples, adjust_rate) = match level {
         x if x > 0 => {
@@ -310,13 +304,13 @@ fn pbil_config(
             AdjustRate::default(),
         ),
     };
-    (
+    Pbil {
         num_samples,
         adjust_rate,
-        MutationChance::new(0.0).unwrap(),
-        MutationAdjustRate::default(),
-        threshold,
-    )
+        mutation_chance: MutationChance::new(0.0).unwrap(),
+        mutation_adjust_rate: MutationAdjustRate::default(),
+        stopping_criteria: PbilStoppingCriteria::Threshold(threshold),
+    }
 }
 
 fn asymptotic_log_like(to: f64, from: usize) -> f64 {

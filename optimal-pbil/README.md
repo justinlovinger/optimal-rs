@@ -12,42 +12,19 @@ Population-based incremental learning (PBIL).
 ## Examples
 
 ```rust
-use optimal_pbil::*;
-use rand::prelude::*;
+use optimal_pbil::PbilBuilder;
 
-fn main() {
-    let len = 2;
-
-    let num_samples = NumSamples::default();
-    let adjust_rate = AdjustRate::default();
-    let mutation_chance = MutationChance::default_for(len);
-    let mutation_adjust_rate = MutationAdjustRate::default();
-    let threshold = ProbabilityThreshold::default();
-
-    let mut rng = SmallRng::from_entropy();
-    let mut probabilities = std::iter::repeat(Probability::default())
-        .take(len)
-        .collect::<Vec<_>>();
-    while !converged(threshold, &probabilities) {
-        adjust_probabilities(
-            adjust_rate,
-            &Sampleable::new(&probabilities).best_sample(num_samples, &obj_func, &mut rng),
-            &mut probabilities,
-        );
-        mutate_probabilities(
-            &mutation_chance,
-            mutation_adjust_rate,
-            &mut rng,
-            &mut probabilities,
-        );
-    }
-
-    println!("{:?}", point_from(&probabilities));
-}
-
-fn obj_func(point: &[bool]) -> usize {
-    point.iter().filter(|x| **x).count()
-}
+println!(
+    "{:?}",
+    PbilBuilder::default()
+        .for_(2, |point| point.iter().filter(|x| **x).count())
+        .argmin()
+)
 ```
+
+For greater flexibility,
+introspection,
+and customization,
+see [`low_level`].
 
 License: MIT

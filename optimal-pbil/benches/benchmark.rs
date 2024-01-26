@@ -9,42 +9,22 @@ pub fn bench_pbil(c: &mut Criterion) {
         c.bench_function(&format!("pbil count {len}"), |b| {
             b.iter_batched(
                 || SmallRng::seed_from_u64(0),
-                |rng| run_pbil(black_box(count), black_box(len), black_box(rng)),
+                |rng| run_pbil(black_box(len), black_box(count), black_box(rng)),
                 BatchSize::SmallInput,
             )
         });
     }
 }
 
-fn run_pbil<F, R>(obj_func: F, len: usize, mut rng: R) -> Vec<bool>
+fn run_pbil<F, R>(len: usize, obj_func: F, rng: R) -> Vec<bool>
 where
     F: Fn(&[bool]) -> usize,
     R: Rng,
 {
-    let num_samples = NumSamples::default();
-    let adjust_rate = AdjustRate::default();
-    let mutation_chance = MutationChance::default_for(len);
-    let mutation_adjust_rate = MutationAdjustRate::default();
-    let threshold = ProbabilityThreshold::default();
-
-    let mut probabilities = std::iter::repeat(Probability::default())
-        .take(len)
-        .collect::<Vec<_>>();
-    while !converged(threshold, &probabilities) {
-        adjust_probabilities(
-            adjust_rate,
-            &Sampleable::new(&probabilities).best_sample(num_samples, &obj_func, &mut rng),
-            &mut probabilities,
-        );
-        mutate_probabilities(
-            &mutation_chance,
-            mutation_adjust_rate,
-            &mut rng,
-            &mut probabilities,
-        );
-    }
-
-    point_from(&probabilities)
+    PbilBuilder::default()
+        .for_(len, obj_func)
+        .with(rng)
+        .argmin()
 }
 
 fn count(point: &[bool]) -> usize {

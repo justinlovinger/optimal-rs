@@ -21,10 +21,12 @@ harness = false
 serde = ["dep:serde"]
 
 [dependencies]
+derive_builder = "0.13.0"
 derive-num-bounded = { path = "../derive-num-bounded", version = "0.0.0" }
 derive-getters = "0.3.0"
 derive_more = "0.99.17"
 num-traits = "0.2.16"
+rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.185", features = ["derive", "rc"], optional = true }
 thiserror = "1.0.47"
 

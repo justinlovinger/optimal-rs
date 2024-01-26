@@ -9,7 +9,7 @@ mod incr_prev {
     use derive_num_bounded::{derive_into_inner, derive_new_from_lower_bounded_partial_ord};
     use num_traits::{bounds::LowerBounded, real::Real, AsPrimitive, One};
 
-    use crate::{backtracking_line_search::BacktrackingRate, StepSize};
+    use crate::{backtracking_line_search::types::BacktrackingRate, StepSize};
 
     /// Rate to increase step-size before starting each line-search.
     #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, Hash)]

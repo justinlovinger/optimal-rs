@@ -1,3 +1,5 @@
+//! Types for PBIL.
+
 use core::convert::TryFrom;
 use std::{f64::EPSILON, fmt};
 
