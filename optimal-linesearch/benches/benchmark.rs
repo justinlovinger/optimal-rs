@@ -1,4 +1,4 @@
-use std::hint::black_box;
+use std::{hint::black_box, time::Duration};
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use optimal_linesearch::{
@@ -7,34 +7,45 @@ use optimal_linesearch::{
 };
 
 pub fn bench_line_search(c: &mut Criterion) {
-    for len in [10, 100, 1000] {
-        let initial_point = (1..(len + 1)).map(|x| x as f64).collect::<Vec<_>>();
-        c.bench_function(&format!("fixed_step_size skewed_sphere {len}"), |b| {
+    let mut group = c.benchmark_group("slow");
+    group
+        .sample_size(50)
+        .measurement_time(Duration::from_secs(60))
+        .warm_up_time(Duration::from_secs(10))
+        .noise_threshold(0.02)
+        .significance_level(0.01);
+
+    let len = 100000;
+    let initial_point = (1..(len + 1)).map(|x| x as f64).collect::<Vec<_>>();
+
+    group.bench_function(&format!("fixed_step_size skewed_sphere {len}"), |b| {
+        b.iter_batched(
+            || initial_point.clone(),
+            |initial_point| {
+                run_fixed_step_size(black_box(skewed_sphere_d), black_box(initial_point))
+            },
+            BatchSize::SmallInput,
+        )
+    });
+
+    group.bench_function(
+        &format!("backtracking_line_search skewed_sphere {len}"),
+        |b| {
             b.iter_batched(
                 || initial_point.clone(),
                 |initial_point| {
-                    run_fixed_step_size(black_box(skewed_sphere_d), black_box(initial_point))
+                    run_backtracking_line_search(
+                        black_box(skewed_sphere),
+                        black_box(skewed_sphere_d),
+                        black_box(initial_point),
+                    )
                 },
                 BatchSize::SmallInput,
             )
-        });
-        c.bench_function(
-            &format!("backtracking_line_search skewed_sphere {len}"),
-            |b| {
-                b.iter_batched(
-                    || initial_point.clone(),
-                    |initial_point| {
-                        run_backtracking_line_search(
-                            black_box(skewed_sphere),
-                            black_box(skewed_sphere_d),
-                            black_box(initial_point),
-                        )
-                    },
-                    BatchSize::SmallInput,
-                )
-            },
-        );
-    }
+        },
+    );
+
+    group.finish();
 }
 
 pub fn run_fixed_step_size<FD>(obj_func_d: FD, initial_point: Vec<f64>) -> Vec<f64>
@@ -43,7 +54,7 @@ where
 {
     let step_size = StepSize::new(0.5).unwrap();
     let mut point = initial_point;
-    for _ in 0..1000 {
+    for _ in 0..2000 {
         point = descend(step_size, &steepest_descent(&obj_func_d(&point)), &point);
     }
     point
