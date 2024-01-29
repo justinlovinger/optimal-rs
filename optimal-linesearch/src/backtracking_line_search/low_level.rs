@@ -20,12 +20,13 @@
 //!     for _ in 0..100 {
 //!         let value = obj_func(&point);
 //!         let derivatives = obj_func_d(&point);
+//!         let direction = steepest_descent(derivatives.iter().copied()).collect();
 //!         (step_size, point) = BacktrackingSearcher::new(
 //!             c_1,
 //!             point,
 //!             value,
-//!             &derivatives,
-//!             steepest_descent(&derivatives),
+//!             derivatives,
+//!             direction,
 //!         )
 //!         .search(backtracking_rate, &obj_func, step_size);
 //!         step_size = incr_rate * step_size;
@@ -50,7 +51,7 @@ use std::{
 
 use derive_getters::{Dissolve, Getters};
 
-use crate::StepSize;
+use crate::{descend, StepSize};
 
 use super::types::*;
 
@@ -71,19 +72,18 @@ impl<A> BacktrackingSearcher<A> {
         c_1: SufficientDecreaseParameter<A>,
         point: Vec<A>,
         value: A,
-        derivatives: &[A],
+        derivatives: impl IntoIterator<Item = A>,
         direction: Vec<A>,
     ) -> Self
     where
         A: Clone + Neg<Output = A> + Mul<Output = A> + Sum,
     {
-        debug_assert_eq!(point.len(), derivatives.len());
         debug_assert_eq!(point.len(), direction.len());
         Self {
             c_1_times_derivatives_dot_direction: C1TimesDerivativesDotDirection::new(
                 c_1,
                 derivatives,
-                &direction,
+                direction.iter().cloned(),
             ),
             point,
             value,
@@ -106,7 +106,7 @@ impl<A> BacktrackingSearcher<A> {
     {
         let mut step_size = initial_step_size;
         let point = loop {
-            let point_at_step = self.point_at_step(step_size.clone());
+            let point_at_step = self.point_at_step(step_size.clone()).collect::<Vec<_>>();
             if self.is_sufficient_decrease(step_size.clone(), obj_func(&point_at_step)) {
                 break point_at_step;
             } else {
@@ -117,11 +117,15 @@ impl<A> BacktrackingSearcher<A> {
     }
 
     /// Return point at `step_size` in line-search direction.
-    pub fn point_at_step(&self, step_size: StepSize<A>) -> Vec<A>
+    pub fn point_at_step(&self, step_size: StepSize<A>) -> impl Iterator<Item = A> + '_
     where
         A: Clone + Add<Output = A> + Mul<Output = A>,
     {
-        crate::descend(step_size, self.direction(), self.point())
+        descend(
+            step_size,
+            self.direction.iter().cloned(),
+            self.point.iter().cloned(),
+        )
     }
 
     /// Return whether `point_at_step` is sufficient.

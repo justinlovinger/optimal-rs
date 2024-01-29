@@ -90,7 +90,7 @@ impl<F> PbilFor<F> {
             rng,
             probabilities: std::iter::repeat(Probability::default())
                 .take(self.len)
-                .collect::<Vec<_>>(),
+                .collect(),
             problem: self,
         }
     }
@@ -127,40 +127,49 @@ impl<F, R> PbilWith<F, R> {
         match self.problem.agnostic.stopping_criteria {
             PbilStoppingCriteria::Iteration(i) => {
                 for _ in 0..i {
-                    self.step()
+                    self = self.step();
                 }
             }
             PbilStoppingCriteria::Threshold(threshold) => {
-                while !converged(threshold, &self.probabilities) {
-                    self.step()
+                while !converged(threshold, self.probabilities.iter().copied()) {
+                    self = self.step();
                 }
             }
         }
-        point_from(&self.probabilities)
+        point_from(self.probabilities).collect()
     }
 
-    fn step<V>(&mut self)
+    fn step<V>(mut self) -> Self
     where
         F: Fn(&[bool]) -> V,
         V: PartialOrd,
         R: Rng,
     {
-        adjust_probabilities(
+        let probabilities = adjust_probabilities(
             self.problem.agnostic.adjust_rate,
-            &Sampleable::new(&self.probabilities).best_sample(
+            Sampleable::new(&self.probabilities).best_sample(
                 self.problem.agnostic.num_samples,
                 &self.problem.obj_func,
                 &mut self.rng,
             ),
-            &mut self.probabilities,
+            self.probabilities,
         );
-        if !self.problem.agnostic.mutation_chance.is_zero() {
+        let probabilities = if !self.problem.agnostic.mutation_chance.is_zero() {
             mutate_probabilities(
                 &self.problem.agnostic.mutation_chance,
                 self.problem.agnostic.mutation_adjust_rate,
+                probabilities,
                 &mut self.rng,
-                &mut self.probabilities,
-            );
+            )
+            .collect()
+        } else {
+            probabilities.collect()
+        };
+
+        Self {
+            problem: self.problem,
+            rng: self.rng,
+            probabilities,
         }
     }
 }

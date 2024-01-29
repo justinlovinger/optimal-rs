@@ -19,21 +19,21 @@
 //!     let mut probabilities = std::iter::repeat(Probability::default())
 //!         .take(len)
 //!         .collect::<Vec<_>>();
-//!     while !converged(threshold, &probabilities) {
-//!         adjust_probabilities(
-//!             adjust_rate,
-//!             &Sampleable::new(&probabilities).best_sample(num_samples, &obj_func, &mut rng),
-//!             &mut probabilities,
-//!         );
-//!         mutate_probabilities(
+//!     while !converged(threshold, probabilities.iter().copied()) {
+//!         probabilities = mutate_probabilities(
 //!             &mutation_chance,
 //!             mutation_adjust_rate,
+//!             adjust_probabilities(
+//!                 adjust_rate,
+//!                 Sampleable::new(&probabilities).best_sample(num_samples, obj_func, &mut rng),
+//!                 probabilities,
+//!             ),
 //!             &mut rng,
-//!             &mut probabilities,
-//!         );
+//!         )
+//!         .collect();
 //!     }
 //!
-//!     println!("{:?}", point_from(&probabilities));
+//!     println!("{:?}", point_from(probabilities).collect::<Vec<_>>());
 //! }
 //!
 //! fn obj_func(point: &[bool]) -> usize {
@@ -51,15 +51,17 @@ pub use self::sampleable::Sampleable;
 
 /// Adjust each probability towards corresponding `sample` bit
 /// at `rate`.
-pub fn adjust_probabilities(rate: AdjustRate, sample: &[bool], probabilities: &mut [Probability]) {
-    probabilities.iter_mut().zip(sample).for_each(|(p, b)| {
+pub fn adjust_probabilities(
+    rate: AdjustRate,
+    sample: impl IntoIterator<Item = bool>,
+    probabilities: impl IntoIterator<Item = Probability>,
+) -> impl Iterator<Item = Probability> {
+    probabilities.into_iter().zip(sample).map(move |(p, b)| {
         // This operation is safe
         // because Probability is closed under `adjust`
         // with rate in [0,1].
-        *p = unsafe {
-            Probability::new_unchecked(adjust(rate.into(), f64::from(*p), *b as u8 as f64))
-        }
-    });
+        unsafe { Probability::new_unchecked(adjust(rate.into(), f64::from(p), b as u8 as f64)) }
+    })
 }
 
 /// Adjust a number from `x` to `y`
@@ -74,15 +76,16 @@ where
 /// With `chance`,
 /// adjust each probability towards a random probability
 /// at `adjust_rate`.
-pub fn mutate_probabilities<R>(
-    chance: &MutationChance,
+pub fn mutate_probabilities<'a, R>(
+    chance: &'a MutationChance,
     adjust_rate: MutationAdjustRate,
-    rng: &mut R,
-    probabilities: &mut [Probability],
-) where
+    probabilities: impl IntoIterator<Item = Probability> + 'a,
+    rng: &'a mut R,
+) -> impl Iterator<Item = Probability> + 'a
+where
     R: Rng,
 {
-    probabilities.iter_mut().for_each(|p| {
+    probabilities.into_iter().map(move |p| {
         if rng.sample(chance) {
             // `Standard` distribution excludes `1`,
             // but it more efficient
@@ -90,29 +93,36 @@ pub fn mutate_probabilities<R>(
             // This operation is safe
             // because Probability is closed under `adjust`
             // with rate in [0,1].
-            *p = unsafe {
+            unsafe {
                 Probability::new_unchecked(adjust(
                     adjust_rate.into(),
-                    f64::from(*p),
+                    f64::from(p),
                     rng.sample(Standard),
                 ))
             }
+        } else {
+            p
         }
-    });
+    })
 }
 
 /// Return whether all probabilities are above the given threshold
 /// or below its inverse.
-pub fn converged(threshold: ProbabilityThreshold, probabilities: &[Probability]) -> bool {
+pub fn converged(
+    threshold: ProbabilityThreshold,
+    probabilities: impl IntoIterator<Item = Probability>,
+) -> bool {
     probabilities
-        .iter()
-        .all(|p| p > &threshold.upper_bound() || p < &threshold.lower_bound())
+        .into_iter()
+        .all(|p| p > threshold.upper_bound() || p < threshold.lower_bound())
 }
 
 /// Estimate the best sample discovered
 /// from a set of probabilities.
-pub fn point_from(probabilities: &[Probability]) -> Vec<bool> {
-    probabilities.iter().map(|p| f64::from(*p) >= 0.5).collect()
+pub fn point_from(
+    probabilities: impl IntoIterator<Item = Probability>,
+) -> impl Iterator<Item = bool> {
+    probabilities.into_iter().map(|p| f64::from(p) >= 0.5)
 }
 
 mod sampleable {
@@ -142,7 +152,7 @@ mod sampleable {
                     .as_ref()
                     .iter()
                     .map(|p| Bernoulli::new(f64::from(*p)).expect("Invalid probability"))
-                    .collect::<Vec<_>>(),
+                    .collect(),
                 probabilities,
             }
         }
@@ -200,9 +210,12 @@ mod tests {
         #[strategy(Vec::<Probability>::arbitrary().prop_flat_map(|xs| (prop::collection::vec(bool::arbitrary(), xs.len()), Just(xs))))]
         args: (Vec<bool>, Vec<Probability>),
     ) {
-        let (sample, mut probabilities) = args;
-        adjust_probabilities(adjust_rate, &sample, &mut probabilities);
-        prop_assert!(are_valid(&probabilities));
+        let (sample, probabilities) = args;
+        prop_assert!(are_valid(adjust_probabilities(
+            adjust_rate,
+            sample,
+            probabilities
+        )));
     }
 
     #[proptest()]
@@ -210,15 +223,14 @@ mod tests {
         mutation_chance: MutationChance,
         mutation_adjust_rate: MutationAdjustRate,
         seed: u64,
-        mut probabilities: Vec<Probability>,
+        probabilities: Vec<Probability>,
     ) {
-        mutate_probabilities(
+        prop_assert!(are_valid(mutate_probabilities(
             &mutation_chance,
             mutation_adjust_rate,
+            probabilities,
             &mut SmallRng::seed_from_u64(seed),
-            &mut probabilities,
-        );
-        prop_assert!(are_valid(&probabilities));
+        )));
     }
 
     macro_rules! arbitrary_from_bounded {
@@ -240,9 +252,9 @@ mod tests {
     arbitrary_from_bounded!(f64, MutationChance);
     arbitrary_from_bounded!(f64, MutationAdjustRate);
 
-    fn are_valid(probabilities: &[Probability]) -> bool {
+    fn are_valid(probabilities: impl IntoIterator<Item = Probability>) -> bool {
         probabilities
-            .iter()
-            .all(|p| Probability::try_from(f64::from(*p)).is_ok())
+            .into_iter()
+            .all(|p| Probability::try_from(f64::from(p)).is_ok())
     }
 }

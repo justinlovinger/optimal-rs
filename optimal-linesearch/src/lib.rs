@@ -13,11 +13,7 @@
 //!     let step_size = StepSize::new(0.5).unwrap();
 //!     let mut point = vec![10.0, 10.0];
 //!     for _ in 0..10 {
-//!         point = descend(
-//!             step_size,
-//!             &steepest_descent(&obj_func_d(&point)),
-//!             &point,
-//!         );
+//!         point = descend(step_size, steepest_descent(obj_func_d(&point)), point).collect();
 //!     }
 //!     println!("{:?}", point);
 //! }
@@ -39,17 +35,18 @@ pub use self::types::*;
 
 /// Descend in step-direction
 /// by moving `point` `step_size` length in `direction`.
-pub fn descend<A>(step_size: StepSize<A>, direction: &[A], point: &[A]) -> Vec<A>
+pub fn descend<A>(
+    step_size: StepSize<A>,
+    direction: impl IntoIterator<Item = A>,
+    point: impl IntoIterator<Item = A>,
+) -> impl Iterator<Item = A>
 where
     A: Clone + Add<Output = A> + Mul<Output = A>,
 {
-    debug_assert_eq!(direction.len(), point.len());
     point
-        .iter()
-        .cloned()
-        .zip(direction.iter().cloned())
-        .map(|(x, d)| x + step_size.clone() * d)
-        .collect()
+        .into_iter()
+        .zip(direction)
+        .map(move |(x, d)| x + step_size.clone() * d)
 }
 
 mod types {

@@ -55,7 +55,7 @@ where
     let step_size = StepSize::new(0.5).unwrap();
     let mut point = initial_point;
     for _ in 0..2000 {
-        point = descend(step_size, &steepest_descent(&obj_func_d(&point)), &point);
+        point = descend(step_size, steepest_descent(obj_func_d(&point)), point).collect();
     }
     point
 }

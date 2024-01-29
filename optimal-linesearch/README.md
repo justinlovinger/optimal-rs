@@ -19,11 +19,7 @@ fn main() {
     let step_size = StepSize::new(0.5).unwrap();
     let mut point = vec![10.0, 10.0];
     for _ in 0..10 {
-        point = descend(
-            step_size,
-            &steepest_descent(&obj_func_d(&point)),
-            &point,
-        );
+        point = descend(step_size, steepest_descent(obj_func_d(&point)), point).collect();
     }
     println!("{:?}", point);
 }

@@ -275,13 +275,13 @@ impl<A, F, FFD> BacktrackingLineSearchWith<A, F, FFD> {
     {
         let (value, derivatives) = (self.problem.obj_func_and_d)(&self.point);
         let direction = match self.problem.agnostic.direction {
-            StepDirection::Steepest => steepest_descent(&derivatives),
+            StepDirection::Steepest => steepest_descent(derivatives.iter().cloned()).collect(),
         };
         (self.step_size, self.point) = BacktrackingSearcher::new(
             self.problem.agnostic.c_1.clone(),
             self.point,
             value,
-            &derivatives,
+            derivatives,
             direction,
         )
         .search(

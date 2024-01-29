@@ -105,16 +105,19 @@ where
 
 impl<A> C1TimesDerivativesDotDirection<A> {
     #[allow(missing_docs)]
-    pub fn new(c_1: SufficientDecreaseParameter<A>, derivatives: &[A], direction: &[A]) -> Self
+    pub fn new(
+        c_1: SufficientDecreaseParameter<A>,
+        derivatives: impl IntoIterator<Item = A>,
+        direction: impl IntoIterator<Item = A>,
+    ) -> Self
     where
         A: Clone + Neg<Output = A> + Mul<Output = A> + Sum,
     {
         Self(
             c_1.into_inner()
                 * derivatives
-                    .iter()
-                    .cloned()
-                    .zip(direction.iter().cloned())
+                    .into_iter()
+                    .zip(direction)
                     .map(|(x, y)| x * y)
                     .sum(),
         )
