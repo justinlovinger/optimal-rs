@@ -142,26 +142,20 @@ impl<F, R> PbilWith<F, R> {
         V: PartialOrd,
         R: Rng,
     {
-        let probabilities = adjust_probabilities(
-            self.problem.agnostic.adjust_rate,
-            Sampleable::new(&probabilities).best_sample(
-                self.problem.agnostic.num_samples,
-                &self.problem.obj_func,
-                &mut self.rng,
-            ),
-            probabilities,
-        );
-        let probabilities = if !self.problem.agnostic.mutation_chance.is_zero() {
-            mutate_probabilities(
-                &self.problem.agnostic.mutation_chance,
-                self.problem.agnostic.mutation_adjust_rate,
+        mutate_probabilities(
+            &self.problem.agnostic.mutation_chance,
+            self.problem.agnostic.mutation_adjust_rate,
+            adjust_probabilities(
+                self.problem.agnostic.adjust_rate,
+                Sampleable::new(&probabilities).best_sample(
+                    self.problem.agnostic.num_samples,
+                    &self.problem.obj_func,
+                    &mut self.rng,
+                ),
                 probabilities,
-                &mut self.rng,
-            )
-            .collect()
-        } else {
-            probabilities.collect()
-        };
-        probabilities
+            ),
+            &mut self.rng,
+        )
+        .collect()
     }
 }

@@ -1,7 +1,7 @@
 use std::{hint::black_box, time::Duration};
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use optimal_pbil::*;
+use optimal_pbil::PbilBuilder;
 use rand::prelude::*;
 
 pub fn bench_pbil(c: &mut Criterion) {
