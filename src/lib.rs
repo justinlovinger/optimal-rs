@@ -153,7 +153,7 @@ impl<I, F, FD, R> RealDerivativeWith<I, F, FD, R> {
         BacktrackingLineSearchBuilder::default()
             .build()
             .for_(self.problem.obj_func, self.problem.obj_func_d)
-            .random_using(self.problem.initial_bounds, self.rng)
+            .with_random_point_using(self.problem.initial_bounds, self.rng)
             .argmin()
     }
 }

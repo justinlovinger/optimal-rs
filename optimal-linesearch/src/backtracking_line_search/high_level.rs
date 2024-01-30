@@ -191,19 +191,19 @@ pub struct BacktrackingLineSearchFor<A, F, FFD> {
 
 impl<A, F, FFD> BacktrackingLineSearchFor<A, F, FFD> {
     /// Prepare backtracking line-search with a random point.
-    pub fn random(
+    pub fn with_random_point(
         self,
         initial_bounds: impl IntoIterator<Item = RangeInclusive<A>>,
     ) -> BacktrackingLineSearchWith<A, F, FFD>
     where
         A: Clone + SampleUniform,
     {
-        self.random_using(initial_bounds, SmallRng::from_entropy())
+        self.with_random_point_using(initial_bounds, SmallRng::from_entropy())
     }
 
     /// Prepare backtracking line-search with a random point
     /// using a specific RNG.
-    pub fn random_using<R>(
+    pub fn with_random_point_using<R>(
         self,
         initial_bounds: impl IntoIterator<Item = RangeInclusive<A>>,
         mut rng: R,
@@ -212,7 +212,7 @@ impl<A, F, FFD> BacktrackingLineSearchFor<A, F, FFD> {
         A: Clone + SampleUniform,
         R: Rng,
     {
-        self.point(
+        self.with_point(
             initial_bounds
                 .into_iter()
                 .map(|range| {
@@ -224,7 +224,7 @@ impl<A, F, FFD> BacktrackingLineSearchFor<A, F, FFD> {
     }
 
     /// Prepare backtracking line-search with a specific point.
-    pub fn point(self, initial_point: Vec<A>) -> BacktrackingLineSearchWith<A, F, FFD>
+    pub fn with_point(self, initial_point: Vec<A>) -> BacktrackingLineSearchWith<A, F, FFD>
     where
         A: Clone,
     {

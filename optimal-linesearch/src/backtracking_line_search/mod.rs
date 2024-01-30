@@ -13,7 +13,7 @@
 //!             |point: &[f64]| point.iter().map(|x| x.powi(2)).sum(),
 //!             |point| point.iter().map(|x| 2.0 * x).collect()
 //!         )
-//!         .point(vec![10.0, 10.0])
+//!         .with_point(vec![10.0, 10.0])
 //!         .argmin()
 //! );
 //! ```

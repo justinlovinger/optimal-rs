@@ -71,7 +71,7 @@ where
 {
     BacktrackingLineSearchBuilder::default()
         .for_(initial_point.len(), obj_func, obj_func_d)
-        .point(initial_point)
+        .with_point(initial_point)
         .argmin()
 }
 
