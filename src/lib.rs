@@ -2,30 +2,12 @@
 #![warn(missing_debug_implementations)]
 #![warn(missing_docs)]
 
-//! Mathematical optimization and machine learning framework
-//! and algorithms.
+//! Mathematical optimization and machine-learning components and algorithms.
 //!
-//! Optimal provides a composable framework
+//! Optimal provides composable functions
 //! for mathematical optimization
-//! and machine learning
-//! from the optimization perspective,
-//! in addition to algorithm implementations.
-//!
-//! The framework consists of runners,
-//! optimizers,
-//! and problems,
-//! with a chain of dependency as follows:
-//! `runner -> optimizer -> problem`.
-//! Most optimizers can support many problems
-//! and most runners can support many optimizers.
-//!
-//! A problem defines a mathematical optimization problem.
-//! An optimizer defines the steps for solving a problem,
-//! usually as an infinite series of state transitions
-//! incrementally improving a solution.
-//! A runner defines the stopping criteria for an optimizer
-//! and may affect the optimization sequence
-//! in other ways.
+//! and machine-learning
+//! from the optimization-perspective.
 //!
 //! # Examples
 //!
@@ -61,11 +43,17 @@
 //! );
 //! ```
 //!
-//! For more control over configuration parameters,
+//! For more control over configuration,
 //! introspection of the optimization process,
 //! serialization,
 //! and specialization that may improve performance,
 //! see individual optimizer packages.
+//!
+//! Note: more specific support for machine-learning will be added in the future.
+//! Currently,
+//! machine-learning is supported
+//! by defining an objective-function
+//! taking model-parameters.
 
 use std::ops::{Add, Mul, RangeInclusive, Sub};
 
