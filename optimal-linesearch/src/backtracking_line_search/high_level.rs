@@ -224,14 +224,13 @@ impl<A, F, FFD> BacktrackingLineSearchFor<A, F, FFD> {
     }
 
     /// Prepare backtracking line-search with a specific point.
-    pub fn point(self, point: Vec<A>) -> BacktrackingLineSearchWith<A, F, FFD>
+    pub fn point(self, initial_point: Vec<A>) -> BacktrackingLineSearchWith<A, F, FFD>
     where
         A: Clone,
     {
         BacktrackingLineSearchWith {
-            step_size: self.agnostic.initial_step_size.clone(),
             problem: self,
-            point,
+            initial_point,
         }
     }
 }
@@ -243,43 +242,45 @@ impl<A, F, FFD> BacktrackingLineSearchFor<A, F, FFD> {
 pub struct BacktrackingLineSearchWith<A, F, FFD> {
     /// Problem-specific variables.
     pub problem: BacktrackingLineSearchFor<A, F, FFD>,
-    /// Initial step-size for next search.
-    pub step_size: StepSize<A>,
-    /// Best point found so far.
-    pub point: Vec<A>,
+    /// Initial point to search from.
+    pub initial_point: Vec<A>,
 }
 
 impl<A, F, FFD> BacktrackingLineSearchWith<A, F, FFD> {
     /// Return a point that attempts to minimize the given objective function.
-    pub fn argmin(mut self) -> Vec<A>
+    pub fn argmin(self) -> Vec<A>
     where
         A: Clone + PartialOrd + Neg<Output = A> + Add<Output = A> + Mul<Output = A> + Sum,
         F: Fn(&[A]) -> A,
         FFD: Fn(&[A]) -> (A, Vec<A>),
     {
+        // The compiler should remove these `clone()`s.
+        // We use them so we can call `self.step`.
+        let mut step_size = self.problem.agnostic.initial_step_size.clone();
+        let mut point = self.initial_point.clone();
         match self.problem.agnostic.stopping_criteria {
             BacktrackingLineSearchStoppingCriteria::Iteration(i) => {
                 for _ in 0..i {
-                    self = self.step();
+                    (step_size, point) = self.step(step_size, point);
                 }
             }
         }
-        self.point
+        point
     }
 
-    fn step(mut self) -> Self
+    fn step(&self, mut step_size: StepSize<A>, mut point: Vec<A>) -> (StepSize<A>, Vec<A>)
     where
         A: Clone + PartialOrd + Neg<Output = A> + Add<Output = A> + Mul<Output = A> + Sum,
         F: Fn(&[A]) -> A,
         FFD: Fn(&[A]) -> (A, Vec<A>),
     {
-        let (value, derivatives) = (self.problem.obj_func_and_d)(&self.point);
+        let (value, derivatives) = (self.problem.obj_func_and_d)(&point);
         let direction = match self.problem.agnostic.direction {
             StepDirection::Steepest => steepest_descent(derivatives.iter().cloned()).collect(),
         };
-        (self.step_size, self.point) = BacktrackingSearcher::new(
+        (step_size, point) = BacktrackingSearcher::new(
             self.problem.agnostic.c_1.clone(),
-            self.point,
+            point,
             value,
             derivatives,
             direction,
@@ -287,17 +288,13 @@ impl<A, F, FFD> BacktrackingLineSearchWith<A, F, FFD> {
         .search(
             self.problem.agnostic.backtracking_rate.clone(),
             &self.problem.obj_func,
-            self.step_size.clone(),
+            step_size,
         );
 
-        self.step_size = match &self.problem.agnostic.step_size_update {
-            StepSizeUpdate::IncrPrev(rate) => rate.clone() * self.step_size,
+        step_size = match &self.problem.agnostic.step_size_update {
+            StepSizeUpdate::IncrPrev(rate) => rate.clone() * step_size,
         };
 
-        Self {
-            problem: self.problem,
-            step_size: self.step_size,
-            point: self.point,
-        }
+        (step_size, point)
     }
 }

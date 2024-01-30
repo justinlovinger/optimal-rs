@@ -86,13 +86,7 @@ impl<F> PbilFor<F> {
     where
         R: Rng,
     {
-        PbilWith {
-            rng,
-            probabilities: std::iter::repeat(Probability::default())
-                .take(self.len)
-                .collect(),
-            problem: self,
-        }
+        PbilWith { problem: self, rng }
     }
 
     /// Return a point that attempts to minimize the given objective function.
@@ -110,10 +104,10 @@ impl<F> PbilFor<F> {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[dissolve(rename = "into_parts")]
 pub struct PbilWith<F, R> {
-    problem: PbilFor<F>,
+    /// Problem-specific variables.
+    pub problem: PbilFor<F>,
     /// Source of randomness.
     pub rng: R,
-    probabilities: Vec<Probability>,
 }
 
 impl<F, R> PbilWith<F, R> {
@@ -124,22 +118,25 @@ impl<F, R> PbilWith<F, R> {
         V: PartialOrd,
         R: Rng,
     {
+        let mut probabilities = std::iter::repeat(Probability::default())
+            .take(self.problem.len)
+            .collect::<Vec<_>>();
         match self.problem.agnostic.stopping_criteria {
             PbilStoppingCriteria::Iteration(i) => {
                 for _ in 0..i {
-                    self = self.step();
+                    probabilities = self.step(probabilities);
                 }
             }
             PbilStoppingCriteria::Threshold(threshold) => {
-                while !converged(threshold, self.probabilities.iter().copied()) {
-                    self = self.step();
+                while !converged(threshold, probabilities.iter().copied()) {
+                    probabilities = self.step(probabilities);
                 }
             }
         }
-        point_from(self.probabilities).collect()
+        point_from(probabilities).collect()
     }
 
-    fn step<V>(mut self) -> Self
+    fn step<V>(&mut self, probabilities: Vec<Probability>) -> Vec<Probability>
     where
         F: Fn(&[bool]) -> V,
         V: PartialOrd,
@@ -147,12 +144,12 @@ impl<F, R> PbilWith<F, R> {
     {
         let probabilities = adjust_probabilities(
             self.problem.agnostic.adjust_rate,
-            Sampleable::new(&self.probabilities).best_sample(
+            Sampleable::new(&probabilities).best_sample(
                 self.problem.agnostic.num_samples,
                 &self.problem.obj_func,
                 &mut self.rng,
             ),
-            self.probabilities,
+            probabilities,
         );
         let probabilities = if !self.problem.agnostic.mutation_chance.is_zero() {
             mutate_probabilities(
@@ -165,11 +162,6 @@ impl<F, R> PbilWith<F, R> {
         } else {
             probabilities.collect()
         };
-
-        Self {
-            problem: self.problem,
-            rng: self.rng,
-            probabilities,
-        }
+        probabilities
     }
 }
