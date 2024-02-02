@@ -5,7 +5,7 @@ use rand::prelude::*;
 use crate::{low_level::*, types::*};
 
 /// PBIL independent of problem.
-#[derive(Clone, Debug, PartialEq, PartialOrd, Builder)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord, Builder)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Pbil {
     /// See [`NumSamples`].
@@ -52,7 +52,7 @@ impl PbilBuilder {
 }
 
 /// Options for stopping a PBIL optimization-loop.
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Eq, Ord)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum PbilStoppingCriteria {
