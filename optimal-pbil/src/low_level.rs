@@ -21,7 +21,7 @@
 //!         .collect::<Vec<_>>();
 //!     while !converged(threshold, probabilities.iter().copied()) {
 //!         probabilities = mutate_probabilities(
-//!             &mutation_chance,
+//!             mutation_chance,
 //!             mutation_adjust_rate,
 //!             adjust_probabilities(
 //!                 adjust_rate,
@@ -77,7 +77,7 @@ where
 /// adjust each probability towards a random probability
 /// at `adjust_rate`.
 pub fn mutate_probabilities<'a, R>(
-    chance: &'a MutationChance,
+    chance: MutationChance,
     adjust_rate: MutationAdjustRate,
     probabilities: impl IntoIterator<Item = Probability> + 'a,
     rng: &'a mut R,
@@ -85,8 +85,9 @@ pub fn mutate_probabilities<'a, R>(
 where
     R: Rng,
 {
+    let distr = chance.into_distr();
     probabilities.into_iter().map(move |p| {
-        if rng.sample(chance) {
+        if rng.sample(distr) {
             // `Standard` distribution excludes `1`,
             // but it more efficient
             // than `Uniform::new_inclusive(0., 1.)`.
@@ -226,7 +227,7 @@ mod tests {
         probabilities: Vec<Probability>,
     ) {
         prop_assert!(are_valid(mutate_probabilities(
-            &mutation_chance,
+            mutation_chance,
             mutation_adjust_rate,
             probabilities,
             &mut SmallRng::seed_from_u64(seed),

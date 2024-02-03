@@ -143,7 +143,7 @@ impl<F, R> PbilWith<F, R> {
         R: Rng,
     {
         mutate_probabilities(
-            &self.problem.agnostic.mutation_chance,
+            self.problem.agnostic.mutation_chance,
             self.problem.agnostic.mutation_adjust_rate,
             adjust_probabilities(
                 self.problem.agnostic.adjust_rate,

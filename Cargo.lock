@@ -509,7 +509,6 @@ dependencies = [
  "proptest",
  "rand",
  "serde",
- "serde_json",
  "test-strategy",
  "thiserror",
 ]
