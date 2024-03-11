@@ -2,8 +2,10 @@ use std::{hint::black_box, time::Duration};
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use optimal_linesearch::{
-    backtracking_line_search::BacktrackingLineSearchBuilder, descend,
-    step_direction::steepest_descent, StepSize,
+    backtracking_line_search::{BacktrackingLineSearchBuilder, BfgsInitializer, StepDirection},
+    descend,
+    step_direction::steepest_descent,
+    StepSize,
 };
 
 pub fn bench_line_search(c: &mut Criterion) {
@@ -18,23 +20,52 @@ pub fn bench_line_search(c: &mut Criterion) {
     let len = 100000;
     let initial_point = (1..(len + 1)).map(|x| x as f64).collect::<Vec<_>>();
 
-    group.bench_function(&format!("fixed_step_size skewed_sphere {len}"), |b| {
-        b.iter_batched(
-            || initial_point.clone(),
-            |initial_point| {
-                run_fixed_step_size(black_box(skewed_sphere_d), black_box(initial_point))
-            },
-            BatchSize::SmallInput,
-        )
-    });
+    group.bench_function(
+        &format!("fixed_step_size steepest skewed_sphere {len}"),
+        |b| {
+            b.iter_batched(
+                || initial_point.clone(),
+                |initial_point| {
+                    run_fixed_step_size(black_box(skewed_sphere_d), black_box(initial_point))
+                },
+                BatchSize::SmallInput,
+            )
+        },
+    );
 
     group.bench_function(
-        &format!("backtracking_line_search skewed_sphere {len}"),
+        &format!("backtracking_line_search steepest skewed_sphere {len}"),
         |b| {
             b.iter_batched(
                 || initial_point.clone(),
                 |initial_point| {
                     run_backtracking_line_search(
+                        StepDirection::Steepest,
+                        black_box(skewed_sphere),
+                        black_box(skewed_sphere_d),
+                        black_box(initial_point),
+                    )
+                },
+                BatchSize::SmallInput,
+            )
+        },
+    );
+
+    // BFGS requires quadratic time and memory,
+    // relative to the length of points.
+    let len = 400;
+    let initial_point = (1..(len + 1)).map(|x| x as f64).collect::<Vec<_>>();
+
+    group.bench_function(
+        &format!("backtracking_line_search bfgs skewed_sphere {len}"),
+        |b| {
+            b.iter_batched(
+                || initial_point.clone(),
+                |initial_point| {
+                    run_backtracking_line_search(
+                        StepDirection::Bfgs {
+                            initializer: BfgsInitializer::Gamma,
+                        },
                         black_box(skewed_sphere),
                         black_box(skewed_sphere_d),
                         black_box(initial_point),
@@ -61,6 +92,7 @@ where
 }
 
 pub fn run_backtracking_line_search<F, FD>(
+    step_direction: StepDirection,
     obj_func: F,
     obj_func_d: FD,
     initial_point: Vec<f64>,
@@ -70,6 +102,7 @@ where
     FD: Fn(&[f64]) -> Vec<f64> + 'static,
 {
     BacktrackingLineSearchBuilder::default()
+        .direction(step_direction)
         .for_(initial_point.len(), obj_func, obj_func_d)
         .with_point(initial_point)
         .argmin()

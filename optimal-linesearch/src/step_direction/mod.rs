@@ -1,5 +1,7 @@
 //! Methods to get direction for line-search.
 
+pub mod bfgs;
+
 use std::ops::Neg;
 
 /// Return the direction of steepest descent.

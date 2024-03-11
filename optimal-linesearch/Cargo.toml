@@ -29,6 +29,7 @@ num-traits = "0.2.16"
 rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.185", features = ["derive", "rc"], optional = true }
 thiserror = "1.0.47"
+ndarray = "0.15.6"
 
 [dev-dependencies]
 criterion = "0.5.1"

@@ -1,17 +1,28 @@
 use std::{
     iter::Sum,
-    ops::{Add, Mul, Neg, RangeInclusive},
+    ops::{RangeInclusive, Sub},
 };
 
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
+use ndarray::{Array1, Array2, LinalgScalar, ScalarOperand};
 use num_traits::{AsPrimitive, Float};
 use rand::{
     distributions::{uniform::SampleUniform, Uniform},
     prelude::*,
 };
 
-use crate::{initial_step_size::IncrRate, step_direction::steepest_descent, StepSize};
+use crate::{
+    initial_step_size::IncrRate,
+    step_direction::{
+        bfgs::{
+            approx_inv_snd_derivatives, bfgs_direction, initial_approx_inv_snd_derivatives_gamma,
+            initial_approx_inv_snd_derivatives_identity,
+        },
+        steepest_descent,
+    },
+    StepSize,
+};
 
 use super::{
     low_level::BacktrackingSearcher,
@@ -43,6 +54,58 @@ pub struct BacktrackingLineSearch<A> {
     /// See [`BacktrackingLineSearchStoppingCriteria`].
     #[builder(default)]
     pub stopping_criteria: BacktrackingLineSearchStoppingCriteria,
+}
+
+/// Options for step-direction.
+#[derive(Clone, Debug, PartialEq, PartialOrd, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum StepDirection {
+    /// Steepest descent.
+    #[default]
+    Steepest,
+    /// BFGS
+    Bfgs {
+        /// How to handle the first few iterations of BFGS,
+        /// before it has enough information to approximate second-derivatives.
+        initializer: BfgsInitializer,
+    },
+}
+
+/// Options for BFGS initialization.
+#[derive(Clone, Debug, PartialEq, PartialOrd, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum BfgsInitializer {
+    /// Initialize using [`initial_approx_inv_snd_derivatives_identity`].
+    Identity,
+    /// Initialize using [`initial_approx_inv_snd_derivatives_gamma`].
+    #[default]
+    Gamma,
+}
+
+/// Options for getting new initial step-size after each iteration.
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum StepSizeUpdate<A> {
+    /// Increment last step-size by a fixed factor.
+    IncrPrev(IncrRate<A>),
+}
+
+/// Options for stopping a backtracking line-search optimization-loop.
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[non_exhaustive]
+pub enum BacktrackingLineSearchStoppingCriteria {
+    /// Stop when the given iteration is reached.
+    Iteration(usize),
+}
+
+impl Default for BacktrackingLineSearchStoppingCriteria {
+    fn default() -> Self {
+        Self::Iteration(100)
+    }
 }
 
 impl<A> BacktrackingLineSearch<A> {
@@ -143,40 +206,6 @@ impl<A> BacktrackingLineSearchBuilder<A> {
     }
 }
 
-/// Options for step-direction.
-#[derive(Clone, Debug, PartialEq, PartialOrd, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
-pub enum StepDirection {
-    #[default]
-    /// Steepest descent.
-    Steepest,
-}
-
-/// Options for getting new initial step-size after each iteration.
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
-pub enum StepSizeUpdate<A> {
-    /// Increment last step-size by a fixed factor.
-    IncrPrev(IncrRate<A>),
-}
-
-/// Options for stopping a backtracking line-search optimization-loop.
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[non_exhaustive]
-pub enum BacktrackingLineSearchStoppingCriteria {
-    /// Stop when the given iteration is reached.
-    Iteration(usize),
-}
-
-impl Default for BacktrackingLineSearchStoppingCriteria {
-    fn default() -> Self {
-        Self::Iteration(100)
-    }
-}
-
 /// Backtracking line-search for a specific problem.
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -250,51 +279,187 @@ impl<A, F, FFD> BacktrackingLineSearchWith<A, F, FFD> {
     /// Return a point that attempts to minimize the given objective function.
     pub fn argmin(self) -> Vec<A>
     where
-        A: Clone + PartialOrd + Neg<Output = A> + Add<Output = A> + Mul<Output = A> + Sum,
+        A: Sum + Float + ScalarOperand + LinalgScalar,
         F: Fn(&[A]) -> A,
         FFD: Fn(&[A]) -> (A, Vec<A>),
     {
         // The compiler should remove these `clone()`s.
         // We use them so we can call `self.step`.
-        let mut step_size = self.problem.agnostic.initial_step_size.clone();
-        let mut point = self.initial_point.clone();
+        let mut step_dir_state = match &self.problem.agnostic.direction {
+            StepDirection::Steepest => StepDirState::Steepest,
+            StepDirection::Bfgs { .. } => StepDirState::Bfgs(BfgsIteration::First),
+        };
+        let mut step_size = self.problem.agnostic.initial_step_size;
+        let mut point = Array1::from_vec(self.initial_point.clone());
         match self.problem.agnostic.stopping_criteria {
             BacktrackingLineSearchStoppingCriteria::Iteration(i) => {
                 for _ in 0..i {
-                    (step_size, point) = self.step(step_size, point);
+                    (step_dir_state, step_size, point) =
+                        self.step(step_dir_state, step_size, point);
                 }
             }
         }
-        point
+        point.to_vec()
     }
 
-    fn step(&self, mut step_size: StepSize<A>, mut point: Vec<A>) -> (StepSize<A>, Vec<A>)
+    fn step(
+        &self,
+        step_dir_state: StepDirState<A>,
+        step_size: StepSize<A>,
+        point: Array1<A>,
+    ) -> (StepDirState<A>, StepSize<A>, Array1<A>)
     where
-        A: Clone + PartialOrd + Neg<Output = A> + Add<Output = A> + Mul<Output = A> + Sum,
+        A: Sum + Float + ScalarOperand + LinalgScalar,
         F: Fn(&[A]) -> A,
         FFD: Fn(&[A]) -> (A, Vec<A>),
     {
-        let (value, derivatives) = (self.problem.obj_func_and_d)(&point);
-        let direction = match self.problem.agnostic.direction {
-            StepDirection::Steepest => steepest_descent(derivatives.iter().cloned()).collect(),
+        let (value, derivatives) = (self.problem.obj_func_and_d)(point.as_slice().unwrap());
+        let derivatives = Array1::from_vec(derivatives);
+
+        let (direction, step_dir_partial_state) = match step_dir_state {
+            StepDirState::Steepest => (
+                steepest_descent(derivatives.iter().cloned()).collect(),
+                StepDirPartialState::Steepest,
+            ),
+            StepDirState::Bfgs(bfgs_state) => {
+                let (direction, partial_state) = match bfgs_state {
+                    BfgsIteration::First => {
+                        let approx_inv_snd_derivatives =
+                            initial_approx_inv_snd_derivatives_identity(point.len());
+                        let direction =
+                            bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
+                        (
+                            direction,
+                            match &self.problem.agnostic.direction {
+                                StepDirection::Bfgs { initializer } => match initializer {
+                                    BfgsInitializer::Identity => BfgsPartialIteration::Other {
+                                        approx_inv_snd_derivatives,
+                                    },
+                                    BfgsInitializer::Gamma => BfgsPartialIteration::Second,
+                                },
+                                _ => panic!(),
+                            },
+                        )
+                    }
+                    BfgsIteration::Second {
+                        prev_derivatives,
+                        prev_step,
+                    } => {
+                        let approx_inv_snd_derivatives = initial_approx_inv_snd_derivatives_gamma(
+                            prev_derivatives,
+                            prev_step,
+                            derivatives.view(),
+                        );
+                        let direction =
+                            bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
+                        (
+                            direction,
+                            BfgsPartialIteration::Other {
+                                approx_inv_snd_derivatives,
+                            },
+                        )
+                    }
+                    BfgsIteration::Other {
+                        prev_derivatives,
+                        prev_approx_inv_snd_derivatives,
+                        prev_step,
+                    } => {
+                        let approx_inv_snd_derivatives = approx_inv_snd_derivatives(
+                            prev_approx_inv_snd_derivatives,
+                            prev_step,
+                            prev_derivatives,
+                            derivatives.view(),
+                        );
+                        let direction =
+                            bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
+                        (
+                            direction,
+                            BfgsPartialIteration::Other {
+                                approx_inv_snd_derivatives,
+                            },
+                        )
+                    }
+                };
+                (direction.to_vec(), StepDirPartialState::Bfgs(partial_state))
+            }
         };
-        (step_size, point) = BacktrackingSearcher::new(
-            self.problem.agnostic.c_1.clone(),
-            point,
+
+        // The compiler should remove these clones
+        // if they are not necessary
+        // for the type of step-direction used.
+        let (step_size, new_point) = BacktrackingSearcher::new(
+            self.problem.agnostic.c_1,
+            point.clone().to_vec(),
             value,
-            derivatives,
+            derivatives.clone(),
             direction,
         )
         .search(
-            self.problem.agnostic.backtracking_rate.clone(),
+            self.problem.agnostic.backtracking_rate,
             &self.problem.obj_func,
             step_size,
         );
+        let new_point = Array1::from_vec(new_point);
 
-        step_size = match &self.problem.agnostic.step_size_update {
-            StepSizeUpdate::IncrPrev(rate) => rate.clone() * step_size,
+        let step_dir_state = match step_dir_partial_state {
+            StepDirPartialState::Steepest => StepDirState::Steepest,
+            StepDirPartialState::Bfgs(partial_state) => {
+                let prev_derivatives = derivatives;
+                // We could theoretically get `prev_step` directly from line-search,
+                // but then we would need to calculate each point of line-search
+                // less efficiently,
+                // calculating step and point separately.
+                let prev_step = new_point.view().sub(point);
+                StepDirState::Bfgs(match partial_state {
+                    BfgsPartialIteration::Second => BfgsIteration::Second {
+                        prev_derivatives,
+                        prev_step,
+                    },
+                    BfgsPartialIteration::Other {
+                        approx_inv_snd_derivatives,
+                    } => BfgsIteration::Other {
+                        prev_derivatives,
+                        prev_approx_inv_snd_derivatives: approx_inv_snd_derivatives,
+                        prev_step,
+                    },
+                })
+            }
         };
 
-        (step_size, point)
+        let step_size = match &self.problem.agnostic.step_size_update {
+            StepSizeUpdate::IncrPrev(rate) => *rate * step_size,
+        };
+
+        (step_dir_state, step_size, new_point)
     }
+}
+
+enum StepDirState<A> {
+    Steepest,
+    Bfgs(BfgsIteration<A>),
+}
+
+enum BfgsIteration<A> {
+    First,
+    Second {
+        prev_derivatives: Array1<A>,
+        prev_step: Array1<A>,
+    },
+    Other {
+        prev_derivatives: Array1<A>,
+        prev_approx_inv_snd_derivatives: Array2<A>,
+        prev_step: Array1<A>,
+    },
+}
+
+enum StepDirPartialState<A> {
+    Steepest,
+    Bfgs(BfgsPartialIteration<A>),
+}
+
+enum BfgsPartialIteration<A> {
+    Second,
+    Other {
+        approx_inv_snd_derivatives: Array2<A>,
+    },
 }
