@@ -2,7 +2,10 @@ use std::{hint::black_box, time::Duration};
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use optimal_linesearch::{
-    backtracking_line_search::{BacktrackingLineSearchBuilder, BfgsInitializer, StepDirection},
+    backtracking_line_search::{
+        BacktrackingLineSearchBuilder, BacktrackingLineSearchStoppingCriteria, BfgsInitializer,
+        StepDirection,
+    },
     descend,
     step_direction::steepest_descent,
     StepSize,
@@ -103,6 +106,7 @@ where
 {
     BacktrackingLineSearchBuilder::default()
         .direction(step_direction)
+        .stopping_criteria(BacktrackingLineSearchStoppingCriteria::Iteration(100))
         .for_(initial_point.len(), obj_func, obj_func_d)
         .with_point(initial_point)
         .argmin()

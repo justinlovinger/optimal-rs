@@ -31,6 +31,8 @@ pub mod step_direction;
 
 use std::ops::{Add, Mul};
 
+use num_traits::{AsPrimitive, One, Signed};
+
 pub use self::types::*;
 
 /// Descend in step-direction
@@ -47,6 +49,35 @@ where
         .into_iter()
         .zip(direction)
         .map(move |(x, d)| x + step_size.clone() * d)
+}
+
+/// Return whether a point is sufficiently close to a minima.
+///
+/// Also known as the derivative-norm stopping-criteria.
+/// This is mathematically defined as,
+/// `||\vec{dx}||_inf < 10^-5 (1 + |fx|)`,
+/// where `fx` is the value of a point
+/// and `\vec{dx}` is the derivative of the same point.
+///
+/// Returns true for empty derivatives.
+pub fn is_near_minima<A>(value: A, derivatives: impl IntoIterator<Item = A>) -> bool
+where
+    A: Copy + PartialOrd + Signed + Mul<Output = A> + One + 'static,
+    f64: AsPrimitive<A>,
+{
+    const COEFF: f64 = 0.00001; // 10^-5
+    infinite_norm(derivatives)
+        .map(|inf_norm_ds| inf_norm_ds < COEFF.as_() * (A::one() + value.abs()))
+        .unwrap_or(true)
+}
+
+fn infinite_norm<A>(xs: impl IntoIterator<Item = A>) -> Option<A>
+where
+    A: PartialOrd + Signed,
+{
+    xs.into_iter()
+        .map(|x| x.abs())
+        .reduce(|acc, x| if x > acc { x } else { acc })
 }
 
 mod types {

@@ -6,7 +6,7 @@ use std::{
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
 use ndarray::{Array1, Array2, LinalgScalar, ScalarOperand};
-use num_traits::{AsPrimitive, Float};
+use num_traits::{AsPrimitive, Float, Signed};
 use rand::{
     distributions::{uniform::SampleUniform, Uniform},
     prelude::*,
@@ -14,6 +14,7 @@ use rand::{
 
 use crate::{
     initial_step_size::IncrRate,
+    is_near_minima,
     step_direction::{
         bfgs::{
             approx_inv_snd_derivatives, bfgs_direction, initial_approx_inv_snd_derivatives_gamma,
@@ -94,18 +95,15 @@ pub enum StepSizeUpdate<A> {
 }
 
 /// Options for stopping a backtracking line-search optimization-loop.
-#[derive(Clone, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, PartialEq, PartialOrd, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum BacktrackingLineSearchStoppingCriteria {
     /// Stop when the given iteration is reached.
     Iteration(usize),
-}
-
-impl Default for BacktrackingLineSearchStoppingCriteria {
-    fn default() -> Self {
-        Self::Iteration(100)
-    }
+    /// Stop when the point is near a minima.
+    #[default]
+    NearMinima,
 }
 
 impl<A> BacktrackingLineSearch<A> {
@@ -279,7 +277,8 @@ impl<A, F, FFD> BacktrackingLineSearchWith<A, F, FFD> {
     /// Return a point that attempts to minimize the given objective function.
     pub fn argmin(self) -> Vec<A>
     where
-        A: Sum + Float + ScalarOperand + LinalgScalar,
+        A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
+        f64: AsPrimitive<A>,
         F: Fn(&[A]) -> A,
         FFD: Fn(&[A]) -> (A, Vec<A>),
     {
@@ -294,10 +293,20 @@ impl<A, F, FFD> BacktrackingLineSearchWith<A, F, FFD> {
         match self.problem.agnostic.stopping_criteria {
             BacktrackingLineSearchStoppingCriteria::Iteration(i) => {
                 for _ in 0..i {
+                    let (value, derivatives) =
+                        (self.problem.obj_func_and_d)(point.as_slice().unwrap());
                     (step_dir_state, step_size, point) =
-                        self.step(step_dir_state, step_size, point);
+                        self.step(step_dir_state, step_size, point, value, derivatives);
                 }
             }
+            BacktrackingLineSearchStoppingCriteria::NearMinima => loop {
+                let (value, derivatives) = (self.problem.obj_func_and_d)(point.as_slice().unwrap());
+                if is_near_minima(value, derivatives.iter().copied()) {
+                    break;
+                }
+                (step_dir_state, step_size, point) =
+                    self.step(step_dir_state, step_size, point, value, derivatives);
+            },
         }
         point.to_vec()
     }
@@ -307,13 +316,14 @@ impl<A, F, FFD> BacktrackingLineSearchWith<A, F, FFD> {
         step_dir_state: StepDirState<A>,
         step_size: StepSize<A>,
         point: Array1<A>,
+        value: A,
+        derivatives: Vec<A>,
     ) -> (StepDirState<A>, StepSize<A>, Array1<A>)
     where
         A: Sum + Float + ScalarOperand + LinalgScalar,
         F: Fn(&[A]) -> A,
         FFD: Fn(&[A]) -> (A, Vec<A>),
     {
-        let (value, derivatives) = (self.problem.obj_func_and_d)(point.as_slice().unwrap());
         let derivatives = Array1::from_vec(derivatives);
 
         let (direction, step_dir_partial_state) = match step_dir_state {
