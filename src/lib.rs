@@ -57,9 +57,9 @@
 
 use std::ops::{Add, Mul, RangeInclusive, Sub};
 
-use optimal_linesearch::backtracking_line_search::BacktrackingLineSearchBuilder;
+use optimal_linesearch::backtracking_line_search::{BacktrackingLineSearchBuilder, StepDirection};
 use optimal_pbil::{types::*, Pbil, PbilStoppingCriteria};
-use rand::prelude::*;
+use rand::{distributions::Uniform, prelude::*};
 
 /// An optimizer for real-derivative problems.
 ///
@@ -143,17 +143,42 @@ pub struct RealDerivativeWith<I, F, FD, R> {
 
 impl<I, F, FD, R> RealDerivativeWith<I, F, FD, R> {
     /// Return a point that attempts to minimize the given objective function.
-    pub fn argmin(self) -> Vec<f64>
+    pub fn argmin(mut self) -> Vec<f64>
     where
         I: IntoIterator<Item = RangeInclusive<f64>>,
         F: Fn(&[f64]) -> f64 + Clone + 'static,
         FD: Fn(&[f64]) -> Vec<f64> + 'static,
         R: Rng,
     {
+        let initial_point = self
+            .problem
+            .initial_bounds
+            .into_iter()
+            .map(|range| {
+                let (start, end) = range.into_inner();
+                Uniform::new_inclusive(start, end).sample(&mut self.rng)
+            })
+            .collect::<Vec<_>>();
+
+        // Memory and time for BFGS scales quadratically
+        // with length of points,
+        // so it is only appropriate for small problems.
+        // Note,
+        // this cutoff is conservative
+        // and could use more testing.
+        let direction = if initial_point.len() <= 20 {
+            StepDirection::Bfgs {
+                initializer: Default::default(),
+            }
+        } else {
+            StepDirection::Steepest
+        };
+
         BacktrackingLineSearchBuilder::default()
+            .direction(direction)
             .build()
             .for_(self.problem.obj_func, self.problem.obj_func_d)
-            .with_random_point_using(self.problem.initial_bounds, self.rng)
+            .with_point(initial_point)
             .argmin()
     }
 }
