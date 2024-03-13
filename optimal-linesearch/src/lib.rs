@@ -116,3 +116,97 @@ mod types {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::ops::RangeInclusive;
+
+    use rand::{rngs::SmallRng, SeedableRng};
+
+    use crate::backtracking_line_search::{
+        BacktrackingLineSearchBuilder, BfgsInitializer, StepDirection,
+    };
+
+    // Theoretically,
+    // these optimizers should always solve any convex problem.
+    // In practice,
+    // with the numerical-stability issues of floating-point values,
+    // an optimizer may either get stuck approaching an optimal value.
+    // We use static seeds to avoid getting a random point
+    // that results in such an issue.
+
+    #[test]
+    fn backtracking_line_search_should_solve_convex_problems_with_steepest_descent() {
+        test_can_solve_with(StepDirection::Steepest);
+    }
+
+    #[test]
+    fn backtracking_line_search_should_solve_convex_problems_with_bfgs_id() {
+        test_can_solve_with(StepDirection::Bfgs {
+            initializer: BfgsInitializer::Identity,
+        });
+    }
+
+    #[test]
+    fn backtracking_line_search_should_solve_convex_problems_with_bfgs_gamma() {
+        test_can_solve_with(StepDirection::Bfgs {
+            initializer: BfgsInitializer::Gamma,
+        });
+    }
+
+    fn test_can_solve_with(direction: StepDirection) {
+        for seed in 0..10 {
+            assert!(run(seed, 100, direction.clone(), sphere, sphere_d) <= 0.00001);
+            assert!(run(seed, 10, direction.clone(), skewed_sphere, skewed_sphere_d) <= 0.00001);
+        }
+    }
+
+    fn run<F, FD>(
+        seed: u64,
+        len: usize,
+        direction: StepDirection,
+        obj_func: F,
+        obj_func_d: FD,
+    ) -> f64
+    where
+        F: Fn(&[f64]) -> f64 + Clone + 'static,
+        FD: Fn(&[f64]) -> Vec<f64> + 'static,
+    {
+        let point = BacktrackingLineSearchBuilder::default()
+            .direction(direction)
+            .for_(len, obj_func.clone(), obj_func_d)
+            .with_random_point_using(initial_bounds(len), SmallRng::seed_from_u64(seed))
+            .argmin();
+        (obj_func)(&point)
+    }
+
+    fn initial_bounds(len: usize) -> impl Iterator<Item = RangeInclusive<f64>> {
+        std::iter::repeat(0.0..=1.0).take(len)
+    }
+
+    fn sphere(point: &[f64]) -> f64 {
+        point.iter().map(|x| x.powi(2)).sum()
+    }
+    fn sphere_d(point: &[f64]) -> Vec<f64> {
+        point.iter().map(|x| 2.0 * x).collect()
+    }
+
+    // Note,
+    // this is only defined for non-negative numbers.
+    fn skewed_sphere(point: &[f64]) -> f64 {
+        let len = point.len() as f64;
+        point
+            .iter()
+            .enumerate()
+            .map(|(i, x)| x.powf(1.0 + ((i + 1) as f64) / len))
+            .sum()
+    }
+    fn skewed_sphere_d(point: &[f64]) -> Vec<f64> {
+        let len = point.len() as f64;
+        point
+            .iter()
+            .enumerate()
+            .map(|(i, x)| (1.0 + ((i + 1) as f64) / len) * x)
+            .collect()
+    }
+}
