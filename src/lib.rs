@@ -57,7 +57,7 @@
 
 use std::ops::{Add, Mul, RangeInclusive, Sub};
 
-use optimal_linesearch::backtracking_line_search::{BacktrackingLineSearchBuilder, StepDirection};
+use optimal_linesearch::backtracking_line_search::BacktrackingLineSearchBuilder;
 use optimal_pbil::{types::*, Pbil, PbilStoppingCriteria};
 use rand::{distributions::Uniform, prelude::*};
 
@@ -160,24 +160,12 @@ impl<I, F, FD, R> RealDerivativeWith<I, F, FD, R> {
             })
             .collect::<Vec<_>>();
 
-        // Memory and time for BFGS scales quadratically
-        // with length of points,
-        // so it is only appropriate for small problems.
-        // Note,
-        // this cutoff is conservative
-        // and could use more testing.
-        let direction = if initial_point.len() <= 20 {
-            StepDirection::Bfgs {
-                initializer: Default::default(),
-            }
-        } else {
-            StepDirection::Steepest
-        };
-
         BacktrackingLineSearchBuilder::default()
-            .direction(direction)
-            .build()
-            .for_(self.problem.obj_func, self.problem.obj_func_d)
+            .for_(
+                initial_point.len(),
+                self.problem.obj_func,
+                self.problem.obj_func_d,
+            )
             .with_point(initial_point)
             .argmin()
     }

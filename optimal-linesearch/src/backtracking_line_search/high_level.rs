@@ -47,7 +47,6 @@ pub struct BacktrackingLineSearch<A> {
     #[builder(default)]
     pub initial_step_size: StepSize<A>,
     /// See [`StepDirection`].
-    #[builder(default)]
     pub direction: StepDirection,
     /// See [`StepSizeUpdate`].
     #[builder(default)]
@@ -58,12 +57,11 @@ pub struct BacktrackingLineSearch<A> {
 }
 
 /// Options for step-direction.
-#[derive(Clone, Debug, PartialEq, PartialOrd, Default)]
+#[derive(Clone, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[non_exhaustive]
 pub enum StepDirection {
     /// Steepest descent.
-    #[default]
     Steepest,
     /// BFGS
     Bfgs {
@@ -145,35 +143,10 @@ impl<A> BacktrackingLineSearch<A> {
 }
 
 impl<A> BacktrackingLineSearchBuilder<A> {
-    /// Builds a new [`BacktrackingLineSearch`].
-    pub fn build(&mut self) -> BacktrackingLineSearch<A>
-    where
-        A: 'static + Copy + std::fmt::Debug + Float,
-        f64: AsPrimitive<A>,
-    {
-        let backtracking_rate = self.backtracking_rate.unwrap_or_default();
-        BacktrackingLineSearch {
-            c_1: self.c_1.unwrap_or_default(),
-            backtracking_rate,
-            initial_step_size: self
-                .initial_step_size
-                .unwrap_or_else(|| StepSize::new(A::one()).unwrap()),
-            direction: self.direction.clone().unwrap_or_default(),
-            step_size_update: self.step_size_update.clone().unwrap_or_else(|| {
-                StepSizeUpdate::IncrPrev(IncrRate::from_backtracking_rate(backtracking_rate))
-            }),
-            stopping_criteria: self.stopping_criteria.clone().unwrap_or_default(),
-        }
-    }
-
-    // `len` will be useful when more directions are available,
-    // so we can decide between BFGS and L-BFGS,
-    // for example.
-
     /// Prepare backtracking line-search for a specific problem.
     pub fn for_<F, FD>(
         &mut self,
-        _len: usize,
+        len: usize,
         obj_func: F,
         obj_func_d: FD,
     ) -> BacktrackingLineSearchFor<A, F, DynObjFuncAndD<A>>
@@ -183,14 +156,14 @@ impl<A> BacktrackingLineSearchBuilder<A> {
         F: Fn(&[A]) -> A + Clone + 'static,
         FD: Fn(&[A]) -> Vec<A> + 'static,
     {
-        self.build().for_(obj_func, obj_func_d)
+        self.build(len).for_(obj_func, obj_func_d)
     }
 
     /// Prepare backtracking line-search for a specific problem
     /// where value and derivatives can be efficiently calculated together.
     pub fn for_combined<F, FFD>(
         &mut self,
-        _len: usize,
+        len: usize,
         obj_func: F,
         obj_func_and_d: FFD,
     ) -> BacktrackingLineSearchFor<A, F, FFD>
@@ -200,7 +173,43 @@ impl<A> BacktrackingLineSearchBuilder<A> {
         F: Fn(&[A]) -> A,
         FFD: Fn(&[A]) -> (A, Vec<A>),
     {
-        self.build().for_combined(obj_func, obj_func_and_d)
+        self.build(len).for_combined(obj_func, obj_func_and_d)
+    }
+
+    /// Builds a new [`BacktrackingLineSearch`].
+    fn build(&mut self, len: usize) -> BacktrackingLineSearch<A>
+    where
+        A: 'static + Copy + std::fmt::Debug + Float,
+        f64: AsPrimitive<A>,
+    {
+        let backtracking_rate = self.backtracking_rate.unwrap_or_default();
+
+        // Memory and time for BFGS scales quadratically
+        // with length of points,
+        // so it is only appropriate for small problems.
+        // Note,
+        // this cutoff is conservative
+        // and could use more testing.
+        let direction = if len <= 20 {
+            StepDirection::Bfgs {
+                initializer: Default::default(),
+            }
+        } else {
+            StepDirection::Steepest
+        };
+
+        BacktrackingLineSearch {
+            c_1: self.c_1.unwrap_or_default(),
+            backtracking_rate,
+            initial_step_size: self
+                .initial_step_size
+                .unwrap_or_else(|| StepSize::new(A::one()).unwrap()),
+            direction,
+            step_size_update: self.step_size_update.clone().unwrap_or_else(|| {
+                StepSizeUpdate::IncrPrev(IncrRate::from_backtracking_rate(backtracking_rate))
+            }),
+            stopping_criteria: self.stopping_criteria.clone().unwrap_or_default(),
+        }
     }
 }
 
