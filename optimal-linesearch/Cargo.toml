@@ -18,7 +18,7 @@ name = "benchmark"
 harness = false
 
 [features]
-serde = ["dep:serde"]
+serde = ["dep:serde", "ndarray/serde"]
 
 [dependencies]
 derive_builder = "0.13.0"

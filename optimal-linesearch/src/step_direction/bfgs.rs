@@ -13,87 +13,18 @@
 //! # Examples
 //!
 //! ```
-//! use ndarray::{Array1, Array2, ArrayView1};
-//!
-//! use optimal_linesearch::{
-//!     step_direction::bfgs::{
-//!         approx_inv_snd_derivatives, bfgs_direction, initial_approx_inv_snd_derivatives_gamma,
-//!         initial_approx_inv_snd_derivatives_identity,
-//!     },
-//!     StepSize,
-//! };
-//!
-//! enum BfgsIteration<A> {
-//!     First,
-//!     Second {
-//!         prev_derivatives: Array1<A>,
-//!         prev_step: Array1<A>,
-//!     },
-//!     Other {
-//!         prev_derivatives: Array1<A>,
-//!         prev_approx_inv_snd_derivatives: Array2<A>,
-//!         prev_step: Array1<A>,
-//!     },
-//! }
+//! use ndarray::{Array1, ArrayView1};
+//! use optimal_linesearch::{step_direction::bfgs::BfgsIterationGamma, StepSize};
 //!
 //! fn main() {
 //!     let step_size = StepSize::new(0.5).unwrap();
-//!
 //!     let mut point = Array1::from_vec(vec![10.0, 10.0]);
-//!     let mut bfgs_state = BfgsIteration::First;
+//!     let mut bfgs_state = BfgsIterationGamma::default();
 //!     for _ in 0..10 {
-//!         let derivatives = obj_func_d(point.view());
-//!         bfgs_state = match bfgs_state {
-//!             BfgsIteration::First => {
-//!                 let approx_inv_snd_derivatives =
-//!                     initial_approx_inv_snd_derivatives_identity(point.len());
-//!                 let step = step_size.into_inner()
-//!                     * bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
-//!                 point = point + step.view();
-//!                 BfgsIteration::Second {
-//!                     prev_derivatives: derivatives,
-//!                     prev_step: step,
-//!                 }
-//!             }
-//!             BfgsIteration::Second {
-//!                 prev_derivatives,
-//!                 prev_step,
-//!             } => {
-//!                 let approx_inv_snd_derivatives = initial_approx_inv_snd_derivatives_gamma(
-//!                     prev_derivatives,
-//!                     prev_step,
-//!                     derivatives.view(),
-//!                 );
-//!                 let step = step_size.into_inner()
-//!                     * bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
-//!                 point = point + step.view();
-//!                 BfgsIteration::Other {
-//!                     prev_derivatives: derivatives,
-//!                     prev_approx_inv_snd_derivatives: approx_inv_snd_derivatives,
-//!                     prev_step: step,
-//!                 }
-//!             }
-//!             BfgsIteration::Other {
-//!                 prev_derivatives,
-//!                 prev_approx_inv_snd_derivatives,
-//!                 prev_step,
-//!             } => {
-//!                 let approx_inv_snd_derivatives = approx_inv_snd_derivatives(
-//!                     prev_approx_inv_snd_derivatives,
-//!                     prev_step,
-//!                     prev_derivatives,
-//!                     derivatives.view(),
-//!                 );
-//!                 let step = step_size.into_inner()
-//!                     * bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
-//!                 point = point + step.view();
-//!                 BfgsIteration::Other {
-//!                     prev_derivatives: derivatives,
-//!                     prev_approx_inv_snd_derivatives: approx_inv_snd_derivatives,
-//!                     prev_step: step,
-//!                 }
-//!             }
-//!         };
+//!         let (direction, before_iteration) = bfgs_state.direction(obj_func_d(point.view()));
+//!         let step = step_size.into_inner() * direction;
+//!         point = point + step.view();
+//!         bfgs_state = before_iteration.next(step);
 //!     }
 //!     println!("{:?}", point);
 //! }
@@ -110,6 +41,305 @@ use ndarray::{
     ScalarOperand,
 };
 use num_traits::{One, Zero};
+
+/// A BFGS-iteration.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BfgsIteration<A> {
+    /// Initialized using [`initial_approx_inv_snd_derivatives_identity`].
+    Identity(BfgsIterationIdentity<A>),
+    /// Initialized using [`initial_approx_inv_snd_derivatives_gamma`].
+    Gamma(BfgsIterationGamma<A>),
+}
+
+/// Values needed to calculate the next iteration of BFGS.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BfgsBeforeIteration<A> {
+    /// Initialized using [`initial_approx_inv_snd_derivatives_identity`].
+    Identity(BfgsBeforeIterationIdentity<A>),
+    /// Initialized using [`initial_approx_inv_snd_derivatives_gamma`].
+    Gamma(BfgsBeforeIterationGamma<A>),
+}
+
+impl<A> BfgsIteration<A> {
+    /// Return a step-direction
+    /// and values needed for the next iteration of BFGS.
+    pub fn direction(self, derivatives: Array1<A>) -> (Array1<A>, BfgsBeforeIteration<A>)
+    where
+        A: Neg<Output = A> + ScalarOperand + LinalgScalar,
+    {
+        match self {
+            Self::Identity(x) => {
+                let (direction, before_iteration) = x.direction(derivatives);
+                (direction, BfgsBeforeIteration::Identity(before_iteration))
+            }
+            Self::Gamma(x) => {
+                let (direction, before_iteration) = x.direction(derivatives);
+                (direction, BfgsBeforeIteration::Gamma(before_iteration))
+            }
+        }
+    }
+}
+
+impl<A> BfgsBeforeIteration<A> {
+    /// Return the next iteration of BFGS.
+    pub fn next(self, step: Array1<A>) -> BfgsIteration<A> {
+        match self {
+            BfgsBeforeIteration::Identity(x) => BfgsIteration::Identity(x.next(step)),
+            BfgsBeforeIteration::Gamma(x) => BfgsIteration::Gamma(x.next(step)),
+        }
+    }
+
+    /// Return derivatives from this iteration.
+    pub fn derivatives(&self) -> ArrayView1<A> {
+        match self {
+            BfgsBeforeIteration::Identity(x) => x.derivatives(),
+            BfgsBeforeIteration::Gamma(x) => x.derivatives(),
+        }
+    }
+}
+
+/// A BFGS-iteration
+/// initialized using [`initial_approx_inv_snd_derivatives_identity`].
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BfgsIterationIdentity<A> {
+    /// The first iteration.
+    #[default]
+    First,
+    /// All subsequent iterations.
+    Other {
+        /// Derivatives from the previous iteration.
+        prev_derivatives: Array1<A>,
+        /// Approximate inverse second-derivatives
+        /// from the previous iteration.
+        prev_approx_inv_snd_derivatives: Array2<A>,
+        /// The difference between the point for this iteration
+        /// and the point from the previous iteration.
+        prev_step: Array1<A>,
+    },
+}
+
+/// Values needed to calculate the next iteration of BFGS,
+/// initialized using [`initial_approx_inv_snd_derivatives_identity`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BfgsBeforeIterationIdentity<A> {
+    /// Values for all subsequent iterations.
+    Other {
+        /// Derivatives from this iteration.
+        derivatives: Array1<A>,
+        /// Approximate inverse second-derivatives
+        /// from this iteration.
+        approx_inv_snd_derivatives: Array2<A>,
+    },
+}
+
+impl<A> BfgsIterationIdentity<A> {
+    /// Return a step-direction
+    /// and values needed for the next iteration of BFGS.
+    pub fn direction(self, derivatives: Array1<A>) -> (Array1<A>, BfgsBeforeIterationIdentity<A>)
+    where
+        A: Neg<Output = A> + ScalarOperand + LinalgScalar,
+    {
+        match self {
+            Self::First => {
+                let approx_inv_snd_derivatives =
+                    initial_approx_inv_snd_derivatives_identity(derivatives.len());
+                let direction =
+                    bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
+                (
+                    direction,
+                    BfgsBeforeIterationIdentity::Other {
+                        derivatives,
+                        approx_inv_snd_derivatives,
+                    },
+                )
+            }
+            Self::Other {
+                prev_derivatives,
+                prev_approx_inv_snd_derivatives,
+                prev_step,
+            } => {
+                let approx_inv_snd_derivatives = approx_inv_snd_derivatives(
+                    prev_approx_inv_snd_derivatives,
+                    prev_step,
+                    prev_derivatives,
+                    derivatives.view(),
+                );
+                let direction =
+                    bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
+                (
+                    direction,
+                    BfgsBeforeIterationIdentity::Other {
+                        derivatives,
+                        approx_inv_snd_derivatives,
+                    },
+                )
+            }
+        }
+    }
+}
+
+impl<A> BfgsBeforeIterationIdentity<A> {
+    /// Return the next iteration of BFGS.
+    pub fn next(self, step: Array1<A>) -> BfgsIterationIdentity<A> {
+        match self {
+            Self::Other {
+                derivatives,
+                approx_inv_snd_derivatives,
+            } => BfgsIterationIdentity::Other {
+                prev_derivatives: derivatives,
+                prev_approx_inv_snd_derivatives: approx_inv_snd_derivatives,
+                prev_step: step,
+            },
+        }
+    }
+
+    /// Return derivatives from this iteration.
+    pub fn derivatives(&self) -> ArrayView1<A> {
+        match self {
+            Self::Other { derivatives, .. } => derivatives.view(),
+        }
+    }
+}
+
+/// A BFGS-iteration
+/// initialized using [`initial_approx_inv_snd_derivatives_gamma`].
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BfgsIterationGamma<A> {
+    /// The first iteration.
+    #[default]
+    First,
+    /// The second iteration.
+    Second {
+        /// Derivatives from the previous iteration.
+        prev_derivatives: Array1<A>,
+        /// The difference between the point for this iteration
+        /// and the point from the previous iteration.
+        prev_step: Array1<A>,
+    },
+    /// All subsequent iterations.
+    Other {
+        /// Derivatives from the previous iteration.
+        prev_derivatives: Array1<A>,
+        /// Approximate inverse second-derivatives
+        /// from the previous iteration.
+        prev_approx_inv_snd_derivatives: Array2<A>,
+        /// The difference between the point for this iteration
+        /// and the point from the previous iteration.
+        prev_step: Array1<A>,
+    },
+}
+
+/// Values needed to calculate the next iteration of BFGS,
+/// initialized using [`initial_approx_inv_snd_derivatives_gamma`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+pub enum BfgsBeforeIterationGamma<A> {
+    /// Values for the second iteration.
+    Second {
+        /// Derivatives from this iteration.
+        derivatives: Array1<A>,
+    },
+    /// Values for all subsequent iterations.
+    Other {
+        /// Derivatives from this iteration.
+        derivatives: Array1<A>,
+        /// Approximate inverse second-derivatives
+        /// from this iteration.
+        approx_inv_snd_derivatives: Array2<A>,
+    },
+}
+
+impl<A> BfgsIterationGamma<A> {
+    /// Return a step-direction
+    /// and values needed for the next iteration of BFGS.
+    pub fn direction(self, derivatives: Array1<A>) -> (Array1<A>, BfgsBeforeIterationGamma<A>)
+    where
+        A: Neg<Output = A> + ScalarOperand + LinalgScalar,
+    {
+        match self {
+            Self::First => {
+                let approx_inv_snd_derivatives =
+                    initial_approx_inv_snd_derivatives_identity(derivatives.len());
+                let direction =
+                    bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
+                (direction, BfgsBeforeIterationGamma::Second { derivatives })
+            }
+            Self::Second {
+                prev_derivatives,
+                prev_step,
+            } => {
+                let approx_inv_snd_derivatives = initial_approx_inv_snd_derivatives_gamma(
+                    prev_derivatives,
+                    prev_step,
+                    derivatives.view(),
+                );
+                let direction =
+                    bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
+                (
+                    direction,
+                    BfgsBeforeIterationGamma::Other {
+                        derivatives,
+                        approx_inv_snd_derivatives,
+                    },
+                )
+            }
+            Self::Other {
+                prev_derivatives,
+                prev_approx_inv_snd_derivatives,
+                prev_step,
+            } => {
+                let approx_inv_snd_derivatives = approx_inv_snd_derivatives(
+                    prev_approx_inv_snd_derivatives,
+                    prev_step,
+                    prev_derivatives,
+                    derivatives.view(),
+                );
+                let direction =
+                    bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
+                (
+                    direction,
+                    BfgsBeforeIterationGamma::Other {
+                        derivatives,
+                        approx_inv_snd_derivatives,
+                    },
+                )
+            }
+        }
+    }
+}
+
+impl<A> BfgsBeforeIterationGamma<A> {
+    /// Return the next iteration of BFGS.
+    pub fn next(self, step: Array1<A>) -> BfgsIterationGamma<A> {
+        match self {
+            Self::Second { derivatives } => BfgsIterationGamma::Second {
+                prev_derivatives: derivatives,
+                prev_step: step,
+            },
+            Self::Other {
+                derivatives,
+                approx_inv_snd_derivatives,
+            } => BfgsIterationGamma::Other {
+                prev_derivatives: derivatives,
+                prev_approx_inv_snd_derivatives: approx_inv_snd_derivatives,
+                prev_step: step,
+            },
+        }
+    }
+
+    /// Return derivatives from this iteration.
+    pub fn derivatives(&self) -> ArrayView1<A> {
+        match self {
+            Self::Second { derivatives } => derivatives.view(),
+            Self::Other { derivatives, .. } => derivatives.view(),
+        }
+    }
+}
 
 /// Return a placeholder for approximate inverse second-derivatives,
 /// useful for starting BFGS.
@@ -320,78 +550,17 @@ mod tests {
         let mut points = Vec::new();
 
         let mut point = initial_point;
-        let mut bfgs_state = BfgsIteration::First;
+        let mut bfgs_state = BfgsIterationGamma::default();
         for _ in 0..iterations {
-            let derivatives = obj_func_d(point.view());
-            bfgs_state = match bfgs_state {
-                BfgsIteration::First => {
-                    let approx_inv_snd_derivatives =
-                        initial_approx_inv_snd_derivatives_identity(point.len());
-                    let step = step_size.into_inner()
-                        * bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
-                    point = point + step.view();
-                    BfgsIteration::Second {
-                        prev_derivatives: derivatives,
-                        prev_step: step,
-                    }
-                }
-                BfgsIteration::Second {
-                    prev_derivatives,
-                    prev_step,
-                } => {
-                    let approx_inv_snd_derivatives = initial_approx_inv_snd_derivatives_gamma(
-                        prev_derivatives,
-                        prev_step,
-                        derivatives.view(),
-                    );
-                    let step = step_size.into_inner()
-                        * bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
-                    point = point + step.view();
-                    BfgsIteration::Other {
-                        prev_derivatives: derivatives,
-                        prev_approx_inv_snd_derivatives: approx_inv_snd_derivatives,
-                        prev_step: step,
-                    }
-                }
-                BfgsIteration::Other {
-                    prev_derivatives,
-                    prev_approx_inv_snd_derivatives,
-                    prev_step,
-                } => {
-                    let approx_inv_snd_derivatives = approx_inv_snd_derivatives(
-                        prev_approx_inv_snd_derivatives,
-                        prev_step,
-                        prev_derivatives,
-                        derivatives.view(),
-                    );
-                    let step = step_size.into_inner()
-                        * bfgs_direction(approx_inv_snd_derivatives.view(), derivatives.view());
-                    point = point + step.view();
-                    BfgsIteration::Other {
-                        prev_derivatives: derivatives,
-                        prev_approx_inv_snd_derivatives: approx_inv_snd_derivatives,
-                        prev_step: step,
-                    }
-                }
-            };
+            let (direction, before_iteration) = bfgs_state.direction(obj_func_d(point.view()));
+            let step = step_size.into_inner() * direction;
+            point = point + step.view();
+            bfgs_state = before_iteration.next(step);
 
             points.push(point.clone());
         }
 
         points
-    }
-
-    enum BfgsIteration<A> {
-        First,
-        Second {
-            prev_derivatives: Array1<A>,
-            prev_step: Array1<A>,
-        },
-        Other {
-            prev_derivatives: Array1<A>,
-            prev_approx_inv_snd_derivatives: Array2<A>,
-            prev_step: Array1<A>,
-        },
     }
 
     fn flat_d(point: ArrayView1<f64>) -> Array1<f64> {
