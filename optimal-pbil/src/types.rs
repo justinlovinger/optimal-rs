@@ -1,7 +1,6 @@
 //! Types for PBIL.
 
 use core::convert::TryFrom;
-use std::f64::EPSILON;
 
 use derive_more::{Display, Into};
 use derive_num_bounded::{
@@ -55,7 +54,7 @@ impl Default for AdjustRate {
 
 impl LowerBounded for AdjustRate {
     fn min_value() -> Self {
-        Self(EPSILON)
+        Self(f64::EPSILON)
     }
 }
 
@@ -159,7 +158,7 @@ impl Default for MutationAdjustRate {
 
 impl LowerBounded for MutationAdjustRate {
     fn min_value() -> Self {
-        Self(EPSILON)
+        Self(f64::EPSILON)
     }
 }
 
@@ -290,8 +289,8 @@ impl ProbabilityThreshold {
 impl LowerBounded for ProbabilityThreshold {
     fn min_value() -> Self {
         Self {
-            ub: Probability(0.5 + EPSILON),
-            lb: Probability(0.5 - EPSILON),
+            ub: Probability(0.5 + f64::EPSILON),
+            lb: Probability(0.5 - f64::EPSILON),
         }
     }
 }
@@ -299,8 +298,8 @@ impl LowerBounded for ProbabilityThreshold {
 impl UpperBounded for ProbabilityThreshold {
     fn max_value() -> Self {
         Self {
-            ub: Probability(1. - EPSILON),
-            lb: Probability(EPSILON),
+            ub: Probability(1. - f64::EPSILON),
+            lb: Probability(f64::EPSILON),
         }
     }
 }
@@ -323,7 +322,7 @@ impl PartialEq for ProbabilityThreshold {
 impl Eq for ProbabilityThreshold {}
 impl PartialOrd for ProbabilityThreshold {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        self.ub.partial_cmp(&other.ub)
+        Some(self.cmp(other))
     }
 }
 impl Ord for ProbabilityThreshold {
