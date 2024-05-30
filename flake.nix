@@ -35,6 +35,8 @@
       devShell = with pkgs;
         mkShell {
           nativeBuildInputs = [
+            # We should add `cargo-export` for benchmarking,
+            # once it is available in Nixpkgs.
             cargo-edit
             cargo-readme
             toolchain

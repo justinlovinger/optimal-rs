@@ -1,6 +1,5 @@
-use std::{hint::black_box, time::Duration};
+use std::hint::black_box;
 
-use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
 use optimal_linesearch::{
     backtracking_line_search::{
         BacktrackingLineSearchBuilder, BacktrackingLineSearchStoppingCriteria, BfgsInitializer,
@@ -10,76 +9,60 @@ use optimal_linesearch::{
     step_direction::steepest_descent,
     StepSize,
 };
+use tango_bench::{benchmark_fn, tango_benchmarks, tango_main, IntoBenchmarks};
 
-pub fn bench_line_search(c: &mut Criterion) {
-    let mut group = c.benchmark_group("slow");
-    group
-        .sample_size(50)
-        .measurement_time(Duration::from_secs(60))
-        .warm_up_time(Duration::from_secs(10))
-        .noise_threshold(0.02)
-        .significance_level(0.01);
-
+pub fn linesearch_benchmarks() -> impl IntoBenchmarks {
     let len = 100000;
-    let initial_point = (1..(len + 1)).map(|x| x as f64).collect::<Vec<_>>();
 
-    group.bench_function(
-        &format!("fixed_step_size steepest skewed_sphere {len}"),
-        |b| {
-            b.iter_batched(
-                || initial_point.clone(),
-                |initial_point| {
-                    run_fixed_step_size(black_box(skewed_sphere_d), black_box(initial_point))
-                },
-                BatchSize::SmallInput,
-            )
-        },
-    );
+    // BFGS requires quadratic time and memory,
+    // relative to the length of points.
+    let bfgs_len = 400;
 
-    group.bench_function(
-        &format!("backtracking_line_search steepest skewed_sphere {len}"),
-        |b| {
-            b.iter_batched(
-                || initial_point.clone(),
-                |initial_point| {
+    [
+        benchmark_fn(
+            &format!("fixed_step_size steepest skewed_sphere {len}"),
+            move |b| {
+                b.iter(move || {
+                    run_fixed_step_size(
+                        black_box(skewed_sphere_d),
+                        black_box(skewed_sphere_initial_point(len)),
+                    )
+                })
+            },
+        ),
+        benchmark_fn(
+            &format!("backtracking_line_search steepest skewed_sphere {len}"),
+            move |b| {
+                b.iter(move || {
                     run_backtracking_line_search(
                         StepDirection::Steepest,
                         black_box(skewed_sphere),
                         black_box(skewed_sphere_d),
-                        black_box(initial_point),
+                        black_box(skewed_sphere_initial_point(len)),
                     )
-                },
-                BatchSize::SmallInput,
-            )
-        },
-    );
-
-    // BFGS requires quadratic time and memory,
-    // relative to the length of points.
-    let len = 400;
-    let initial_point = (1..(len + 1)).map(|x| x as f64).collect::<Vec<_>>();
-
-    group.bench_function(
-        &format!("backtracking_line_search bfgs skewed_sphere {len}"),
-        |b| {
-            b.iter_batched(
-                || initial_point.clone(),
-                |initial_point| {
+                })
+            },
+        ),
+        benchmark_fn(
+            &format!("backtracking_line_search bfgs skewed_sphere {len}"),
+            move |b| {
+                b.iter(move || {
                     run_backtracking_line_search(
                         StepDirection::Bfgs {
                             initializer: BfgsInitializer::Gamma,
                         },
                         black_box(skewed_sphere),
                         black_box(skewed_sphere_d),
-                        black_box(initial_point),
+                        black_box(skewed_sphere_initial_point(bfgs_len)),
                     )
-                },
-                BatchSize::SmallInput,
-            )
-        },
-    );
+                })
+            },
+        ),
+    ]
+}
 
-    group.finish();
+fn skewed_sphere_initial_point(len: usize) -> Vec<f64> {
+    (1..(len + 1)).map(|x| x as f64).collect()
 }
 
 pub fn run_fixed_step_size<FD>(obj_func_d: FD, initial_point: Vec<f64>) -> Vec<f64>
@@ -128,5 +111,5 @@ fn skewed_sphere_d(point: &[f64]) -> Vec<f64> {
         .collect()
 }
 
-criterion_group!(benches, bench_line_search);
-criterion_main!(benches);
+tango_benchmarks!(linesearch_benchmarks());
+tango_main!();
