@@ -7,7 +7,7 @@ use tango_bench::{benchmark_fn, tango_benchmarks, tango_main, IntoBenchmarks};
 pub fn pbil_benchmarks() -> impl IntoBenchmarks {
     let len = 20000;
 
-    [benchmark_fn(&format!("pbil count {len}"), move |b| {
+    [benchmark_fn(format!("pbil count {len}"), move |b| {
         b.iter(move || {
             run_pbil(
                 black_box(len),
