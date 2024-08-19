@@ -184,13 +184,15 @@ impl<A> BacktrackingLineSearchBuilder<A> {
         // Note,
         // this cutoff is conservative
         // and could use more testing.
-        let direction = if len <= 20 {
-            StepDirection::Bfgs {
-                initializer: Default::default(),
+        let direction = self.direction.clone().unwrap_or_else(|| {
+            if len <= 20 {
+                StepDirection::Bfgs {
+                    initializer: Default::default(),
+                }
+            } else {
+                StepDirection::Steepest
             }
-        } else {
-            StepDirection::Steepest
-        };
+        });
 
         BacktrackingLineSearch {
             c_1: self.c_1.unwrap_or_default(),
