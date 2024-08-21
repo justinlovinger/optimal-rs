@@ -44,7 +44,7 @@ pub fn linesearch_benchmarks() -> impl IntoBenchmarks {
             },
         ),
         benchmark_fn(
-            format!("backtracking_line_search bfgs skewed_sphere {len}"),
+            format!("backtracking_line_search bfgs skewed_sphere {bfgs_len}"),
             move |b| {
                 b.iter(move || {
                     run_backtracking_line_search(
