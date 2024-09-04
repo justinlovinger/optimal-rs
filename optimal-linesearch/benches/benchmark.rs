@@ -1,5 +1,8 @@
-use std::hint::black_box;
+use std::{hint::black_box, vec::Vec};
 
+use optimal_compute_core::{
+    arg, arg1, argvals, peano::One, run::Value, val, val1, Computation, Run,
+};
 use optimal_linesearch::{
     backtracking_line_search::{
         BacktrackingLineSearchBuilder, BacktrackingLineSearchStoppingCriteria, BfgsInitializer,
@@ -67,14 +70,24 @@ fn skewed_sphere_initial_point(len: usize) -> Vec<f64> {
 
 pub fn run_fixed_step_size<FD>(obj_func_d: FD, initial_point: Vec<f64>) -> Vec<f64>
 where
-    FD: Fn(&[f64]) -> Vec<f64>,
+    FD: Fn(&[f64]) -> Vec<f64> + 'static,
 {
-    let step_size = StepSize::new(0.5).unwrap();
-    let mut point = initial_point;
-    for _ in 0..2000 {
-        point = descend(step_size, steepest_descent(obj_func_d(&point)), point).collect();
-    }
-    point
+    val!(0)
+        .zip(val1!(initial_point))
+        .loop_while(
+            ("i", "point"),
+            (arg!("i", usize) + val!(1)).zip(descend(
+                val!(StepSize::new(0.5).unwrap()),
+                steepest_descent(
+                    arg1!("point", f64)
+                        .black_box::<_, One, f64>(|point: Vec<f64>| Value(obj_func_d(&point))),
+                ),
+                arg1!("point", f64),
+            )),
+            arg!("i", usize).lt(val!(2000)),
+        )
+        .snd()
+        .run(argvals![])
 }
 
 pub fn run_backtracking_line_search<F, FD>(

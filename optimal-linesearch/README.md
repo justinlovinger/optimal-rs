@@ -13,20 +13,25 @@ Fixed step-size optimization can also be performed
 using this package:
 
 ```rust
+use optimal_compute_core::*;
 use optimal_linesearch::{descend, step_direction::steepest_descent, StepSize};
 
-fn main() {
-    let step_size = StepSize::new(0.5).unwrap();
-    let mut point = vec![10.0, 10.0];
-    for _ in 0..10 {
-        point = descend(step_size, steepest_descent(obj_func_d(&point)), point).collect();
-    }
-    println!("{:?}", point);
-}
-
-fn obj_func_d(point: &[f64]) -> Vec<f64> {
-    point.iter().copied().map(|x| 2.0 * x).collect()
-}
+println!(
+    "{:?}",
+    val!(0)
+        .zip(val1!(vec![10.0, 10.0]))
+        .loop_while(
+            ("i", "point"),
+            (arg!("i", usize) + val!(1)).zip(descend(
+                val!(StepSize::new(0.5).unwrap()),
+                steepest_descent(val!(2.0) * arg1!("point", f64)),
+                arg1!("point", f64),
+            )),
+            arg!("i", usize).lt(val!(10)),
+        )
+        .snd()
+        .run(argvals![])
+)
 ```
 
 See [`backtracking_line_search`] for more sophisticated and effective optimizers.

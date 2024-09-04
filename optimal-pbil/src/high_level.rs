@@ -1,5 +1,11 @@
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
+use optimal_compute_core::{
+    arg, arg1, argvals,
+    peano::Zero,
+    run::{ArgVal, Value},
+    val, val1, Computation, Run,
+};
 use rand::prelude::*;
 
 use crate::{low_level::*, types::*};
@@ -93,7 +99,7 @@ impl<F> PbilFor<F> {
     pub fn argmin<V>(self) -> Vec<bool>
     where
         F: Fn(&[bool]) -> V,
-        V: PartialOrd,
+        V: 'static + Clone + ArgVal + PartialOrd,
     {
         self.with(SmallRng::from_entropy()).argmin()
     }
@@ -112,50 +118,88 @@ pub struct PbilWith<F, R> {
 
 impl<F, R> PbilWith<F, R> {
     /// Return a point that attempts to minimize the given objective function.
-    pub fn argmin<V>(mut self) -> Vec<bool>
+    pub fn argmin<V>(self) -> Vec<bool>
     where
         F: Fn(&[bool]) -> V,
-        V: PartialOrd,
-        R: Rng,
+        V: 'static + Clone + ArgVal + PartialOrd,
+        R: 'static + Clone + ArgVal + Rng,
     {
-        let mut probabilities = std::iter::repeat(Probability::default())
+        let probabilities = std::iter::repeat(Probability::default())
             .take(self.problem.len)
             .collect::<Vec<_>>();
         match self.problem.agnostic.stopping_criteria {
-            PbilStoppingCriteria::Iteration(i) => {
-                for _ in 0..i {
-                    probabilities = self.step(probabilities);
-                }
-            }
-            PbilStoppingCriteria::Threshold(threshold) => {
-                while !converged(threshold, probabilities.iter().copied()) {
-                    probabilities = self.step(probabilities);
-                }
-            }
+            PbilStoppingCriteria::Iteration(i) => PointFrom::new(
+                val!(0)
+                    .zip(val!(self.rng).zip(val1!(probabilities)))
+                    .loop_while(
+                        ("i", ("rng", "probabilities")),
+                        (arg!("i", usize) + val!(1)).zip(
+                            arg1!("probabilities", Probability)
+                                .zip(BestSample::new(
+                                    val!(self.problem.agnostic.num_samples),
+                                    arg1!("sample").black_box::<_, Zero, V>(|sample: Vec<bool>| {
+                                        Value((self.problem.obj_func)(&sample))
+                                    }),
+                                    arg1!("probabilities", Probability),
+                                    arg!("rng", R),
+                                ))
+                                .then(
+                                    ("probabilities", ("rng", "sample")),
+                                    Mutate::new(
+                                        val!(self.problem.agnostic.mutation_chance),
+                                        val!(self.problem.agnostic.mutation_adjust_rate),
+                                        Adjust::new(
+                                            val!(self.problem.agnostic.adjust_rate),
+                                            arg1!("probabilities"),
+                                            arg1!("sample"),
+                                        ),
+                                        arg!("rng"),
+                                    ),
+                                ),
+                        ),
+                        arg!("i", usize).lt(val!(i)),
+                    )
+                    .then(
+                        ("i", ("rng", "probabilities")),
+                        arg1!("probabilities", Probability),
+                    ),
+            )
+            .run(argvals![]),
+            PbilStoppingCriteria::Threshold(threshold) => PointFrom::new(
+                val!(self.rng)
+                    .zip(val1!(probabilities))
+                    .loop_while(
+                        ("rng", "probabilities"),
+                        arg1!("probabilities", Probability)
+                            .zip(BestSample::new(
+                                val!(self.problem.agnostic.num_samples),
+                                arg1!("sample").black_box::<_, Zero, V>(|sample: Vec<bool>| {
+                                    Value((self.problem.obj_func)(&sample))
+                                }),
+                                arg1!("probabilities", Probability),
+                                arg!("rng", R),
+                            ))
+                            .then(
+                                ("probabilities", ("rng", "sample")),
+                                Mutate::new(
+                                    val!(self.problem.agnostic.mutation_chance),
+                                    val!(self.problem.agnostic.mutation_adjust_rate),
+                                    Adjust::new(
+                                        val!(self.problem.agnostic.adjust_rate),
+                                        arg1!("probabilities"),
+                                        arg1!("sample"),
+                                    ),
+                                    arg!("rng", R),
+                                ),
+                            ),
+                        Converged::new(val!(threshold), arg1!("probabilities", Probability)).not(),
+                    )
+                    .then(
+                        ("rng", "probabilities"),
+                        arg1!("probabilities", Probability),
+                    ),
+            )
+            .run(argvals![]),
         }
-        point_from(probabilities).collect()
-    }
-
-    fn step<V>(&mut self, probabilities: Vec<Probability>) -> Vec<Probability>
-    where
-        F: Fn(&[bool]) -> V,
-        V: PartialOrd,
-        R: Rng,
-    {
-        mutate_probabilities(
-            self.problem.agnostic.mutation_chance,
-            self.problem.agnostic.mutation_adjust_rate,
-            adjust_probabilities(
-                self.problem.agnostic.adjust_rate,
-                Sampleable::new(&probabilities).best_sample(
-                    self.problem.agnostic.num_samples,
-                    &self.problem.obj_func,
-                    &mut self.rng,
-                ),
-                probabilities,
-            ),
-            &mut self.rng,
-        )
-        .collect()
     }
 }

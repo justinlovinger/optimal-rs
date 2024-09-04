@@ -1,6 +1,7 @@
 //! Types for PBIL.
 
 use core::convert::TryFrom;
+use std::ops::Mul;
 
 use derive_more::{Display, Into};
 use derive_num_bounded::{
@@ -76,6 +77,14 @@ impl Ord for AdjustRate {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
         // `f64` has total ordering for the the range of values allowed by this type.
         unsafe { self.partial_cmp(other).unwrap_unchecked() }
+    }
+}
+
+impl Mul<f64> for AdjustRate {
+    type Output = f64;
+
+    fn mul(self, rhs: f64) -> Self::Output {
+        self.0 * rhs
     }
 }
 

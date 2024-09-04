@@ -1,0 +1,26 @@
+[package]
+name = "optimal-compute-core"
+version = "0.0.0"
+edition = "2021"
+authors = ["Justin Lovinger"]
+description = "Core types for abstract mathematical computation"
+repository = "https://github.com/justinlovinger/optimal-rs/tree/master/optimal-compute-core"
+readme = "README.md"
+keywords = ["math", "linear-algebra", "gpu"]
+categories = ["mathematics"]
+license = "MIT"
+
+[badges]
+github = { repository = "justinlovinger/optimal-rs", workflow = "build" }
+
+[dependencies]
+downcast-rs = "1.2.1"
+ndarray = "0.15.6"
+num-traits = "0.2.16"
+paste = "1.0.14"
+rand = "0.8.5"
+thiserror = "1.0.47"
+
+[dev-dependencies]
+proptest = "1.2.0"
+test-strategy = "0.3.1"

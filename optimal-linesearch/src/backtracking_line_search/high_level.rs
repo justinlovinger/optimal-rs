@@ -2,8 +2,16 @@ use std::{iter::Sum, ops::RangeInclusive};
 
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
-use ndarray::{Array1, LinalgScalar, ScalarOperand};
+use ndarray::{LinalgScalar, ScalarOperand};
 use num_traits::{AsPrimitive, Float, Signed};
+use optimal_compute_core::{
+    arg, arg1, arg2, argvals,
+    peano::{One, Zero},
+    run::Value,
+    val, val1,
+    zip::{Zip3, Zip4, Zip5, Zip6, Zip7},
+    Computation, Run,
+};
 use rand::{
     distributions::{uniform::SampleUniform, Uniform},
     prelude::*,
@@ -13,14 +21,17 @@ use crate::{
     initial_step_size::IncrRate,
     is_near_minima,
     step_direction::{
-        bfgs::{BfgsIteration, BfgsIterationGamma, BfgsIterationIdentity},
+        bfgs::{
+            approx_inv_snd_derivatives, bfgs_direction, initial_approx_inv_snd_derivatives_gamma,
+            initial_approx_inv_snd_derivatives_identity,
+        },
         steepest_descent,
     },
     StepSize,
 };
 
 use super::{
-    low_level::BacktrackingSearcher,
+    low_level::search,
     types::{BacktrackingRate, SufficientDecreaseParameter},
 };
 
@@ -278,130 +289,744 @@ pub struct BacktrackingLineSearchWith<A, F, FFD> {
     pub initial_point: Vec<A>,
 }
 
+macro_rules! bfgs_loop {
+    ( $c_1:expr, $backtracking_rate:expr, $obj_func:expr, $incr_rate:expr $( , )? ) => {
+        Zip7::new(
+            arg1!("prev_derivatives", A),
+            arg1!("prev_step", A),
+            arg!("step_size", StepSize<A>),
+            arg1!("point", A),
+            arg!("value", A),
+            arg1!("derivatives", A),
+            approx_inv_snd_derivatives(
+                arg2!("prev_approx_inv_snd_derivatives", A),
+                arg1!("prev_derivatives", A),
+                arg1!("prev_step", A),
+                arg1!("derivatives", A),
+            ),
+        )
+        .then(
+            (
+                "prev_derivatives",
+                "prev_step",
+                "step_size",
+                "point",
+                "value",
+                "derivatives",
+                "approx_inv_snd_derivatives",
+            ),
+            Zip4::new(
+                arg1!("point", A),
+                arg1!("derivatives", A),
+                arg2!("approx_inv_snd_derivatives", A),
+                search(
+                    // Note,
+                    // these variables only work here
+                    // if the computations do not use any unexpected arguments.
+                    $c_1,
+                    $backtracking_rate,
+                    $obj_func,
+                    arg!("step_size", StepSize<A>),
+                    arg1!("point", A),
+                    arg!("value", A),
+                    arg1!("derivatives", A),
+                    bfgs_direction(
+                        arg2!("approx_inv_snd_derivatives", A),
+                        arg1!("derivatives", A),
+                    ),
+                ),
+            ),
+        )
+        .then(
+            (
+                "prev_point",
+                "prev_derivatives",
+                "prev_approx_inv_snd_derivatives",
+                ("step_size", "point"),
+            ),
+            Zip4::new(
+                arg1!("prev_point", A),
+                arg1!("prev_derivatives", A),
+                arg2!("prev_approx_inv_snd_derivatives", A),
+                (val!($incr_rate) * arg!("step_size", StepSize<A>)).zip(arg1!("point", A)),
+            ),
+        )
+    };
+}
+
 impl<A, F, FFD> BacktrackingLineSearchWith<A, F, FFD>
 where
-    A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
+    A: std::fmt::Debug + Sum + Signed + Float + ScalarOperand + LinalgScalar,
+    f64: AsPrimitive<A>,
     F: Fn(&[A]) -> A,
     FFD: Fn(&[A]) -> (A, Vec<A>),
 {
     /// Return a point that attempts to minimize the given objective function.
-    pub fn argmin(self) -> Vec<A>
-    where
-        A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
-        f64: AsPrimitive<A>,
-        F: Fn(&[A]) -> A,
-        FFD: Fn(&[A]) -> (A, Vec<A>),
-    {
-        // The compiler should remove these `clone()`s.
-        // We use them so we can call `self.step`.
-        let mut step_dir_state = match &self.problem.agnostic.direction {
-            StepDirection::Steepest => StepDirState::Steepest,
-            StepDirection::Bfgs { initializer } => match initializer {
-                BfgsInitializer::Identity => {
-                    StepDirState::Bfgs(BfgsIteration::Identity(BfgsIterationIdentity::default()))
-                }
-                BfgsInitializer::Gamma => {
-                    StepDirState::Bfgs(BfgsIteration::Gamma(BfgsIterationGamma::default()))
-                }
-            },
-        };
-        let mut step_size = self.problem.agnostic.initial_step_size;
-        let mut point = self.initial_point.clone();
-        match self.problem.agnostic.stopping_criteria {
-            BacktrackingLineSearchStoppingCriteria::Iteration(i) => {
-                for _ in 0..i {
-                    let (value, derivatives) = (self.problem.obj_func_and_d)(&point);
-                    (step_dir_state, step_size, point) =
-                        self.step(step_dir_state, step_size, point, value, derivatives);
-                }
-            }
-            BacktrackingLineSearchStoppingCriteria::NearMinima => loop {
+    pub fn argmin(self) -> Vec<A> {
+        // This code is a bit of a mess.
+        // It is written the way it is
+        // in part because we want it to eventually return a computation,
+        // not the result of running a computation.
+
+        let c_1 = val!(self.problem.agnostic.c_1);
+        let backtracking_rate = val!(self.problem.agnostic.backtracking_rate);
+        let initial_step_size = val!(self.problem.agnostic.initial_step_size);
+        let obj_func = arg1!("point", A)
+            .black_box::<_, Zero, A>(|point: Vec<A>| Value((self.problem.obj_func)(&point)));
+        let obj_func_and_d =
+            arg1!("point", A).black_box::<_, (Zero, One), (A, A)>(|point: Vec<A>| {
                 let (value, derivatives) = (self.problem.obj_func_and_d)(&point);
-                if is_near_minima(value, derivatives.iter().copied()) {
-                    break;
+                (Value(value), Value(derivatives))
+            });
+        match (
+            self.problem.agnostic.direction,
+            self.problem.agnostic.step_size_update,
+            self.problem.agnostic.stopping_criteria,
+        ) {
+            (
+                StepDirection::Steepest,
+                StepSizeUpdate::IncrPrev(incr_rate),
+                BacktrackingLineSearchStoppingCriteria::Iteration(i),
+            ) => val!(0)
+                .zip(initial_step_size.zip(val1!(self.initial_point)))
+                .loop_while(
+                    ("i", ("step_size", "point")),
+                    (arg!("i", usize) + val!(1)).zip(
+                        Zip3::new(
+                            arg!("step_size", StepSize<A>),
+                            arg1!("point", A),
+                            obj_func_and_d,
+                        )
+                        .then(
+                            ("step_size", "point", ("value", "derivatives")),
+                            search(
+                                c_1,
+                                backtracking_rate,
+                                obj_func,
+                                arg!("step_size", StepSize<A>),
+                                arg1!("point", A),
+                                arg!("value", A),
+                                arg1!("derivatives", A),
+                                steepest_descent(arg1!("derivatives", A)),
+                            ),
+                        )
+                        .then(
+                            ("step_size", "point"),
+                            (val!(incr_rate) * arg!("step_size", StepSize<A>))
+                                .zip(arg1!("point", A)),
+                        ),
+                    ),
+                    arg!("i", usize).lt(val!(i)),
+                )
+                .then(("i", ("step_size", "point")), arg1!("point", A))
+                .run(argvals![]),
+            (
+                StepDirection::Steepest,
+                StepSizeUpdate::IncrPrev(incr_rate),
+                BacktrackingLineSearchStoppingCriteria::NearMinima,
+            ) => initial_step_size
+                .zip(val1!(self.initial_point))
+                .then(
+                    ("step_size", "point"),
+                    Zip3::new(
+                        arg!("step_size", StepSize<A>),
+                        arg1!("point", A),
+                        obj_func_and_d,
+                    ),
+                )
+                .loop_while(
+                    ("step_size", "point", ("value", "derivatives")),
+                    search(
+                        c_1,
+                        backtracking_rate,
+                        obj_func,
+                        arg!("step_size", StepSize<A>),
+                        arg1!("point", A),
+                        arg!("value", A),
+                        arg1!("derivatives", A),
+                        steepest_descent(arg1!("derivatives", A)),
+                    )
+                    .then(
+                        ("step_size", "point"),
+                        Zip3::new(
+                            val!(incr_rate) * arg!("step_size", StepSize<A>),
+                            arg1!("point", A),
+                            obj_func_and_d,
+                        ),
+                    ),
+                    is_near_minima(arg!("value", A), arg1!("derivatives", A)).not(),
+                )
+                .then(
+                    ("step_size", "point", ("value", "derivatives")),
+                    arg1!("point", A),
+                )
+                .run(argvals![]),
+            (
+                StepDirection::Bfgs { initializer },
+                StepSizeUpdate::IncrPrev(incr_rate),
+                BacktrackingLineSearchStoppingCriteria::Iteration(i),
+            ) => {
+                if i == 0 {
+                    self.initial_point
+                } else {
+                    let len = self.initial_point.len();
+                    let first_iteration = val1!(self.initial_point)
+                        .then("point", arg1!("point", A).zip(obj_func_and_d))
+                        .then(
+                            ("point", ("value", "derivatives")),
+                            Zip3::new(
+                                arg1!("point", A),
+                                arg1!("derivatives", A),
+                                search(
+                                    c_1,
+                                    backtracking_rate,
+                                    obj_func,
+                                    initial_step_size,
+                                    arg1!("point", A),
+                                    arg!("value", A),
+                                    arg1!("derivatives", A),
+                                    bfgs_direction(
+                                        initial_approx_inv_snd_derivatives_identity(val!(len)),
+                                        arg1!("derivatives", A),
+                                    ),
+                                ),
+                            )
+                            .then(
+                                ("prev_point", "prev_derivatives", ("step_size", "point")),
+                                Zip3::new(
+                                    arg1!("prev_point", A),
+                                    arg1!("prev_derivatives", A),
+                                    (val!(incr_rate) * arg!("step_size", StepSize<A>))
+                                        .zip(arg1!("point", A)),
+                                ),
+                            ),
+                        );
+                    if i == 1 {
+                        first_iteration
+                            .then(
+                                ("prev_point", "prev_derivatives", ("step_size", "point")),
+                                arg1!("point", A),
+                            )
+                            .run(argvals![])
+                    } else {
+                        match initializer {
+                            BfgsInitializer::Identity => first_iteration
+                                .then(
+                                    ("prev_point", "prev_derivatives", ("step_size", "point")),
+                                    val!(1).zip(Zip4::new(
+                                        arg1!("prev_point", A),
+                                        arg1!("prev_derivatives", A),
+                                        initial_approx_inv_snd_derivatives_identity(val!(len)),
+                                        arg!("step_size", StepSize<A>).zip(arg1!("point", A)),
+                                    )),
+                                )
+                                .loop_while(
+                                    (
+                                        "i",
+                                        (
+                                            "prev_point",
+                                            "prev_derivatives",
+                                            "prev_approx_inv_snd_derivatives",
+                                            ("step_size", "point"),
+                                        ),
+                                    ),
+                                    (arg!("i", usize) + val!(1_usize)).zip(
+                                        Zip6::new(
+                                            arg1!("prev_derivatives", A),
+                                            arg2!("prev_approx_inv_snd_derivatives", A),
+                                            arg1!("point", A) - arg1!("prev_point", A),
+                                            arg!("step_size", StepSize<A>),
+                                            arg1!("point", A),
+                                            obj_func_and_d,
+                                        )
+                                        .then(
+                                            (
+                                                "prev_derivatives",
+                                                "prev_approx_inv_snd_derivatives",
+                                                "prev_step",
+                                                "step_size",
+                                                "point",
+                                                ("value", "derivatives"),
+                                            ),
+                                            bfgs_loop!(c_1, backtracking_rate, obj_func, incr_rate),
+                                        ),
+                                    ),
+                                    arg!("i", usize).lt(val!(i)),
+                                )
+                                .then(
+                                    (
+                                        "i",
+                                        (
+                                            "prev_point",
+                                            "prev_derivatives",
+                                            "prev_approx_inv_snd_derivatives",
+                                            ("step_size", "point"),
+                                        ),
+                                    ),
+                                    arg1!("point", A),
+                                )
+                                .run(argvals![]),
+                            BfgsInitializer::Gamma => {
+                                let second_iteration = first_iteration
+                                    .then(
+                                        ("prev_point", "prev_derivatives", ("step_size", "point")),
+                                        Zip5::new(
+                                            arg1!("prev_derivatives", A),
+                                            arg1!("point", A) - arg1!("prev_point", A),
+                                            arg!("step_size", StepSize<A>),
+                                            arg1!("point", A),
+                                            obj_func_and_d,
+                                        ),
+                                    )
+                                    .then(
+                                        (
+                                            "prev_derivatives",
+                                            "prev_step",
+                                            "step_size",
+                                            "point",
+                                            ("value", "derivatives"),
+                                        ),
+                                        Zip7::new(
+                                            arg1!("prev_derivatives", A),
+                                            arg1!("prev_step", A),
+                                            arg!("step_size", StepSize<A>),
+                                            arg1!("point", A),
+                                            arg!("value", A),
+                                            arg1!("derivatives", A),
+                                            initial_approx_inv_snd_derivatives_gamma(
+                                                arg1!("prev_derivatives", A),
+                                                arg1!("prev_step", A),
+                                                arg1!("derivatives", A),
+                                            ),
+                                        ),
+                                    )
+                                    .then(
+                                        (
+                                            "prev_derivatives",
+                                            "prev_step",
+                                            "step_size",
+                                            "point",
+                                            "value",
+                                            "derivatives",
+                                            "approx_inv_snd_derivatives",
+                                        ),
+                                        val!(2_usize).zip(
+                                            Zip4::new(
+                                                arg1!("point", A),
+                                                arg1!("derivatives", A),
+                                                arg2!("approx_inv_snd_derivatives", A),
+                                                search(
+                                                    c_1,
+                                                    backtracking_rate,
+                                                    obj_func,
+                                                    arg!("step_size", StepSize<A>),
+                                                    arg1!("point", A),
+                                                    arg!("value", A),
+                                                    arg1!("derivatives", A),
+                                                    bfgs_direction(
+                                                        arg2!("approx_inv_snd_derivatives", A),
+                                                        arg1!("derivatives", A),
+                                                    ),
+                                                ),
+                                            )
+                                            .then(
+                                                (
+                                                    "prev_point",
+                                                    "prev_derivatives",
+                                                    "prev_approx_inv_snd_derivatives",
+                                                    ("step_size", "point"),
+                                                ),
+                                                Zip4::new(
+                                                    arg1!("prev_point", A),
+                                                    arg1!("prev_derivatives", A),
+                                                    arg2!("prev_approx_inv_snd_derivatives", A),
+                                                    (val!(incr_rate)
+                                                        * arg!("step_size", StepSize<A>))
+                                                    .zip(arg1!("point", A)),
+                                                ),
+                                            ),
+                                        ),
+                                    );
+
+                                if i == 2 {
+                                    second_iteration
+                                        .then(
+                                            (
+                                                "i",
+                                                (
+                                                    "prev_point",
+                                                    "prev_derivatives",
+                                                    "prev_approx_inv_snd_derivatives",
+                                                    ("step_size", "point"),
+                                                ),
+                                            ),
+                                            arg1!("point", A),
+                                        )
+                                        .run(argvals![])
+                                } else {
+                                    second_iteration
+                                        .loop_while(
+                                            (
+                                                "i",
+                                                (
+                                                    "prev_point",
+                                                    "prev_derivatives",
+                                                    "prev_approx_inv_snd_derivatives",
+                                                    ("step_size", "point"),
+                                                ),
+                                            ),
+                                            (arg!("i", usize) + val!(1_usize)).zip(
+                                                Zip6::new(
+                                                    arg1!("prev_derivatives", A),
+                                                    arg2!("prev_approx_inv_snd_derivatives", A),
+                                                    arg1!("point", A) - arg1!("prev_point", A),
+                                                    arg!("step_size", StepSize<A>),
+                                                    arg1!("point", A),
+                                                    obj_func_and_d,
+                                                )
+                                                .then(
+                                                    (
+                                                        "prev_derivatives",
+                                                        "prev_approx_inv_snd_derivatives",
+                                                        "prev_step",
+                                                        "step_size",
+                                                        "point",
+                                                        ("value", "derivatives"),
+                                                    ),
+                                                    bfgs_loop!(
+                                                        c_1,
+                                                        backtracking_rate,
+                                                        obj_func,
+                                                        incr_rate,
+                                                    ),
+                                                ),
+                                            ),
+                                            arg!("i", usize).lt(val!(i)),
+                                        )
+                                        .then(
+                                            (
+                                                "i",
+                                                (
+                                                    "prev_point",
+                                                    "prev_derivatives",
+                                                    "prev_approx_inv_snd_derivatives",
+                                                    ("step_size", "point"),
+                                                ),
+                                            ),
+                                            arg1!("point", A),
+                                        )
+                                        .run(argvals![])
+                                }
+                            }
+                        }
+                    }
                 }
-                (step_dir_state, step_size, point) =
-                    self.step(step_dir_state, step_size, point, value, derivatives);
-            },
+            }
+            (
+                StepDirection::Bfgs { initializer },
+                StepSizeUpdate::IncrPrev(incr_rate),
+                BacktrackingLineSearchStoppingCriteria::NearMinima,
+            ) => {
+                let len = self.initial_point.len();
+                match initializer {
+                    BfgsInitializer::Identity => val1!(self.initial_point)
+                        .then("point", arg1!("point", A).zip(obj_func_and_d))
+                        .if_(
+                            ("point", ("value", "derivatives")),
+                            is_near_minima(arg!("value", A), arg1!("derivatives", A)),
+                            arg1!("point", A),
+                            Zip4::new(
+                                arg1!("point", A),
+                                arg!("value", A),
+                                arg1!("derivatives", A),
+                                initial_approx_inv_snd_derivatives_identity::<_, A>(val!(len)),
+                            )
+                            .then(
+                                (
+                                    "point",
+                                    "value",
+                                    "derivatives",
+                                    "approx_inv_snd_derivatives",
+                                ),
+                                Zip4::new(
+                                    arg1!("point", A),
+                                    arg1!("derivatives", A),
+                                    arg2!("approx_inv_snd_derivatives", A),
+                                    search(
+                                        c_1,
+                                        backtracking_rate,
+                                        obj_func,
+                                        initial_step_size,
+                                        arg1!("point", A),
+                                        arg!("value", A),
+                                        arg1!("derivatives", A),
+                                        bfgs_direction(
+                                            arg2!("approx_inv_snd_derivatives", A),
+                                            arg1!("derivatives", A),
+                                        ),
+                                    ),
+                                ),
+                            )
+                            .then(
+                                (
+                                    "prev_point",
+                                    "prev_derivatives",
+                                    "prev_approx_inv_snd_derivatives",
+                                    ("step_size", "point"),
+                                ),
+                                Zip6::new(
+                                    arg1!("prev_point", A),
+                                    arg1!("prev_derivatives", A),
+                                    arg2!("prev_approx_inv_snd_derivatives", A),
+                                    val!(incr_rate) * arg!("step_size", StepSize<A>),
+                                    arg1!("point", A),
+                                    obj_func_and_d,
+                                ),
+                            )
+                            .loop_while(
+                                (
+                                    "prev_point",
+                                    "prev_derivatives",
+                                    "prev_approx_inv_snd_derivatives",
+                                    "step_size",
+                                    "point",
+                                    ("value", "derivatives"),
+                                ),
+                                Zip7::new(
+                                    arg1!("prev_derivatives", A),
+                                    arg2!("prev_approx_inv_snd_derivatives", A),
+                                    arg1!("point", A) - arg1!("prev_point", A),
+                                    arg!("step_size", StepSize<A>),
+                                    arg1!("point", A),
+                                    arg!("value", A),
+                                    arg1!("derivatives", A),
+                                )
+                                .then(
+                                    (
+                                        "prev_derivatives",
+                                        "prev_approx_inv_snd_derivatives",
+                                        "prev_step",
+                                        "step_size",
+                                        "point",
+                                        "value",
+                                        "derivatives",
+                                    ),
+                                    bfgs_loop!(c_1, backtracking_rate, obj_func, incr_rate),
+                                )
+                                .then(
+                                    (
+                                        "prev_point",
+                                        "prev_derivatives",
+                                        "prev_approx_inv_snd_derivatives",
+                                        ("step_size", "point"),
+                                    ),
+                                    Zip6::new(
+                                        arg1!("prev_point", A),
+                                        arg1!("prev_derivatives", A),
+                                        arg2!("prev_approx_inv_snd_derivatives"),
+                                        arg!("step_size", StepSize<A>),
+                                        arg1!("point", A),
+                                        obj_func_and_d,
+                                    ),
+                                ),
+                                is_near_minima(arg!("value", A), arg1!("derivatives", A)).not(),
+                            )
+                            .then(
+                                (
+                                    "prev_point",
+                                    "prev_derivatives",
+                                    "prev_approx_inv_snd_derivatives",
+                                    "step_size",
+                                    "point",
+                                    ("value", "derivatives"),
+                                ),
+                                arg1!("point", A),
+                            ),
+                        )
+                        .run(argvals![]),
+                    BfgsInitializer::Gamma => val1!(self.initial_point)
+                        .then("point", arg1!("point", A).zip(obj_func_and_d))
+                        .if_(
+                            ("point", ("value", "derivatives")),
+                            is_near_minima(arg!("value", A), arg1!("derivatives", A)),
+                            arg1!("point", A),
+                            Zip3::new(
+                                arg1!("point", A),
+                                arg1!("derivatives", A),
+                                search(
+                                    c_1,
+                                    backtracking_rate,
+                                    obj_func,
+                                    initial_step_size,
+                                    arg1!("point", A),
+                                    arg!("value", A),
+                                    arg1!("derivatives", A),
+                                    bfgs_direction(
+                                        initial_approx_inv_snd_derivatives_identity(val!(len)),
+                                        arg1!("derivatives", A),
+                                    ),
+                                ),
+                            )
+                            .then(
+                                ("prev_point", "prev_derivatives", ("step_size", "point")),
+                                Zip5::new(
+                                    arg1!("prev_point", A),
+                                    arg1!("prev_derivatives", A),
+                                    val!(incr_rate) * arg!("step_size", StepSize<A>),
+                                    arg1!("point", A),
+                                    obj_func_and_d,
+                                ),
+                            )
+                            .if_(
+                                (
+                                    "prev_point",
+                                    "prev_derivatives",
+                                    "step_size",
+                                    "point",
+                                    ("value", "derivatives"),
+                                ),
+                                is_near_minima(arg!("value", A), arg1!("derivatives", A)),
+                                arg1!("point", A),
+                                Zip6::new(
+                                    arg1!("prev_derivatives", A),
+                                    arg1!("point", A) - arg1!("prev_point", A),
+                                    arg!("step_size", StepSize<A>),
+                                    arg1!("point", A),
+                                    arg!("value", A),
+                                    arg1!("derivatives", A),
+                                )
+                                .then(
+                                    (
+                                        "prev_derivatives",
+                                        "prev_step",
+                                        "step_size",
+                                        "point",
+                                        "value",
+                                        "derivatives",
+                                    ),
+                                    Zip7::new(
+                                        arg1!("prev_derivatives", A),
+                                        arg1!("prev_step", A),
+                                        arg!("step_size", StepSize<A>),
+                                        arg1!("point", A),
+                                        arg!("value", A),
+                                        arg1!("derivatives", A),
+                                        initial_approx_inv_snd_derivatives_gamma(
+                                            arg1!("prev_derivatives", A),
+                                            arg1!("prev_step", A),
+                                            arg1!("derivatives", A),
+                                        ),
+                                    ),
+                                )
+                                .then(
+                                    (
+                                        "prev_derivatives",
+                                        "prev_step",
+                                        "step_size",
+                                        "point",
+                                        "value",
+                                        "derivatives",
+                                        "approx_inv_snd_derivatives",
+                                    ),
+                                    Zip4::new(
+                                        arg1!("point", A),
+                                        arg1!("derivatives", A),
+                                        arg2!("approx_inv_snd_derivatives", A),
+                                        search(
+                                            c_1,
+                                            backtracking_rate,
+                                            obj_func,
+                                            arg!("step_size", StepSize<A>),
+                                            arg1!("point", A),
+                                            arg!("value", A),
+                                            arg1!("derivatives", A),
+                                            bfgs_direction(
+                                                arg2!("approx_inv_snd_derivatives", A),
+                                                arg1!("derivatives", A),
+                                            ),
+                                        ),
+                                    ),
+                                )
+                                .then(
+                                    (
+                                        "prev_point",
+                                        "prev_derivatives",
+                                        "prev_approx_inv_snd_derivatives",
+                                        ("step_size", "point"),
+                                    ),
+                                    Zip6::new(
+                                        arg1!("prev_point", A),
+                                        arg1!("prev_derivatives", A),
+                                        arg2!("prev_approx_inv_snd_derivatives", A),
+                                        val!(incr_rate) * arg!("step_size", StepSize<A>),
+                                        arg1!("point", A),
+                                        obj_func_and_d,
+                                    ),
+                                )
+                                .loop_while(
+                                    (
+                                        "prev_point",
+                                        "prev_derivatives",
+                                        "prev_approx_inv_snd_derivatives",
+                                        "step_size",
+                                        "point",
+                                        ("value", "derivatives"),
+                                    ),
+                                    Zip7::new(
+                                        arg1!("prev_derivatives", A),
+                                        arg2!("prev_approx_inv_snd_derivatives", A),
+                                        arg1!("point", A) - arg1!("prev_point", A),
+                                        arg!("step_size", StepSize<A>),
+                                        arg1!("point", A),
+                                        arg!("value", A),
+                                        arg1!("derivatives", A),
+                                    )
+                                    .then(
+                                        (
+                                            "prev_derivatives",
+                                            "prev_approx_inv_snd_derivatives",
+                                            "prev_step",
+                                            "step_size",
+                                            "point",
+                                            "value",
+                                            "derivatives",
+                                        ),
+                                        bfgs_loop!(c_1, backtracking_rate, obj_func, incr_rate),
+                                    )
+                                    .then(
+                                        (
+                                            "prev_point",
+                                            "prev_derivatives",
+                                            "prev_approx_inv_snd_derivatives",
+                                            ("step_size", "point"),
+                                        ),
+                                        Zip6::new(
+                                            arg1!("prev_point", A),
+                                            arg1!("prev_derivatives", A),
+                                            arg2!("prev_approx_inv_snd_derivatives"),
+                                            arg!("step_size", StepSize<A>),
+                                            arg1!("point", A),
+                                            obj_func_and_d,
+                                        ),
+                                    ),
+                                    is_near_minima(arg!("value", A), arg1!("derivatives", A)).not(),
+                                )
+                                .then(
+                                    (
+                                        "prev_point",
+                                        "prev_derivatives",
+                                        "prev_approx_inv_snd_derivatives",
+                                        "step_size",
+                                        "point",
+                                        ("value", "derivatives"),
+                                    ),
+                                    arg1!("point", A),
+                                ),
+                            ),
+                        )
+                        .run(argvals![]),
+                }
+            }
         }
-        point.to_vec()
     }
-
-    fn step(
-        &self,
-        step_dir_state: StepDirState<A>,
-        step_size: StepSize<A>,
-        point: Vec<A>,
-        value: A,
-        derivatives: Vec<A>,
-    ) -> (StepDirState<A>, StepSize<A>, Vec<A>) {
-        let (step_dir_state, step_size, new_point) = match step_dir_state {
-            StepDirState::Steepest => {
-                let direction = steepest_descent(derivatives.iter().cloned()).collect();
-                let (step_size, point) =
-                    self.search(step_size, point, value, derivatives, direction);
-                (StepDirState::Steepest, step_size, point)
-            }
-            StepDirState::Bfgs(bfgs_state) => {
-                let derivatives = Array1::from_vec(derivatives);
-                let (direction, before_iteration) = bfgs_state.direction(derivatives);
-
-                let (step_size, new_point) = self.search(
-                    step_size,
-                    point.clone(),
-                    value,
-                    before_iteration.derivatives().iter().cloned(),
-                    direction.to_vec(),
-                );
-
-                // We could theoretically get `prev_step` directly from line-search,
-                // but then we would need to calculate each point of line-search
-                // less efficiently,
-                // calculating step and point separately.
-                let bfgs_state = before_iteration.next(
-                    new_point
-                        .iter()
-                        .cloned()
-                        .zip(point)
-                        .map(|(x, y)| x - y)
-                        .collect(),
-                );
-
-                (StepDirState::Bfgs(bfgs_state), step_size, new_point)
-            }
-        };
-
-        let step_size = match &self.problem.agnostic.step_size_update {
-            StepSizeUpdate::IncrPrev(rate) => *rate * step_size,
-        };
-
-        (step_dir_state, step_size, new_point)
-    }
-
-    fn search(
-        &self,
-        step_size: StepSize<A>,
-        point: Vec<A>,
-        value: A,
-        derivatives: impl IntoIterator<Item = A>,
-        direction: Vec<A>,
-    ) -> (StepSize<A>, Vec<A>) {
-        BacktrackingSearcher::new(
-            self.problem.agnostic.c_1,
-            point,
-            value,
-            derivatives,
-            direction,
-        )
-        .search(
-            self.problem.agnostic.backtracking_rate,
-            &self.problem.obj_func,
-            step_size,
-        )
-    }
-}
-
-enum StepDirState<A> {
-    Steepest,
-    Bfgs(BfgsIteration<A>),
 }

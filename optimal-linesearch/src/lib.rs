@@ -7,20 +7,25 @@
 //! using this package:
 //!
 //! ```
+//! use optimal_compute_core::*;
 //! use optimal_linesearch::{descend, step_direction::steepest_descent, StepSize};
 //!
-//! fn main() {
-//!     let step_size = StepSize::new(0.5).unwrap();
-//!     let mut point = vec![10.0, 10.0];
-//!     for _ in 0..10 {
-//!         point = descend(step_size, steepest_descent(obj_func_d(&point)), point).collect();
-//!     }
-//!     println!("{:?}", point);
-//! }
-//!
-//! fn obj_func_d(point: &[f64]) -> Vec<f64> {
-//!     point.iter().copied().map(|x| 2.0 * x).collect()
-//! }
+//! println!(
+//!     "{:?}",
+//!     val!(0)
+//!         .zip(val1!(vec![10.0, 10.0]))
+//!         .loop_while(
+//!             ("i", "point"),
+//!             (arg!("i", usize) + val!(1)).zip(descend(
+//!                 val!(StepSize::new(0.5).unwrap()),
+//!                 steepest_descent(val!(2.0) * arg1!("point", f64)),
+//!                 arg1!("point", f64),
+//!             )),
+//!             arg!("i", usize).lt(val!(10)),
+//!         )
+//!         .snd()
+//!         .run(argvals![])
+//! )
 //! ```
 //!
 //! See [`backtracking_line_search`] for more sophisticated and effective optimizers.
@@ -29,27 +34,39 @@ pub mod backtracking_line_search;
 pub mod initial_step_size;
 pub mod step_direction;
 
-use std::ops::{Add, Mul};
+use core::ops;
 
 use num_traits::{AsPrimitive, One, Signed};
+use optimal_compute_core::{
+    cmp::{Lt, Max},
+    math::{Abs, Add, Mul},
+    peano, val, Computation, Val0,
+};
 
 pub use self::types::*;
 
+/// See [`descend`].
+pub type Descend<S, D, P> = Add<P, Mul<S, D>>;
+
 /// Descend in step-direction
 /// by moving `point` `step_size` length in `direction`.
-pub fn descend<A>(
-    step_size: StepSize<A>,
-    direction: impl IntoIterator<Item = A>,
-    point: impl IntoIterator<Item = A>,
-) -> impl Iterator<Item = A>
+#[allow(clippy::type_complexity)]
+pub fn descend<S, D, P, SA, DPDim>(step_size: S, direction: D, point: P) -> Descend<S, D, P>
 where
-    A: Clone + Add<Output = A> + Mul<Output = A>,
+    S: Computation<Dim = peano::Zero, Item = StepSize<SA>>,
+    D: Computation<Dim = peano::Suc<DPDim>>,
+    P: Computation<Dim = peano::Suc<DPDim>>,
+    StepSize<SA>: ops::Mul<D::Item>,
+    P::Item: ops::Add<<Mul<S, D> as Computation>::Item>,
 {
-    point
-        .into_iter()
-        .zip(direction)
-        .map(move |(x, d)| x + step_size.clone() * d)
+    point.add(step_size.mul(direction))
 }
+
+/// See [`is_near_minima`].
+pub type IsNearMinima<V, D> = Lt<
+    InfiniteNorm<D>,
+    Mul<Val0<<V as Computation>::Item>, Add<Val0<<V as Computation>::Item>, Abs<V>>>,
+>;
 
 /// Return whether a point is sufficiently close to a minima.
 ///
@@ -60,24 +77,27 @@ where
 /// and `\vec{dx}` is the derivative of the same point.
 ///
 /// Returns true for empty derivatives.
-pub fn is_near_minima<A>(value: A, derivatives: impl IntoIterator<Item = A>) -> bool
+pub fn is_near_minima<V, D>(value: V, derivatives: D) -> IsNearMinima<V, D>
 where
-    A: Copy + PartialOrd + Signed + Mul<Output = A> + One + 'static,
-    f64: AsPrimitive<A>,
+    V: Computation<Dim = peano::Zero>,
+    V::Item: Copy + PartialOrd + Signed + ops::Mul<Output = V::Item> + One + 'static,
+    f64: AsPrimitive<V::Item>,
+    D: Computation<Dim = peano::One>,
+    D::Item: PartialOrd + Signed,
 {
     const COEFF: f64 = 0.00001; // 10^-5
-    infinite_norm(derivatives)
-        .map(|inf_norm_ds| inf_norm_ds < COEFF.as_() * (A::one() + value.abs()))
-        .unwrap_or(true)
+    infinite_norm(derivatives).lt(val!(COEFF.as_()) * (val!(<V::Item as One>::one()) + value.abs()))
 }
 
-fn infinite_norm<A>(xs: impl IntoIterator<Item = A>) -> Option<A>
+/// See [`infinite_norm`].
+pub type InfiniteNorm<A> = Max<Abs<A>>;
+
+fn infinite_norm<A>(xs: A) -> InfiniteNorm<A>
 where
-    A: PartialOrd + Signed,
+    A: Computation<Dim = peano::One>,
+    A::Item: PartialOrd + Signed,
 {
-    xs.into_iter()
-        .map(|x| x.abs())
-        .reduce(|acc, x| if x > acc { x } else { acc })
+    xs.abs().max()
 }
 
 mod types {
@@ -124,40 +144,107 @@ mod tests {
     use rand::{rngs::SmallRng, SeedableRng};
 
     use crate::backtracking_line_search::{
-        BacktrackingLineSearchBuilder, BfgsInitializer, StepDirection,
+        BacktrackingLineSearchBuilder, BacktrackingLineSearchStoppingCriteria, BfgsInitializer,
+        StepDirection,
     };
 
     // Theoretically,
     // these optimizers should always solve any convex problem.
     // In practice,
     // with the numerical-stability issues of floating-point values,
-    // an optimizer may either get stuck approaching an optimal value.
+    // an optimizer may get stuck approaching an optimal value.
     // We use static seeds to avoid getting a random point
     // that results in such an issue.
 
     #[test]
     fn backtracking_line_search_should_solve_convex_problems_with_steepest_descent() {
-        test_can_solve_with(StepDirection::Steepest);
+        test_can_solve_with(
+            StepDirection::Steepest,
+            BacktrackingLineSearchStoppingCriteria::NearMinima,
+        );
     }
 
     #[test]
     fn backtracking_line_search_should_solve_convex_problems_with_bfgs_id() {
-        test_can_solve_with(StepDirection::Bfgs {
-            initializer: BfgsInitializer::Identity,
-        });
+        test_can_solve_with(
+            StepDirection::Bfgs {
+                initializer: BfgsInitializer::Identity,
+            },
+            BacktrackingLineSearchStoppingCriteria::NearMinima,
+        );
     }
 
     #[test]
     fn backtracking_line_search_should_solve_convex_problems_with_bfgs_gamma() {
-        test_can_solve_with(StepDirection::Bfgs {
-            initializer: BfgsInitializer::Gamma,
-        });
+        test_can_solve_with(
+            StepDirection::Bfgs {
+                initializer: BfgsInitializer::Gamma,
+            },
+            BacktrackingLineSearchStoppingCriteria::NearMinima,
+        );
     }
 
-    fn test_can_solve_with(direction: StepDirection) {
+    // Technically,
+    // backtracking line-search is not guarenteed to converge
+    // in any particular number of iterations.
+    // However,
+    // if we set the number high enough,
+    // it should in practice.
+
+    #[test]
+    fn backtracking_line_search_should_solve_convex_problems_with_steepest_descent_and_iterations()
+    {
+        test_can_solve_with(
+            StepDirection::Steepest,
+            BacktrackingLineSearchStoppingCriteria::Iteration(100),
+        );
+    }
+
+    #[test]
+    fn backtracking_line_search_should_solve_convex_problems_with_bfgs_id_and_iterations() {
+        test_can_solve_with(
+            StepDirection::Bfgs {
+                initializer: BfgsInitializer::Identity,
+            },
+            BacktrackingLineSearchStoppingCriteria::Iteration(100),
+        );
+    }
+
+    #[test]
+    fn backtracking_line_search_should_solve_convex_problems_with_bfgs_gamma_and_iterations() {
+        test_can_solve_with(
+            StepDirection::Bfgs {
+                initializer: BfgsInitializer::Gamma,
+            },
+            BacktrackingLineSearchStoppingCriteria::Iteration(100),
+        );
+    }
+
+    fn test_can_solve_with(
+        direction: StepDirection,
+        stopping_criteria: BacktrackingLineSearchStoppingCriteria,
+    ) {
         for seed in 0..10 {
-            assert!(run(seed, 100, direction.clone(), sphere, sphere_d) <= 0.00001);
-            assert!(run(seed, 10, direction.clone(), skewed_sphere, skewed_sphere_d) <= 0.00001);
+            assert!(
+                run(
+                    seed,
+                    100,
+                    direction.clone(),
+                    stopping_criteria.clone(),
+                    sphere,
+                    sphere_d
+                ) <= 0.00001
+            );
+            assert!(
+                run(
+                    seed,
+                    10,
+                    direction.clone(),
+                    stopping_criteria.clone(),
+                    skewed_sphere,
+                    skewed_sphere_d
+                ) <= 0.00001
+            );
         }
     }
 
@@ -165,6 +252,7 @@ mod tests {
         seed: u64,
         len: usize,
         direction: StepDirection,
+        stopping_criteria: BacktrackingLineSearchStoppingCriteria,
         obj_func: F,
         obj_func_d: FD,
     ) -> f64
@@ -174,6 +262,7 @@ mod tests {
     {
         let point = BacktrackingLineSearchBuilder::default()
             .direction(direction)
+            .stopping_criteria(stopping_criteria)
             .for_(len, obj_func.clone(), obj_func_d)
             .with_random_point_using(initial_bounds(len), SmallRng::seed_from_u64(seed))
             .argmin();

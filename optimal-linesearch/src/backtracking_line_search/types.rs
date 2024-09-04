@@ -1,10 +1,6 @@
 //! Types for backtracking line-search.
 
-use std::{
-    fmt::Debug,
-    iter::Sum,
-    ops::{Mul, Neg},
-};
+use std::{fmt::Debug, ops::Mul};
 
 use derive_more::Display;
 use derive_num_bounded::{derive_into_inner, derive_new_from_bounded_partial_ord};
@@ -64,67 +60,16 @@ where
     }
 }
 
-/// Value prepared to check for sufficient decrease.
-#[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "serde", serde(transparent))]
-pub struct C1TimesDerivativesDotDirection<A>(pub A);
-
-impl<A> Mul<A> for C1TimesDerivativesDotDirection<A>
+impl<A> Mul<A> for SufficientDecreaseParameter<A>
 where
     A: Mul<Output = A>,
 {
     type Output = A;
 
     fn mul(self, rhs: A) -> Self::Output {
-        self.0.mul(rhs)
+        self.0 * rhs
     }
 }
-
-impl<A> Mul<StepSize<A>> for C1TimesDerivativesDotDirection<A>
-where
-    A: Mul<Output = A>,
-{
-    type Output = A;
-
-    fn mul(self, rhs: StepSize<A>) -> Self::Output {
-        self.0.mul(rhs.0)
-    }
-}
-
-impl<A> Mul<C1TimesDerivativesDotDirection<A>> for StepSize<A>
-where
-    A: Mul<Output = A>,
-{
-    type Output = A;
-
-    fn mul(self, rhs: C1TimesDerivativesDotDirection<A>) -> Self::Output {
-        self.0.mul(rhs.0)
-    }
-}
-
-impl<A> C1TimesDerivativesDotDirection<A> {
-    #[allow(missing_docs)]
-    pub fn new(
-        c_1: SufficientDecreaseParameter<A>,
-        derivatives: impl IntoIterator<Item = A>,
-        direction: impl IntoIterator<Item = A>,
-    ) -> Self
-    where
-        A: Clone + Neg<Output = A> + Mul<Output = A> + Sum,
-    {
-        Self(
-            c_1.into_inner()
-                * derivatives
-                    .into_iter()
-                    .zip(direction)
-                    .map(|(x, y)| x * y)
-                    .sum(),
-        )
-    }
-}
-
-derive_into_inner!(C1TimesDerivativesDotDirection<A>);
 
 /// Rate to decrease step-size while line-searching.
 #[derive(Clone, Copy, Debug, Display, PartialEq, Eq, PartialOrd, Ord, Hash)]

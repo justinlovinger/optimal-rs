@@ -26,10 +26,12 @@ derive-num-bounded = { path = "../derive-num-bounded", version = "0.0.0" }
 derive-getters = "0.3.0"
 derive_more = "0.99.17"
 num-traits = "0.2.16"
+optimal-compute-core = { path = "../optimal-compute-core", version = "0.0.0" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.185", features = ["derive", "rc"], optional = true }
 thiserror = "1.0.47"
 ndarray = "0.15.6"
 
 [dev-dependencies]
+approx = "0.5.1"
 tango-bench = "0.5.0"

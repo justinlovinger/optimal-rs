@@ -9,10 +9,28 @@ and infrequent releases.
 
 Mathematical optimization and machine-learning components and algorithms.
 
-Optimal provides composable functions
+Optimal provides a framework
 for mathematical optimization
 and machine-learning
 from the optimization-perspective.
+
+This package provides a relatively stable high-level API
+for broadly defined optimizers.
+
+For more control over configuration,
+introspection of the optimization process,
+serialization,
+and specialization that may improve performance,
+see individual optimizer packages.
+
+For the computation-framework powering Optimal,
+see `optimal-compute-core`.
+
+Note: more specific support for machine-learning will be added in the future.
+Currently,
+machine-learning is supported
+by defining an objective-function
+taking model-parameters.
 
 ## Examples
 
@@ -47,17 +65,5 @@ println!(
         .argmin()
 );
 ```
-
-For more control over configuration,
-introspection of the optimization process,
-serialization,
-and specialization that may improve performance,
-see individual optimizer packages.
-
-Note: more specific support for machine-learning will be added in the future.
-Currently,
-machine-learning is supported
-by defining an objective-function
-taking model-parameters.
 
 License: MIT

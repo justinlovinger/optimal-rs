@@ -3,8 +3,9 @@
 //! # Examples
 //!
 //! ```
+//! use optimal_compute_core::{*, peano::*, run::Value};
 //! use optimal_pbil::{low_level::*, types::*};
-//! use rand::prelude::*;
+//! use ::rand::prelude::*;
 //!
 //! fn main() {
 //!     let len = 2;
@@ -15,25 +16,43 @@
 //!     let mutation_adjust_rate = MutationAdjustRate::default();
 //!     let threshold = ProbabilityThreshold::default();
 //!
-//!     let mut rng = SmallRng::from_entropy();
-//!     let mut probabilities = std::iter::repeat(Probability::default())
+//!     let rng = SmallRng::from_entropy();
+//!     let probabilities = std::iter::repeat(Probability::default())
 //!         .take(len)
 //!         .collect::<Vec<_>>();
-//!     while !converged(threshold, probabilities.iter().copied()) {
-//!         probabilities = mutate_probabilities(
-//!             mutation_chance,
-//!             mutation_adjust_rate,
-//!             adjust_probabilities(
-//!                 adjust_rate,
-//!                 Sampleable::new(&probabilities).best_sample(num_samples, obj_func, &mut rng),
-//!                 probabilities,
-//!             ),
-//!             &mut rng,
-//!         )
-//!         .collect();
-//!     }
 //!
-//!     println!("{:?}", point_from(probabilities).collect::<Vec<_>>());
+//!     let pbil = PointFrom::new(
+//!         val!(rng)
+//!             .zip(val1!(probabilities))
+//!             .loop_while(
+//!                 ("rng", "probabilities"),
+//!                 arg1!("probabilities", Probability)
+//!                     .zip(BestSample::new(
+//!                         val!(num_samples),
+//!                         arg1!("sample").black_box::<_, Zero, usize>(|sample: Vec<bool>| {
+//!                             Value(obj_func(&sample))
+//!                         }),
+//!                         arg1!("probabilities", Probability),
+//!                         arg!("rng", SmallRng),
+//!                     ))
+//!                     .then(
+//!                         ("probabilities", ("rng", "sample")),
+//!                         Mutate::new(
+//!                             val!(mutation_chance),
+//!                             val!(mutation_adjust_rate),
+//!                             Adjust::new(val!(adjust_rate), arg1!("probabilities"), arg1!("sample")),
+//!                             arg!("rng", SmallRng),
+//!                         ),
+//!                     ),
+//!                 Converged::new(val!(threshold), arg1!("probabilities", Probability)).not(),
+//!             )
+//!             .then(
+//!                 ("rng", "probabilities"),
+//!                 arg1!("probabilities", Probability),
+//!             ),
+//!     );
+//!
+//!     println!("{:?}", pbil.run(argvals![]));
 //! }
 //!
 //! fn obj_func(point: &[bool]) -> usize {
@@ -41,28 +60,20 @@
 //! }
 //! ```
 
-use std::ops::{Add, Mul, Sub};
+mod adjust;
+mod best_sample;
+mod converged;
+mod mutate;
+mod point_from;
 
-use rand::{distributions::Standard, prelude::*};
+use std::ops::{Add, Mul, Sub};
 
 use crate::types::*;
 
-pub use self::sampleable::Sampleable;
-
-/// Adjust each probability towards corresponding `sample` bit
-/// at `rate`.
-pub fn adjust_probabilities(
-    rate: AdjustRate,
-    sample: impl IntoIterator<Item = bool>,
-    probabilities: impl IntoIterator<Item = Probability>,
-) -> impl Iterator<Item = Probability> {
-    probabilities.into_iter().zip(sample).map(move |(p, b)| {
-        // This operation is safe
-        // because Probability is closed under `adjust`
-        // with rate in [0,1].
-        unsafe { Probability::new_unchecked(adjust(rate.into(), f64::from(p), b as u8 as f64)) }
-    })
-}
+pub use self::{
+    adjust::Adjust, best_sample::BestSample, converged::Converged, mutate::Mutate,
+    point_from::PointFrom, sampleable::Sampleable,
+};
 
 /// Adjust a number from `x` to `y`
 /// at given rate.
@@ -71,59 +82,6 @@ where
     T: Add<Output = T> + Sub<Output = T> + Mul<Output = T> + Copy,
 {
     x + rate * (y - x)
-}
-
-/// With `chance`,
-/// adjust each probability towards a random probability
-/// at `adjust_rate`.
-pub fn mutate_probabilities<'a, R>(
-    chance: MutationChance,
-    adjust_rate: MutationAdjustRate,
-    probabilities: impl IntoIterator<Item = Probability> + 'a,
-    rng: &'a mut R,
-) -> impl Iterator<Item = Probability> + 'a
-where
-    R: Rng,
-{
-    let distr = chance.into_distr();
-    probabilities.into_iter().map(move |p| {
-        if rng.sample(distr) {
-            // `Standard` distribution excludes `1`,
-            // but it more efficient
-            // than `Uniform::new_inclusive(0., 1.)`.
-            // This operation is safe
-            // because Probability is closed under `adjust`
-            // with rate in [0,1].
-            unsafe {
-                Probability::new_unchecked(adjust(
-                    adjust_rate.into(),
-                    f64::from(p),
-                    rng.sample(Standard),
-                ))
-            }
-        } else {
-            p
-        }
-    })
-}
-
-/// Return whether all probabilities are above the given threshold
-/// or below its inverse.
-pub fn converged(
-    threshold: ProbabilityThreshold,
-    probabilities: impl IntoIterator<Item = Probability>,
-) -> bool {
-    probabilities
-        .into_iter()
-        .all(|p| p > threshold.upper_bound() || p < threshold.lower_bound())
-}
-
-/// Estimate the best sample discovered
-/// from a set of probabilities.
-pub fn point_from(
-    probabilities: impl IntoIterator<Item = Probability>,
-) -> impl Iterator<Item = bool> {
-    probabilities.into_iter().map(|p| f64::from(p) >= 0.5)
 }
 
 mod sampleable {
@@ -200,10 +158,13 @@ mod sampleable {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use num_traits::bounds::{LowerBounded, UpperBounded};
+    use optimal_compute_core::{argvals, val, val1, Computation, Run};
     use proptest::prelude::*;
+    use rand::{rngs::SmallRng, SeedableRng};
     use test_strategy::proptest;
+
+    use super::*;
 
     #[proptest()]
     fn probabilities_are_valid_after_adjusting(
@@ -212,11 +173,9 @@ mod tests {
         args: (Vec<bool>, Vec<Probability>),
     ) {
         let (sample, probabilities) = args;
-        prop_assert!(are_valid(adjust_probabilities(
-            adjust_rate,
-            sample,
-            probabilities
-        )));
+        prop_assert!(are_valid(
+            Adjust::new(val!(adjust_rate), val1!(probabilities), val1!(sample)).run(argvals![])
+        ));
     }
 
     #[proptest()]
@@ -226,12 +185,16 @@ mod tests {
         seed: u64,
         probabilities: Vec<Probability>,
     ) {
-        prop_assert!(are_valid(mutate_probabilities(
-            mutation_chance,
-            mutation_adjust_rate,
-            probabilities,
-            &mut SmallRng::seed_from_u64(seed),
-        )));
+        prop_assert!(are_valid(
+            Mutate::new(
+                val!(mutation_chance),
+                val!(mutation_adjust_rate),
+                val1!(probabilities),
+                val!(SmallRng::seed_from_u64(seed)),
+            )
+            .snd()
+            .run(argvals![])
+        ));
     }
 
     macro_rules! arbitrary_from_bounded {

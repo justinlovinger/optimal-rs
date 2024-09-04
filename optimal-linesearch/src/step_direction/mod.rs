@@ -2,12 +2,15 @@
 
 pub mod bfgs;
 
-use std::ops::Neg;
+use core::ops;
+
+use optimal_compute_core::{math::Neg, peano, Computation};
 
 /// Return the direction of steepest descent.
-pub fn steepest_descent<A>(derivatives: impl IntoIterator<Item = A>) -> impl Iterator<Item = A>
+pub fn steepest_descent<D, Dim>(derivatives: D) -> Neg<D>
 where
-    A: Clone + Neg<Output = A>,
+    D: Computation<Dim = peano::Suc<Dim>>,
+    D::Item: ops::Neg,
 {
-    derivatives.into_iter().map(|x| x.neg())
+    derivatives.neg()
 }

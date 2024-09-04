@@ -4,10 +4,28 @@
 
 //! Mathematical optimization and machine-learning components and algorithms.
 //!
-//! Optimal provides composable functions
+//! Optimal provides a framework
 //! for mathematical optimization
 //! and machine-learning
 //! from the optimization-perspective.
+//!
+//! This package provides a relatively stable high-level API
+//! for broadly defined optimizers.
+//!
+//! For more control over configuration,
+//! introspection of the optimization process,
+//! serialization,
+//! and specialization that may improve performance,
+//! see individual optimizer packages.
+//!
+//! For the computation-framework powering Optimal,
+//! see `optimal-compute-core`.
+//!
+//! Note: more specific support for machine-learning will be added in the future.
+//! Currently,
+//! machine-learning is supported
+//! by defining an objective-function
+//! taking model-parameters.
 //!
 //! # Examples
 //!
@@ -42,18 +60,6 @@
 //!         .argmin()
 //! );
 //! ```
-//!
-//! For more control over configuration,
-//! introspection of the optimization process,
-//! serialization,
-//! and specialization that may improve performance,
-//! see individual optimizer packages.
-//!
-//! Note: more specific support for machine-learning will be added in the future.
-//! Currently,
-//! machine-learning is supported
-//! by defining an objective-function
-//! taking model-parameters.
 
 use std::ops::{Add, Mul, RangeInclusive, Sub};
 
@@ -211,12 +217,12 @@ pub struct BinaryFor<F> {
 }
 
 impl<F> BinaryFor<F> {
-    /// Use a specific source of randomness.
-    pub fn with<R>(self, rng: R) -> BinaryWith<F, R>
-    where
-        R: Rng,
-    {
-        BinaryWith { problem: self, rng }
+    /// Use a specific seed for randomness.
+    pub fn with(self, seed: u64) -> BinaryWith<F> {
+        BinaryWith {
+            problem: self,
+            rng: SmallRng::seed_from_u64(seed),
+        }
     }
 
     /// Return a point that attempts to minimize the given objective function.
@@ -224,25 +230,27 @@ impl<F> BinaryFor<F> {
     where
         F: Fn(&[bool]) -> f64,
     {
-        self.with(SmallRng::from_entropy()).argmin()
+        BinaryWith {
+            problem: self,
+            rng: SmallRng::from_entropy(),
+        }
+        .argmin()
     }
 }
 
 /// An optimizer for a specific binary problem
 /// with a specific source of randomness.
 #[derive(Clone, Debug)]
-pub struct BinaryWith<F, R> {
+pub struct BinaryWith<F> {
     problem: BinaryFor<F>,
-    /// Source of randomness.
-    rng: R,
+    rng: SmallRng,
 }
 
-impl<F, R> BinaryWith<F, R> {
+impl<F> BinaryWith<F> {
     /// Return a point that attempts to minimize the given objective function.
     pub fn argmin(self) -> Vec<bool>
     where
         F: Fn(&[bool]) -> f64,
-        R: Rng,
     {
         pbil_config(self.problem.agnostic.level, self.problem.len)
             .for_(self.problem.len, self.problem.obj_func)
