@@ -63,10 +63,12 @@ mod seeded_rand {
     use crate::{
         rand::SeededRand,
         run::{ArgVals, Matrix, RunCore, Value},
+        Computation,
     };
 
     impl<RComp, Dist, T, R> RunCore for SeededRand<RComp, (), Dist, T>
     where
+        Self: Computation,
         RComp: RunCore<Output = Value<R>>,
         R: RngCore,
         Dist: Distribution<T>,
@@ -82,6 +84,7 @@ mod seeded_rand {
 
     impl<RComp, Dist, T, R> RunCore for SeededRand<RComp, (usize,), Dist, T>
     where
+        Self: Computation,
         RComp: RunCore<Output = Value<R>>,
         R: RngCore,
         Dist: Distribution<T>,
@@ -102,6 +105,7 @@ mod seeded_rand {
 
     impl<RComp, Dist, T, R> RunCore for SeededRand<RComp, (usize, usize), Dist, T>
     where
+        Self: Computation,
         RComp: RunCore<Output = Value<R>>,
         R: RngCore,
         Dist: Distribution<T>,
@@ -214,6 +218,7 @@ mod seeded_rands {
 
     impl<RComp, DistComp, T, R, Dist, Out> RunCore for SeededRands<RComp, DistComp, T>
     where
+        Self: Computation,
         DistComp: Computation,
         (RComp, DistComp): DistributeArgs<Output = (Value<R>, Value<Dist>)>,
         R: RngCore,

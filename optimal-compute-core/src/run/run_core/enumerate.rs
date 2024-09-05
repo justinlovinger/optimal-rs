@@ -4,11 +4,12 @@ use crate::{
     argvals,
     enumerate::Enumerate,
     run::{ArgVals, RunCore},
-    Run,
+    Computation, Run,
 };
 
 impl<A, F, Item> RunCore for Enumerate<A, F>
 where
+    Self: Computation,
     A: Run<Output = Vec<Item>>,
     Item: 'static + Copy + std::fmt::Debug,
     usize: AsPrimitive<Item>,

@@ -6,6 +6,7 @@ use crate::{
 
 impl<A, Args, P, FTrue, FFalse, Collected, Out> RunCore for If<A, Args, P, FTrue, FFalse>
 where
+    Self: Computation,
     A: Computation + RunCore,
     A::Output: Collect<A::Dim, Collected = Collected>,
     Collected: Clone,
@@ -38,6 +39,7 @@ where
 
 impl<A, Args, F, P, Collected> RunCore for LoopWhile<A, Args, F, P>
 where
+    Self: Computation,
     A: Computation + RunCore,
     A::Output: Collect<A::Dim, Collected = Collected>,
     Collected: Clone,
@@ -70,6 +72,7 @@ where
 
 impl<A, Args, F, Collected> RunCore for Then<A, Args, F>
 where
+    Self: Computation,
     A: Computation + RunCore,
     A::Output: Collect<A::Dim, Collected = Collected>,
     ArgVals: FromArgsVals<Args, Collected>,

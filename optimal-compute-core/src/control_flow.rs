@@ -3,12 +3,15 @@ use core::fmt;
 use crate::{impl_core_ops, peano::Zero, Computation, ComputationFn};
 
 #[derive(Clone, Copy, Debug)]
-pub struct If<A, Args, P, FTrue, FFalse> {
-    pub(crate) child: A,
-    pub(crate) args: Args,
-    pub(crate) predicate: P,
-    pub(crate) f_true: FTrue,
-    pub(crate) f_false: FFalse,
+pub struct If<A, Args, P, FTrue, FFalse>
+where
+    Self: Computation,
+{
+    pub child: A,
+    pub args: Args,
+    pub predicate: P,
+    pub f_true: FTrue,
+    pub f_false: FFalse,
 }
 
 impl<A, Args, P, FTrue, FFalse, FDim, FItem> Computation for If<A, Args, P, FTrue, FFalse>
@@ -36,6 +39,7 @@ impl_core_ops!(If<A, Args, P, FTrue, FFalse>);
 
 impl<A, Args, P, FTrue, FFalse> fmt::Display for If<A, Args, P, FTrue, FFalse>
 where
+    Self: Computation,
     A: fmt::Display,
     Args: fmt::Debug,
     P: fmt::Display,
@@ -52,11 +56,14 @@ where
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct LoopWhile<A, Args, F, P> {
-    pub(crate) child: A,
-    pub(crate) args: Args,
-    pub(crate) f: F,
-    pub(crate) predicate: P,
+pub struct LoopWhile<A, Args, F, P>
+where
+    Self: Computation,
+{
+    pub child: A,
+    pub args: Args,
+    pub f: F,
+    pub predicate: P,
 }
 
 impl<A, Args, F, P> Computation for LoopWhile<A, Args, F, P>
@@ -83,6 +90,7 @@ impl_core_ops!(LoopWhile<A, Args, F, P>);
 
 impl<A, Args, F, P> fmt::Display for LoopWhile<A, Args, F, P>
 where
+    Self: Computation,
     A: fmt::Display,
     Args: fmt::Debug,
     F: fmt::Display,
@@ -98,10 +106,13 @@ where
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Then<A, Args, F> {
-    pub(crate) child: A,
-    pub(crate) args: Args,
-    pub(crate) f: F,
+pub struct Then<A, Args, F>
+where
+    Self: Computation,
+{
+    pub child: A,
+    pub args: Args,
+    pub f: F,
 }
 
 impl<A, Args, F> Computation for Then<A, Args, F>
@@ -127,6 +138,7 @@ impl_core_ops!(Then<A, Args, F>);
 
 impl<A, Args, F> fmt::Display for Then<A, Args, F>
 where
+    Self: Computation,
     A: fmt::Display,
     Args: fmt::Debug,
     F: fmt::Display,

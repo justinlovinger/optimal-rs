@@ -42,6 +42,7 @@ macro_rules! impl_display_for_inline_binary {
     ( $op:ident, $inline:literal ) => {
         impl<A, B> core::fmt::Display for $op<A, B>
         where
+            Self: $crate::Computation,
             A: core::fmt::Display,
             B: core::fmt::Display,
         {

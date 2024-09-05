@@ -17,6 +17,7 @@ macro_rules! impl_run_core_for_binary_op {
         paste! {
             impl<A, B, OutA, OutB> RunCore for $op<A, B>
             where
+                Self: Computation,
                 A: Computation,
                 B: Computation,
                 (A, B): DistributeArgs<Output = (Value<OutA>, Value<OutB>)>,
@@ -165,6 +166,7 @@ macro_rules! impl_run_for_unary_op {
         paste! {
             impl<A, Out> RunCore for $op<A>
             where
+                Self: Computation,
                 A: Computation + RunCore<Output = Value<Out>>,
                 Out: [<Broadcast $op>]<A::Dim>
             {
@@ -242,6 +244,7 @@ mod abs {
 
     impl<A, Out> RunCore for Abs<A>
     where
+        Self: Computation,
         A: Computation + RunCore<Output = Value<Out>>,
         Out: BroadcastAbs<A::Dim>,
     {

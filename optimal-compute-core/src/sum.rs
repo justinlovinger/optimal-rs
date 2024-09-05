@@ -7,7 +7,9 @@ use crate::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub struct Sum<A>(pub(crate) A);
+pub struct Sum<A>(pub A)
+where
+    Self: Computation;
 
 impl<A, D> Computation for Sum<A>
 where
@@ -32,6 +34,7 @@ impl_core_ops!(Sum<A>);
 
 impl<A> fmt::Display for Sum<A>
 where
+    Self: Computation,
     A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

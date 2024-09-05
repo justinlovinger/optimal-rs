@@ -5,11 +5,14 @@ use crate::{impl_core_ops, Args, Computation, ComputationFn};
 
 /// See [`Computation::black_box`].
 #[derive(Clone, Copy, Debug)]
-pub struct BlackBox<A, F, FDim, FItem> {
-    pub(crate) child: A,
-    pub(crate) f: F,
-    pub(crate) f_dim: PhantomData<FDim>,
-    pub(crate) f_item: PhantomData<FItem>,
+pub struct BlackBox<A, F, FDim, FItem>
+where
+    Self: Computation,
+{
+    pub child: A,
+    pub f: F,
+    pub(super) f_dim: PhantomData<FDim>,
+    pub(super) f_item: PhantomData<FItem>,
 }
 
 impl<A, F, FDim, FItem> Computation for BlackBox<A, F, FDim, FItem>
@@ -22,6 +25,7 @@ where
 
 impl<A, F, FDim, FItem> ComputationFn for BlackBox<A, F, FDim, FItem>
 where
+    Self: Computation,
     A: ComputationFn,
 {
     fn args(&self) -> Args {
@@ -33,6 +37,7 @@ impl_core_ops!(BlackBox<A, F, FDim, FItem>);
 
 impl<A, F, FDim, FItem> fmt::Display for BlackBox<A, F, FDim, FItem>
 where
+    Self: Computation,
     A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

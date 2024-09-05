@@ -3,10 +3,12 @@ use core::ops;
 use crate::{
     run::{ArgVals, RunCore, Unwrap, Value},
     sum::Sum,
+    Computation,
 };
 
 impl<A, Out> RunCore for Sum<A>
 where
+    Self: Computation,
     A: RunCore<Output = Value<Out>>,
     Out: IntoIterator,
     Out::Item: ops::Add,

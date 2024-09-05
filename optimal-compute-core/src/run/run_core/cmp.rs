@@ -35,6 +35,7 @@ impl_into_cpu_for_comparison!(Ge, PartialOrd);
 
 impl<A, Out> RunCore for Max<A>
 where
+    Self: Computation,
     A: RunCore<Output = Value<Out>>,
     Out: IntoIterator,
     Out::Item: PartialOrd,
@@ -55,6 +56,7 @@ where
 
 impl<A> RunCore for Not<A>
 where
+    Self: Computation,
     A: RunCore<Output = Value<bool>>,
 {
     type Output = Value<bool>;

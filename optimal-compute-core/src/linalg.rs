@@ -9,9 +9,12 @@ use crate::{
 
 /// See [`Computation::identity_matrix`].
 #[derive(Clone, Copy, Debug)]
-pub struct IdentityMatrix<A, T> {
-    pub(crate) inner: A,
-    pub(crate) ty: PhantomData<T>,
+pub struct IdentityMatrix<A, T>
+where
+    Self: Computation,
+{
+    pub inner: A,
+    pub(super) ty: PhantomData<T>,
 }
 
 impl<A, T> Computation for IdentityMatrix<A, T>
@@ -36,6 +39,7 @@ impl_core_ops!(IdentityMatrix<A, T>);
 
 impl<A, T> fmt::Display for IdentityMatrix<A, T>
 where
+    Self: Computation,
     A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -46,17 +50,20 @@ where
 /// A computation representing a diagonal matrix
 /// from an element.
 #[derive(Clone, Copy, Debug)]
-pub struct FromDiagElem<Len, Elem> {
-    pub(crate) len: Len,
-    pub(crate) elem: Elem,
+pub struct FromDiagElem<Len, Elem>
+where
+    Self: Computation,
+{
+    pub len: Len,
+    pub elem: Elem,
 }
 
-impl<Len, Elem> FromDiagElem<Len, Elem> {
+impl<Len, Elem> FromDiagElem<Len, Elem>
+where
+    Self: Computation,
+{
     #[allow(missing_docs)]
-    pub fn new(len: Len, elem: Elem) -> Self
-    where
-        Self: Computation,
-    {
+    pub fn new(len: Len, elem: Elem) -> Self {
         Self { len, elem }
     }
 }
@@ -85,6 +92,7 @@ impl_core_ops!(FromDiagElem<Len, Elem>);
 
 impl<Len, Elem> fmt::Display for FromDiagElem<Len, Elem>
 where
+    Self: Computation,
     Len: fmt::Display,
     Elem: fmt::Display,
 {
@@ -95,7 +103,9 @@ where
 
 /// See [`Computation::scalar_product`].
 #[derive(Clone, Copy, Debug)]
-pub struct ScalarProduct<A, B>(pub(crate) A, pub(crate) B);
+pub struct ScalarProduct<A, B>(pub A, pub B)
+where
+    Self: Computation;
 
 impl<A, B> Computation for ScalarProduct<A, B>
 where
@@ -123,7 +133,9 @@ impl_core_ops!(ScalarProduct<A, B>);
 
 /// See [`Computation::mat_mul`].
 #[derive(Clone, Copy, Debug)]
-pub struct MatMul<A, B>(pub(crate) A, pub(crate) B);
+pub struct MatMul<A, B>(pub A, pub B)
+where
+    Self: Computation;
 
 impl<A, B> Computation for MatMul<A, B>
 where
@@ -151,7 +163,9 @@ impl_core_ops!(MatMul<A, B>);
 
 /// See [`Computation::mul_out`].
 #[derive(Clone, Copy, Debug)]
-pub struct MulOut<A, B>(pub(crate) A, pub(crate) B);
+pub struct MulOut<A, B>(pub A, pub B)
+where
+    Self: Computation;
 
 impl<A, B> Computation for MulOut<A, B>
 where
@@ -178,7 +192,9 @@ impl_core_ops!(MulOut<A, B>);
 
 /// See [`Computation::mul_col`].
 #[derive(Clone, Copy, Debug)]
-pub struct MulCol<A, B>(pub(crate) A, pub(crate) B);
+pub struct MulCol<A, B>(pub A, pub B)
+where
+    Self: Computation;
 
 impl<A, B> Computation for MulCol<A, B>
 where
@@ -206,6 +222,7 @@ impl_core_ops!(MulCol<A, B>);
 
 impl<A, B> fmt::Display for ScalarProduct<A, B>
 where
+    Self: Computation,
     A: fmt::Display,
     B: fmt::Display,
 {
@@ -216,6 +233,7 @@ where
 
 impl<A, B> fmt::Display for MatMul<A, B>
 where
+    Self: Computation,
     A: fmt::Display,
     B: fmt::Display,
 {
@@ -226,6 +244,7 @@ where
 
 impl<A, B> fmt::Display for MulOut<A, B>
 where
+    Self: Computation,
     A: fmt::Display,
     B: fmt::Display,
 {
@@ -236,6 +255,7 @@ where
 
 impl<A, B> fmt::Display for MulCol<A, B>
 where
+    Self: Computation,
     A: fmt::Display,
     B: fmt::Display,
 {

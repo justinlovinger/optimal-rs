@@ -4,12 +4,14 @@ use crate::{
     peano::{One, Two},
     run::{ArgVals, Collect, DistributeArgs, Matrix, Unwrap, Value},
     sum::Sum,
+    Computation,
 };
 
 use super::RunCore;
 
 impl<A, T> RunCore for IdentityMatrix<A, T>
 where
+    Self: Computation,
     A: RunCore<Output = Value<usize>>,
     T: Clone + num_traits::Zero + num_traits::One,
 {
@@ -24,6 +26,7 @@ where
 
 impl<Len, Elem, T> RunCore for FromDiagElem<Len, Elem>
 where
+    Self: Computation,
     (Len, Elem): DistributeArgs<Output = (Value<usize>, Value<T>)>,
     T: Clone + num_traits::Zero,
 {
@@ -38,7 +41,9 @@ where
 
 impl<A, B> RunCore for ScalarProduct<A, B>
 where
-    Sum<Mul<A, B>>: RunCore,
+    Self: Computation,
+    Mul<A, B>: Computation,
+    Sum<Mul<A, B>>: Computation + RunCore,
 {
     type Output = <Sum<Mul<A, B>> as RunCore>::Output;
 
@@ -49,6 +54,7 @@ where
 
 impl<A, B, OutA, OutB, Elem> RunCore for MatMul<A, B>
 where
+    Self: Computation,
     (A, B): DistributeArgs<Output = (OutA, OutB)>,
     OutA: Collect<Two, Collected = Value<Matrix<Vec<Elem>>>>,
     OutB: Collect<Two, Collected = Value<Matrix<Vec<Elem>>>>,
@@ -64,6 +70,7 @@ where
 
 impl<A, B, OutA, OutB, Elem> RunCore for MulOut<A, B>
 where
+    Self: Computation,
     (A, B): DistributeArgs<Output = (OutA, OutB)>,
     OutA: Collect<One, Collected = Value<Vec<Elem>>>,
     OutB: Collect<One, Collected = Value<Vec<Elem>>>,
@@ -83,6 +90,7 @@ where
 
 impl<A, B, OutA, OutB, Elem> RunCore for MulCol<A, B>
 where
+    Self: Computation,
     (A, B): DistributeArgs<Output = (OutA, OutB)>,
     OutA: Collect<Two, Collected = Value<Matrix<Vec<Elem>>>>,
     OutB: Collect<One, Collected = Value<Vec<Elem>>>,

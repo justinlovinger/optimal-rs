@@ -3,9 +3,12 @@ use core::fmt;
 use crate::{impl_core_ops, peano::One, Args, Computation, ComputationFn};
 
 #[derive(Clone, Copy, Debug)]
-pub struct Enumerate<A, F> {
-    pub(crate) child: A,
-    pub(crate) f: F,
+pub struct Enumerate<A, F>
+where
+    Self: Computation,
+{
+    pub child: A,
+    pub f: F,
 }
 
 impl<A, F> Computation for Enumerate<A, F>
@@ -31,6 +34,7 @@ impl_core_ops!(Enumerate<A, F>);
 
 impl<A, F> fmt::Display for Enumerate<A, F>
 where
+    Self: Computation,
     A: fmt::Display,
     F: fmt::Display,
 {

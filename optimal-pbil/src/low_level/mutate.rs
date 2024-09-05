@@ -11,19 +11,26 @@ use super::{MutationAdjustRate, MutationChance, Probability};
 /// adjust each probability towards a random probability
 /// at `adjust_rate`.
 #[derive(Clone, Copy, Debug)]
-pub struct Mutate<C, A, P, R> {
-    pub(crate) chance: C,
-    pub(crate) adjust_rate: A,
-    pub(crate) probabilities: P,
-    pub(crate) rng: R,
+pub struct Mutate<C, A, P, R>
+where
+    Self: Computation,
+{
+    /// Computation representing [`MutationChance`].
+    pub chance: C,
+    /// Computation representing [`MutationAdjustRate`].
+    pub adjust_rate: A,
+    /// Computation representing probabilities to mutate.
+    pub probabilities: P,
+    /// Computation representing a source of randomness.
+    pub rng: R,
 }
 
-impl<C, A, P, R> Mutate<C, A, P, R> {
+impl<C, A, P, R> Mutate<C, A, P, R>
+where
+    Self: Computation,
+{
     #[allow(missing_docs)]
-    pub fn new(chance: C, adjust_rate: A, probabilities: P, rng: R) -> Self
-    where
-        Self: Computation,
-    {
+    pub fn new(chance: C, adjust_rate: A, probabilities: P, rng: R) -> Self {
         Self {
             chance,
             adjust_rate,
@@ -65,7 +72,10 @@ where
 impl_core_ops!(Mutate<C, A, P, R>);
 
 mod run {
-    use optimal_compute_core::run::{ArgVals, DistributeArgs, RunCore, Unwrap, Value};
+    use optimal_compute_core::{
+        run::{ArgVals, DistributeArgs, RunCore, Unwrap, Value},
+        Computation,
+    };
     use rand::{distributions::Standard, Rng};
 
     use crate::low_level::{adjust, MutationAdjustRate, MutationChance, Probability};
@@ -74,6 +84,7 @@ mod run {
 
     impl<C, A, P, R, POut, ROut> RunCore for Mutate<C, A, P, R>
     where
+        Self: Computation,
         (C, A, P, R): DistributeArgs<
             Output = (
                 Value<MutationChance>,

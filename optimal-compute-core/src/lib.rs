@@ -524,7 +524,9 @@ impl<Dim, A> fmt::Display for Arg<Dim, A> {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Len<A>(pub(crate) A);
+pub struct Len<A>(pub A)
+where
+    Self: Computation;
 
 impl<A> Computation for Len<A>
 where
@@ -548,6 +550,7 @@ impl_core_ops!(Len<A>);
 
 impl<A> fmt::Display for Len<A>
 where
+    Self: Computation,
     A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

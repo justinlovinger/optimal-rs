@@ -11,7 +11,7 @@ mod zip;
 use crate::{
     peano::{One, Two, Zero},
     run::{ArgVal, ArgVals},
-    Arg, Len, Val,
+    Arg, Computation, Len, Val,
 };
 
 use super::{Matrix, Unwrap, Value};
@@ -74,6 +74,7 @@ where
 
 impl<A, Out, It> RunCore for Len<A>
 where
+    Self: Computation,
     A: RunCore<Output = Value<Out>>,
     Out: IntoIterator<IntoIter = It>,
     It: ExactSizeIterator,

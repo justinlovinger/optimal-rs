@@ -5,18 +5,24 @@ use super::{AdjustRate, Probability};
 /// Adjust each probability towards corresponding `sample` bit
 /// at `rate`.
 #[derive(Clone, Copy, Debug)]
-pub struct Adjust<R, P, B> {
-    pub(crate) rate: R,
-    pub(crate) probability: P,
-    pub(crate) sample: B,
+pub struct Adjust<R, P, B>
+where
+    Self: Computation,
+{
+    /// Computation representing [`AdjustRate`].
+    pub rate: R,
+    /// Computation representing probability to adjust.
+    pub probability: P,
+    /// Computation representing sample to adjust towards.
+    pub sample: B,
 }
 
-impl<R, P, B> Adjust<R, P, B> {
+impl<R, P, B> Adjust<R, P, B>
+where
+    Self: Computation,
+{
     #[allow(missing_docs)]
-    pub fn new(rate: R, probability: P, sample: B) -> Self
-    where
-        Self: Computation,
-    {
+    pub fn new(rate: R, probability: P, sample: B) -> Self {
         Self {
             rate,
             probability,
@@ -65,6 +71,7 @@ mod run {
 
     impl<R, P, B, OutP, OutB> RunCore for Adjust<R, P, B>
     where
+        Self: Computation,
         R: Computation,
         P: Computation,
         B: Computation,

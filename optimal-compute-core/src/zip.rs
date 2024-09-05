@@ -5,13 +5,19 @@ use paste::paste;
 use crate::{impl_core_ops, Args, Computation, ComputationFn};
 
 #[derive(Clone, Copy, Debug)]
-pub struct Zip<A, B>(pub(crate) A, pub(crate) B);
+pub struct Zip<A, B>(pub A, pub B)
+where
+    Self: Computation;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Fst<A>(pub(crate) A);
+pub struct Fst<A>(pub A)
+where
+    Self: Computation;
 
 #[derive(Clone, Copy, Debug)]
-pub struct Snd<A>(pub(crate) A);
+pub struct Snd<A>(pub A)
+where
+    Self: Computation;
 
 impl<A, B> Computation for Zip<A, B>
 where
@@ -75,6 +81,7 @@ impl_core_ops!(Snd<A>);
 
 impl<A, B> fmt::Display for Zip<A, B>
 where
+    Self: Computation,
     A: fmt::Display,
     B: fmt::Display,
 {
@@ -85,6 +92,7 @@ where
 
 impl<A> fmt::Display for Fst<A>
 where
+    Self: Computation,
     A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -94,6 +102,7 @@ where
 
 impl<A> fmt::Display for Snd<A>
 where
+    Self: Computation,
     A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -108,17 +117,9 @@ macro_rules! zip_n {
     ( @combined $n:expr, { $i_first:expr, $( $i_rest:expr ),* } { $( $i:expr ),* } ) => {
         paste! {
             #[derive(Clone, Copy, Debug)]
-            pub struct [<Zip $n>]< $( [<T $i>] ),* >( $( pub(crate) [<T $i>] ),* );
-
-            impl< $( [<T $i>] ),* > [<Zip $n>]< $( [<T $i>] ),* > {
-                #[allow(clippy::too_many_arguments)]
-                pub fn new( $( [<t $i>]: [<T $i>] ),* ) -> Self
-                where
-                    Self: Computation,
-                {
-                    Self($( [<t $i>] ),*)
-                }
-            }
+            pub struct [<Zip $n>]< $( [<T $i>] ),* >( $( pub [<T $i>] ),* )
+            where
+                Self: Computation;
 
             impl< $( [<T $i>] ),* > Computation for [<Zip $n>]< $( [<T $i>] ),* >
             where
@@ -142,6 +143,7 @@ macro_rules! zip_n {
 
             impl< $( [<T $i>] ),* > fmt::Display for [<Zip $n>]< $( [<T $i>] ),* >
             where
+                Self: Computation,
                 $( [<T $i>]: fmt::Display ),*
             {
                 fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -205,7 +207,7 @@ mod tests {
     #[proptest]
     fn zip3_should_display(x: usize, y: usize, z: usize) {
         prop_assert_eq!(
-            Zip3::new(val!(x), val!(y), val!(z)).to_string(),
+            Zip3(val!(x), val!(y), val!(z)).to_string(),
             format!("({}, {}, {})", val!(x), val!(y), val!(z))
         );
     }

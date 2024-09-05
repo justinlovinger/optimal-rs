@@ -9,19 +9,26 @@ use super::{NumSamples, Probability};
 
 /// See [`Sampleable::best_sample`].
 #[derive(Clone, Copy, Debug)]
-pub struct BestSample<N, F, P, R> {
-    pub(crate) num_samples: N,
-    pub(crate) obj_func: F,
-    pub(crate) probabilities: P,
-    pub(crate) rng: R,
+pub struct BestSample<N, F, P, R>
+where
+    Self: Computation,
+{
+    /// Computation representing [`NumSamples`].
+    pub num_samples: N,
+    /// Computation representing objective function.
+    pub obj_func: F,
+    /// Computation representing probabilities to sample from.
+    pub probabilities: P,
+    /// Computation representing a source of randomness.
+    pub rng: R,
 }
 
-impl<N, F, P, R> BestSample<N, F, P, R> {
+impl<N, F, P, R> BestSample<N, F, P, R>
+where
+    Self: Computation,
+{
     #[allow(missing_docs)]
-    pub fn new(num_samples: N, obj_func: F, probabilities: P, rng: R) -> Self
-    where
-        Self: Computation,
-    {
+    pub fn new(num_samples: N, obj_func: F, probabilities: P, rng: R) -> Self {
         Self {
             num_samples,
             obj_func,
@@ -66,7 +73,7 @@ mod run {
         argvals,
         peano::One,
         run::{Collect, DistributeArgs, RunCore, Unwrap, Value},
-        Run,
+        Computation, Run,
     };
     use rand::Rng;
 
@@ -76,6 +83,7 @@ mod run {
 
     impl<N, F, P, R, POut, ROut> RunCore for BestSample<N, F, P, R>
     where
+        Self: Computation,
         (N, P, R): DistributeArgs<Output = (Value<NumSamples>, POut, Value<ROut>)>,
         POut: Collect<One, Collected = Value<Vec<Probability>>>,
         ROut: Rng,

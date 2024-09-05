@@ -28,7 +28,7 @@
 //!             val1!(initial_point)
 //!                 .then(
 //!                     "point",
-//!                     Zip3::new(
+//!                     Zip3(
 //!                         arg1!("point", f64),
 //!                         obj_func_d,
 //!                         initial_approx_inv_snd_derivatives_identity::<_, f64>(val!(len)),
@@ -36,7 +36,7 @@
 //!                 )
 //!                 .then(
 //!                     ("point", "derivatives", "approx_inv_snd_derivatives"),
-//!                     Zip4::new(
+//!                     Zip4(
 //!                         arg1!("point", f64),
 //!                         arg1!("derivatives", f64),
 //!                         arg2!("approx_inv_snd_derivatives", f64),
@@ -49,7 +49,7 @@
 //!                 )
 //!                 .then(
 //!                     ("point", "derivatives", "approx_inv_snd_derivatives", "step"),
-//!                     Zip4::new(
+//!                     Zip4(
 //!                         arg1!("derivatives", f64),
 //!                         arg2!("approx_inv_snd_derivatives", f64),
 //!                         arg1!("step", f64),
@@ -68,7 +68,7 @@
 //!                 ),
 //!             ),
 //!             (arg!("i", usize) + val!(1_usize)).zip(
-//!                 Zip5::new(
+//!                 Zip5(
 //!                     arg1!("prev_derivatives", f64),
 //!                     arg2!("prev_approx_inv_snd_derivatives", f64),
 //!                     arg1!("prev_step", f64),
@@ -83,7 +83,7 @@
 //!                         "point",
 //!                         "derivatives",
 //!                     ),
-//!                     Zip3::new(
+//!                     Zip3(
 //!                         arg1!("point", f64),
 //!                         arg1!("derivatives", f64),
 //!                         approx_inv_snd_derivatives(
@@ -96,7 +96,7 @@
 //!                 )
 //!                 .then(
 //!                     ("point", "derivatives", "approx_inv_snd_derivatives"),
-//!                     Zip4::new(
+//!                     Zip4(
 //!                         arg1!("point", f64),
 //!                         arg1!("derivatives", f64),
 //!                         arg2!("approx_inv_snd_derivatives", f64),
@@ -109,7 +109,7 @@
 //!                 )
 //!                 .then(
 //!                     ("point", "derivatives", "approx_inv_snd_derivatives", "step"),
-//!                     Zip4::new(
+//!                     Zip4(
 //!                         arg1!("derivatives", f64),
 //!                         arg2!("approx_inv_snd_derivatives", f64),
 //!                         arg1!("step", f64),
@@ -213,7 +213,7 @@ where
         .zip(derivatives.sub(prev_derivatives))
         .then(
             ("prev_step", "derivatives_diff"),
-            Zip3::new(
+            Zip3(
                 arg1!("prev_step", A),
                 arg1!("derivatives_diff", A),
                 arg1!("derivatives_diff", A).scalar_product(arg1!("derivatives_diff", A)),
@@ -339,14 +339,14 @@ where
     D: Computation<Dim = One, Item = A>,
     A: ScalarOperand + LinalgScalar,
 {
-    Zip3::new(
+    Zip3(
         prev_inv_snd_derivatives,
         prev_step,
         derivatives.sub(prev_derivatives),
     )
     .then(
         ("prev_inv_snd_derivatives", "prev_step", "derivatives_diff"),
-        Zip4::new(
+        Zip4(
             arg2!("prev_inv_snd_derivatives", A),
             arg1!("prev_step", A),
             arg1!("derivatives_diff", A),
@@ -364,7 +364,7 @@ where
         ),
         arg!("derivatives_diff_dot_prev_step", A).eq(val!(A::zero())),
         arg2!("prev_inv_snd_derivatives"),
-        Zip5::new(
+        Zip5(
             arg2!("prev_inv_snd_derivatives", A),
             arg1!("prev_step", A),
             arg1!("derivatives_diff", A),
@@ -379,7 +379,7 @@ where
                 "derivatives_diff_dot_prev_step",
                 "p",
             ),
-            Zip7::new(
+            Zip7(
                 arg2!("prev_inv_snd_derivatives", A),
                 arg1!("prev_step", A),
                 arg1!("derivatives_diff", A),

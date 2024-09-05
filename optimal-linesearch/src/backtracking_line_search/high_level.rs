@@ -291,7 +291,7 @@ pub struct BacktrackingLineSearchWith<A, F, FFD> {
 
 macro_rules! bfgs_loop {
     ( $c_1:expr, $backtracking_rate:expr, $obj_func:expr, $incr_rate:expr $( , )? ) => {
-        Zip7::new(
+        Zip7(
             arg1!("prev_derivatives", A),
             arg1!("prev_step", A),
             arg!("step_size", StepSize<A>),
@@ -315,7 +315,7 @@ macro_rules! bfgs_loop {
                 "derivatives",
                 "approx_inv_snd_derivatives",
             ),
-            Zip4::new(
+            Zip4(
                 arg1!("point", A),
                 arg1!("derivatives", A),
                 arg2!("approx_inv_snd_derivatives", A),
@@ -344,7 +344,7 @@ macro_rules! bfgs_loop {
                 "prev_approx_inv_snd_derivatives",
                 ("step_size", "point"),
             ),
-            Zip4::new(
+            Zip4(
                 arg1!("prev_point", A),
                 arg1!("prev_derivatives", A),
                 arg2!("prev_approx_inv_snd_derivatives", A),
@@ -392,7 +392,7 @@ where
                 .loop_while(
                     ("i", ("step_size", "point")),
                     (arg!("i", usize) + val!(1)).zip(
-                        Zip3::new(
+                        Zip3(
                             arg!("step_size", StepSize<A>),
                             arg1!("point", A),
                             obj_func_and_d,
@@ -428,7 +428,7 @@ where
                 .zip(val1!(self.initial_point))
                 .then(
                     ("step_size", "point"),
-                    Zip3::new(
+                    Zip3(
                         arg!("step_size", StepSize<A>),
                         arg1!("point", A),
                         obj_func_and_d,
@@ -448,7 +448,7 @@ where
                     )
                     .then(
                         ("step_size", "point"),
-                        Zip3::new(
+                        Zip3(
                             val!(incr_rate) * arg!("step_size", StepSize<A>),
                             arg1!("point", A),
                             obj_func_and_d,
@@ -474,7 +474,7 @@ where
                         .then("point", arg1!("point", A).zip(obj_func_and_d))
                         .then(
                             ("point", ("value", "derivatives")),
-                            Zip3::new(
+                            Zip3(
                                 arg1!("point", A),
                                 arg1!("derivatives", A),
                                 search(
@@ -493,7 +493,7 @@ where
                             )
                             .then(
                                 ("prev_point", "prev_derivatives", ("step_size", "point")),
-                                Zip3::new(
+                                Zip3(
                                     arg1!("prev_point", A),
                                     arg1!("prev_derivatives", A),
                                     (val!(incr_rate) * arg!("step_size", StepSize<A>))
@@ -513,7 +513,7 @@ where
                             BfgsInitializer::Identity => first_iteration
                                 .then(
                                     ("prev_point", "prev_derivatives", ("step_size", "point")),
-                                    val!(1).zip(Zip4::new(
+                                    val!(1).zip(Zip4(
                                         arg1!("prev_point", A),
                                         arg1!("prev_derivatives", A),
                                         initial_approx_inv_snd_derivatives_identity(val!(len)),
@@ -531,7 +531,7 @@ where
                                         ),
                                     ),
                                     (arg!("i", usize) + val!(1_usize)).zip(
-                                        Zip6::new(
+                                        Zip6(
                                             arg1!("prev_derivatives", A),
                                             arg2!("prev_approx_inv_snd_derivatives", A),
                                             arg1!("point", A) - arg1!("prev_point", A),
@@ -570,7 +570,7 @@ where
                                 let second_iteration = first_iteration
                                     .then(
                                         ("prev_point", "prev_derivatives", ("step_size", "point")),
-                                        Zip5::new(
+                                        Zip5(
                                             arg1!("prev_derivatives", A),
                                             arg1!("point", A) - arg1!("prev_point", A),
                                             arg!("step_size", StepSize<A>),
@@ -586,7 +586,7 @@ where
                                             "point",
                                             ("value", "derivatives"),
                                         ),
-                                        Zip7::new(
+                                        Zip7(
                                             arg1!("prev_derivatives", A),
                                             arg1!("prev_step", A),
                                             arg!("step_size", StepSize<A>),
@@ -611,7 +611,7 @@ where
                                             "approx_inv_snd_derivatives",
                                         ),
                                         val!(2_usize).zip(
-                                            Zip4::new(
+                                            Zip4(
                                                 arg1!("point", A),
                                                 arg1!("derivatives", A),
                                                 arg2!("approx_inv_snd_derivatives", A),
@@ -636,7 +636,7 @@ where
                                                     "prev_approx_inv_snd_derivatives",
                                                     ("step_size", "point"),
                                                 ),
-                                                Zip4::new(
+                                                Zip4(
                                                     arg1!("prev_point", A),
                                                     arg1!("prev_derivatives", A),
                                                     arg2!("prev_approx_inv_snd_derivatives", A),
@@ -676,7 +676,7 @@ where
                                                 ),
                                             ),
                                             (arg!("i", usize) + val!(1_usize)).zip(
-                                                Zip6::new(
+                                                Zip6(
                                                     arg1!("prev_derivatives", A),
                                                     arg2!("prev_approx_inv_snd_derivatives", A),
                                                     arg1!("point", A) - arg1!("prev_point", A),
@@ -735,7 +735,7 @@ where
                             ("point", ("value", "derivatives")),
                             is_near_minima(arg!("value", A), arg1!("derivatives", A)),
                             arg1!("point", A),
-                            Zip4::new(
+                            Zip4(
                                 arg1!("point", A),
                                 arg!("value", A),
                                 arg1!("derivatives", A),
@@ -748,7 +748,7 @@ where
                                     "derivatives",
                                     "approx_inv_snd_derivatives",
                                 ),
-                                Zip4::new(
+                                Zip4(
                                     arg1!("point", A),
                                     arg1!("derivatives", A),
                                     arg2!("approx_inv_snd_derivatives", A),
@@ -774,7 +774,7 @@ where
                                     "prev_approx_inv_snd_derivatives",
                                     ("step_size", "point"),
                                 ),
-                                Zip6::new(
+                                Zip6(
                                     arg1!("prev_point", A),
                                     arg1!("prev_derivatives", A),
                                     arg2!("prev_approx_inv_snd_derivatives", A),
@@ -792,7 +792,7 @@ where
                                     "point",
                                     ("value", "derivatives"),
                                 ),
-                                Zip7::new(
+                                Zip7(
                                     arg1!("prev_derivatives", A),
                                     arg2!("prev_approx_inv_snd_derivatives", A),
                                     arg1!("point", A) - arg1!("prev_point", A),
@@ -820,7 +820,7 @@ where
                                         "prev_approx_inv_snd_derivatives",
                                         ("step_size", "point"),
                                     ),
-                                    Zip6::new(
+                                    Zip6(
                                         arg1!("prev_point", A),
                                         arg1!("prev_derivatives", A),
                                         arg2!("prev_approx_inv_snd_derivatives"),
@@ -850,7 +850,7 @@ where
                             ("point", ("value", "derivatives")),
                             is_near_minima(arg!("value", A), arg1!("derivatives", A)),
                             arg1!("point", A),
-                            Zip3::new(
+                            Zip3(
                                 arg1!("point", A),
                                 arg1!("derivatives", A),
                                 search(
@@ -869,7 +869,7 @@ where
                             )
                             .then(
                                 ("prev_point", "prev_derivatives", ("step_size", "point")),
-                                Zip5::new(
+                                Zip5(
                                     arg1!("prev_point", A),
                                     arg1!("prev_derivatives", A),
                                     val!(incr_rate) * arg!("step_size", StepSize<A>),
@@ -887,7 +887,7 @@ where
                                 ),
                                 is_near_minima(arg!("value", A), arg1!("derivatives", A)),
                                 arg1!("point", A),
-                                Zip6::new(
+                                Zip6(
                                     arg1!("prev_derivatives", A),
                                     arg1!("point", A) - arg1!("prev_point", A),
                                     arg!("step_size", StepSize<A>),
@@ -904,7 +904,7 @@ where
                                         "value",
                                         "derivatives",
                                     ),
-                                    Zip7::new(
+                                    Zip7(
                                         arg1!("prev_derivatives", A),
                                         arg1!("prev_step", A),
                                         arg!("step_size", StepSize<A>),
@@ -928,7 +928,7 @@ where
                                         "derivatives",
                                         "approx_inv_snd_derivatives",
                                     ),
-                                    Zip4::new(
+                                    Zip4(
                                         arg1!("point", A),
                                         arg1!("derivatives", A),
                                         arg2!("approx_inv_snd_derivatives", A),
@@ -954,7 +954,7 @@ where
                                         "prev_approx_inv_snd_derivatives",
                                         ("step_size", "point"),
                                     ),
-                                    Zip6::new(
+                                    Zip6(
                                         arg1!("prev_point", A),
                                         arg1!("prev_derivatives", A),
                                         arg2!("prev_approx_inv_snd_derivatives", A),
@@ -972,7 +972,7 @@ where
                                         "point",
                                         ("value", "derivatives"),
                                     ),
-                                    Zip7::new(
+                                    Zip7(
                                         arg1!("prev_derivatives", A),
                                         arg2!("prev_approx_inv_snd_derivatives", A),
                                         arg1!("point", A) - arg1!("prev_point", A),
@@ -1000,7 +1000,7 @@ where
                                             "prev_approx_inv_snd_derivatives",
                                             ("step_size", "point"),
                                         ),
-                                        Zip6::new(
+                                        Zip6(
                                             arg1!("prev_point", A),
                                             arg1!("prev_derivatives", A),
                                             arg2!("prev_approx_inv_snd_derivatives"),

@@ -23,7 +23,7 @@
 //!         .loop_while(
 //!             ("i", ("step_size", "point")),
 //!             (arg!("i", usize) + val!(1)).zip(
-//!                 Zip3::new(
+//!                 Zip3(
 //!                     arg!("step_size", StepSize<f64>),
 //!                     arg1!("point", f64),
 //!                     arg1!("point", f64).black_box::<_, (Zero, One), (f64, f64)>(
@@ -170,7 +170,7 @@ where
     DI: Computation<Dim = One, Item = A>,
     A: Clone + PartialOrd + ops::Add<Output = A> + ops::Mul<Output = A>,
 {
-    Zip7::new(
+    Zip7(
         c_1,
         backtracking_rate,
         initial_step_size,
@@ -189,7 +189,7 @@ where
             "derivatives",
             "direction",
         ),
-        Zip8::new(
+        Zip8(
             c_1_times_derivatives_dot_direction(
                 arg!("c_1", SufficientDecreaseParameter<A>),
                 arg1!("derivatives", A),
@@ -219,7 +219,7 @@ where
             "point",
             "next_step_size",
         ),
-        Zip8::new(
+        Zip8(
             arg!("c1tddd"),
             arg!("backtracking_rate", BacktrackingRate<A>),
             arg1!("initial_point", A),

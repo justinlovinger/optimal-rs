@@ -5,16 +5,20 @@ use super::Probability;
 /// Estimate the best sample discovered
 /// from a set of probabilities.
 #[derive(Clone, Copy, Debug)]
-pub struct PointFrom<P> {
-    pub(crate) probabilities: P,
+pub struct PointFrom<P>
+where
+    Self: Computation,
+{
+    /// Computation representing probabilities to make a point from.
+    pub probabilities: P,
 }
 
-impl<P> PointFrom<P> {
+impl<P> PointFrom<P>
+where
+    Self: Computation,
+{
     #[allow(missing_docs)]
-    pub fn new(probabilities: P) -> Self
-    where
-        Self: Computation,
-    {
+    pub fn new(probabilities: P) -> Self {
         Self { probabilities }
     }
 }
@@ -40,7 +44,10 @@ where
 impl_core_ops!(PointFrom<P>);
 
 mod run {
-    use optimal_compute_core::run::{RunCore, Unwrap, Value};
+    use optimal_compute_core::{
+        run::{RunCore, Unwrap, Value},
+        Computation,
+    };
 
     use crate::low_level::Probability;
 
@@ -48,6 +55,7 @@ mod run {
 
     impl<P, POut> RunCore for PointFrom<P>
     where
+        Self: Computation,
         P: RunCore<Output = Value<POut>>,
         POut: IntoIterator<Item = Probability>,
     {

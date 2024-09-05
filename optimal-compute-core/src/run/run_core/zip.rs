@@ -3,13 +3,12 @@ use paste::paste;
 use crate::{
     run::{ArgVals, DistributeArgs, RunCore},
     zip::*,
-    ComputationFn,
+    Computation,
 };
 
 impl<A, B, Out> RunCore for Zip<A, B>
 where
-    A: ComputationFn,
-    B: ComputationFn,
+    Self: Computation,
     (A, B): DistributeArgs<Output = Out>,
 {
     type Output = Out;
@@ -21,6 +20,7 @@ where
 
 impl<A, OutA, OutB> RunCore for Fst<A>
 where
+    Self: Computation,
     A: RunCore<Output = (OutA, OutB)>,
 {
     type Output = OutA;
@@ -32,6 +32,7 @@ where
 
 impl<A, OutA, OutB> RunCore for Snd<A>
 where
+    Self: Computation,
     A: RunCore<Output = (OutA, OutB)>,
 {
     type Output = OutB;
@@ -46,6 +47,7 @@ macro_rules! impl_intocpu_for_zip_n {
         paste! {
             impl< $( [<T $i>] ),* , Out > RunCore for [<Zip $n>]< $( [<T $i>] ),* >
             where
+                Self: Computation,
                 ( $( [<T $i>] ),* ): DistributeArgs<Output = Out>,
             {
                 type Output = Out;
@@ -99,9 +101,6 @@ mod tests {
 
     #[proptest]
     fn zip3_should_return_a_three_tuple_when_run(x: usize, y: usize, z: usize) {
-        prop_assert_eq!(
-            Zip3::new(val!(x), val!(y), val!(z)).run(argvals![]),
-            (x, y, z)
-        );
+        prop_assert_eq!(Zip3(val!(x), val!(y), val!(z)).run(argvals![]), (x, y, z));
     }
 }

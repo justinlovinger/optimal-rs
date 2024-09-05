@@ -38,7 +38,9 @@ macro_rules! impl_binary_op {
     ( $op:ident, $package:ident ) => {
         paste! {
             #[derive(Clone, Copy, Debug)]
-            pub struct $op<A, B>(pub(crate) A, pub(crate) B);
+            pub struct $op<A, B>(pub A, pub B)
+            where
+                Self: Computation;
 
             impl<A, B> Computation for $op<A, B>
             where
@@ -74,7 +76,10 @@ macro_rules! impl_unary_op {
     ( $op:ident, $package:ident ) => {
         paste! {
             #[derive(Clone, Copy, Debug)]
-            pub struct $op<A>(pub(crate) A);
+            pub struct $op<A>(pub A)
+            where
+                Self: Computation;
+
 
             impl<A> Computation for $op<A>
             where
@@ -115,6 +120,7 @@ impl_display_for_inline_binary!(Pow, "^");
 
 impl<A> fmt::Display for Neg<A>
 where
+    Self: Computation,
     A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -123,7 +129,9 @@ where
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Abs<A>(pub(crate) A);
+pub struct Abs<A>(pub A)
+where
+    Self: Computation;
 
 impl<A> Computation for Abs<A>
 where
@@ -148,6 +156,7 @@ impl_core_ops!(Abs<A>);
 
 impl<A> fmt::Display for Abs<A>
 where
+    Self: Computation,
     A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

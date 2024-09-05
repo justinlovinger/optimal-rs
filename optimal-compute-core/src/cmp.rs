@@ -12,7 +12,9 @@ macro_rules! impl_cmp_op {
     ( $op:ident ) => {
         paste! {
             #[derive(Clone, Copy, Debug)]
-            pub struct $op<A, B>(pub(crate) A, pub(crate) B);
+            pub struct $op<A, B>(pub A, pub B)
+            where
+                Self: Computation;
 
             impl<A, B> Computation for $op<A, B>
             where
@@ -54,7 +56,9 @@ impl_display_for_inline_binary!(Gt, ">");
 impl_display_for_inline_binary!(Ge, ">=");
 
 #[derive(Clone, Copy, Debug)]
-pub struct Max<A>(pub(crate) A);
+pub struct Max<A>(pub A)
+where
+    Self: Computation;
 
 impl<A, D> Computation for Max<A>
 where
@@ -79,6 +83,7 @@ impl_core_ops!(Max<A>);
 
 impl<A> fmt::Display for Max<A>
 where
+    Self: Computation,
     A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -87,7 +92,9 @@ where
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Not<A>(pub(crate) A);
+pub struct Not<A>(pub A)
+where
+    Self: Computation;
 
 impl<A> Computation for Not<A>
 where
@@ -111,6 +118,7 @@ impl_core_ops!(Not<A>);
 
 impl<A> fmt::Display for Not<A>
 where
+    Self: Computation,
     A: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

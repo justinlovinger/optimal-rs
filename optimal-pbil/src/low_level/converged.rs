@@ -9,17 +9,22 @@ use super::{Probability, ProbabilityThreshold};
 /// Return whether all probabilities are above the given threshold
 /// or below its inverse.
 #[derive(Clone, Copy, Debug)]
-pub struct Converged<T, P> {
-    pub(crate) threshold: T,
-    pub(crate) probabilities: P,
+pub struct Converged<T, P>
+where
+    Self: Computation,
+{
+    /// Computation representing [`ProbabilityThreshold`].
+    pub threshold: T,
+    /// Computation representing probabilities to check.
+    pub probabilities: P,
 }
 
-impl<T, P> Converged<T, P> {
+impl<T, P> Converged<T, P>
+where
+    Self: Computation,
+{
     #[allow(missing_docs)]
-    pub fn new(threshold: T, probabilities: P) -> Self
-    where
-        Self: Computation,
-    {
+    pub fn new(threshold: T, probabilities: P) -> Self {
         Self {
             threshold,
             probabilities,
@@ -50,7 +55,10 @@ where
 impl_core_ops!(Converged<T, P>);
 
 mod run {
-    use optimal_compute_core::run::{ArgVals, DistributeArgs, RunCore, Unwrap, Value};
+    use optimal_compute_core::{
+        run::{ArgVals, DistributeArgs, RunCore, Unwrap, Value},
+        Computation,
+    };
 
     use crate::low_level::{Probability, ProbabilityThreshold};
 
@@ -58,6 +66,7 @@ mod run {
 
     impl<T, P, POut> RunCore for Converged<T, P>
     where
+        Self: Computation,
         (T, P): DistributeArgs<Output = (Value<ProbabilityThreshold>, Value<POut>)>,
         POut: IntoIterator<Item = Probability>,
     {

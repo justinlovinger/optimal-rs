@@ -10,17 +10,20 @@ mod rand {
     use super::TupleLen;
 
     #[derive(Clone, Copy, Debug)]
-    pub struct Rand<Sh, Dist, T> {
-        pub(crate) shape: Sh,
-        pub(crate) distribution: Dist,
-        pub(crate) ty: PhantomData<T>,
+    pub struct Rand<Sh, Dist, T>
+    where
+        Self: Computation,
+    {
+        pub shape: Sh,
+        pub distribution: Dist,
+        ty: PhantomData<T>,
     }
 
-    impl<Sh, Dist, T> Rand<Sh, Dist, T> {
-        pub fn new(shape: Sh, distribution: Dist) -> Self
-        where
-            Self: Computation,
-        {
+    impl<Sh, Dist, T> Rand<Sh, Dist, T>
+    where
+        Self: Computation,
+    {
+        pub fn new(shape: Sh, distribution: Dist) -> Self {
             Self {
                 shape,
                 distribution,
@@ -50,6 +53,7 @@ mod rand {
 
     impl<Sh, Dist, T> fmt::Display for Rand<Sh, Dist, T>
     where
+        Self: Computation,
         Sh: fmt::Debug,
         Dist: fmt::Debug,
     {
@@ -68,18 +72,21 @@ mod seeded_rand {
     use super::TupleLen;
 
     #[derive(Clone, Copy, Debug)]
-    pub struct SeededRand<R, Sh, Dist, T> {
-        pub(crate) rng_comp: R,
-        pub(crate) shape: Sh,
-        pub(crate) distribution: Dist,
-        pub(crate) ty: PhantomData<T>,
+    pub struct SeededRand<R, Sh, Dist, T>
+    where
+        Self: Computation,
+    {
+        pub rng_comp: R,
+        pub shape: Sh,
+        pub distribution: Dist,
+        ty: PhantomData<T>,
     }
 
-    impl<R, Sh, Dist, T> SeededRand<R, Sh, Dist, T> {
-        pub fn new(rng_comp: R, shape: Sh, distribution: Dist) -> Self
-        where
-            Self: Computation,
-        {
+    impl<R, Sh, Dist, T> SeededRand<R, Sh, Dist, T>
+    where
+        Self: Computation,
+    {
+        pub fn new(rng_comp: R, shape: Sh, distribution: Dist) -> Self {
             Self {
                 rng_comp,
                 shape,
@@ -112,6 +119,7 @@ mod seeded_rand {
 
     impl<R, Sh, Dist, T> fmt::Display for SeededRand<R, Sh, Dist, T>
     where
+        Self: Computation,
         R: fmt::Display,
         Sh: fmt::Debug,
         Dist: fmt::Debug,
@@ -153,16 +161,19 @@ mod rands {
     use crate::{impl_core_ops, Args, Computation, ComputationFn};
 
     #[derive(Clone, Copy, Debug)]
-    pub struct Rands<Dist, T> {
-        pub(crate) distribution_comp: Dist,
-        pub(crate) ty: PhantomData<T>,
+    pub struct Rands<Dist, T>
+    where
+        Self: Computation,
+    {
+        pub distribution_comp: Dist,
+        ty: PhantomData<T>,
     }
 
-    impl<Dist, T> Rands<Dist, T> {
-        pub fn new(distribution_comp: Dist) -> Self
-        where
-            Self: Computation,
-        {
+    impl<Dist, T> Rands<Dist, T>
+    where
+        Self: Computation,
+    {
+        pub fn new(distribution_comp: Dist) -> Self {
             Self {
                 distribution_comp,
                 ty: PhantomData,
@@ -192,6 +203,7 @@ mod rands {
 
     impl<Dist, T> fmt::Display for Rands<Dist, T>
     where
+        Self: Computation,
         Dist: fmt::Display,
     {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -207,17 +219,20 @@ mod seeded_rands {
     use crate::{impl_core_ops, peano::Zero, Args, Computation, ComputationFn};
 
     #[derive(Clone, Copy, Debug)]
-    pub struct SeededRands<R, Dist, T> {
-        pub(crate) rng_comp: R,
-        pub(crate) distribution_comp: Dist,
-        pub(crate) ty: PhantomData<T>,
+    pub struct SeededRands<R, Dist, T>
+    where
+        Self: Computation,
+    {
+        pub rng_comp: R,
+        pub distribution_comp: Dist,
+        ty: PhantomData<T>,
     }
 
-    impl<R, Dist, T> SeededRands<R, Dist, T> {
-        pub fn new(rng_comp: R, distribution_comp: Dist) -> Self
-        where
-            Self: Computation,
-        {
+    impl<R, Dist, T> SeededRands<R, Dist, T>
+    where
+        Self: Computation,
+    {
+        pub fn new(rng_comp: R, distribution_comp: Dist) -> Self {
             Self {
                 rng_comp,
                 distribution_comp,
@@ -250,6 +265,7 @@ mod seeded_rands {
 
     impl<R, Dist, T> fmt::Display for SeededRands<R, Dist, T>
     where
+        Self: Computation,
         R: fmt::Display,
         Dist: fmt::Display,
     {
