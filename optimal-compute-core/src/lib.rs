@@ -370,14 +370,20 @@ pub trait ComputationFn: Computation {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Val<Dim, A> {
+pub struct Val<Dim, A>
+where
+    Self: Computation,
+{
     dim: PhantomData<Dim>,
-    inner: A,
+    pub inner: A,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Arg<Dim, A> {
-    name: &'static str,
+pub struct Arg<Dim, A>
+where
+    Self: Computation,
+{
+    pub name: &'static str,
     dim: PhantomData<Dim>,
     elem: PhantomData<A>,
 }
@@ -389,16 +395,15 @@ pub type Arg0<A> = Arg<Zero, A>;
 pub type Arg1<A> = Arg<One, A>;
 pub type Arg2<A> = Arg<Two, A>;
 
-impl<Dim, A> Val<Dim, A> {
+impl<Dim, A> Val<Dim, A>
+where
+    Self: Computation,
+{
     pub fn new(value: A) -> Self {
         Val {
             dim: PhantomData,
             inner: value,
         }
-    }
-
-    pub fn into_inner(self) -> A {
-        self.inner
     }
 }
 
@@ -510,6 +515,7 @@ where
 
 impl<D, A> fmt::Display for Val<Suc<D>, A>
 where
+    Self: Computation,
     A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -517,7 +523,10 @@ where
     }
 }
 
-impl<Dim, A> fmt::Display for Arg<Dim, A> {
+impl<Dim, A> fmt::Display for Arg<Dim, A>
+where
+    Self: Computation,
+{
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.name)
     }

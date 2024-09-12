@@ -29,7 +29,10 @@ pub trait RunCore {
     fn run_core(self, args: ArgVals) -> Self::Output;
 }
 
-impl<Dim, A> RunCore for Val<Dim, A> {
+impl<Dim, A> RunCore for Val<Dim, A>
+where
+    Self: Computation,
+{
     type Output = Value<A>;
 
     fn run_core(self, _args: ArgVals) -> Self::Output {
@@ -39,6 +42,7 @@ impl<Dim, A> RunCore for Val<Dim, A> {
 
 impl<A> RunCore for Arg<Zero, A>
 where
+    Self: Computation,
     A: 'static + ArgVal,
 {
     type Output = Value<A>;
