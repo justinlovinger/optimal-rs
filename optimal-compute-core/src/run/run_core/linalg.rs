@@ -9,16 +9,16 @@ use crate::{
 
 use super::RunCore;
 
-impl<A, T> RunCore for IdentityMatrix<A, T>
+impl<Len, T> RunCore for IdentityMatrix<Len, T>
 where
     Self: Computation,
-    A: RunCore<Output = Value<usize>>,
+    Len: RunCore<Output = Value<usize>>,
     T: Clone + num_traits::Zero + num_traits::One,
 {
     type Output = Value<Matrix<Vec<T>>>;
 
     fn run_core(self, args: ArgVals) -> Self::Output {
-        let len = self.inner.run_core(args).unwrap();
+        let len = self.len.run_core(args).unwrap();
         let matrix = ndarray::Array2::from_diag_elem(len, T::one());
         Value(Matrix::from_vec((len, len), matrix.into_raw_vec()).unwrap())
     }

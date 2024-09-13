@@ -302,7 +302,7 @@ pub trait Computation {
         linalg::IdentityMatrix<Self, T>: Computation,
     {
         linalg::IdentityMatrix {
-            inner: self,
+            len: self,
             ty: PhantomData::<T>,
         }
     }

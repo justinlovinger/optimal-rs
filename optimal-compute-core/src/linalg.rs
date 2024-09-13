@@ -9,41 +9,41 @@ use crate::{
 
 /// See [`Computation::identity_matrix`].
 #[derive(Clone, Copy, Debug)]
-pub struct IdentityMatrix<A, T>
+pub struct IdentityMatrix<Len, T>
 where
     Self: Computation,
 {
-    pub inner: A,
+    pub len: Len,
     pub(super) ty: PhantomData<T>,
 }
 
-impl<A, T> Computation for IdentityMatrix<A, T>
+impl<Len, T> Computation for IdentityMatrix<Len, T>
 where
-    A: Computation<Dim = Zero, Item = usize>,
+    Len: Computation<Dim = Zero, Item = usize>,
 {
     type Dim = Two;
     type Item = T;
 }
 
-impl<A, T> ComputationFn for IdentityMatrix<A, T>
+impl<Len, T> ComputationFn for IdentityMatrix<Len, T>
 where
     Self: Computation,
-    A: ComputationFn,
+    Len: ComputationFn,
 {
     fn args(&self) -> crate::Args {
-        self.inner.args()
+        self.len.args()
     }
 }
 
-impl_core_ops!(IdentityMatrix<A, T>);
+impl_core_ops!(IdentityMatrix<Len, T>);
 
-impl<A, T> fmt::Display for IdentityMatrix<A, T>
+impl<Len, T> fmt::Display for IdentityMatrix<Len, T>
 where
     Self: Computation,
-    A: fmt::Display,
+    Len: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "identity_matrix({})", self.inner)
+        write!(f, "identity_matrix({})", self.len)
     }
 }
 
