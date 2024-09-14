@@ -1,3 +1,5 @@
+use core::fmt;
+
 use optimal_compute_core::{
     impl_core_ops,
     peano::{One, Zero},
@@ -67,6 +69,23 @@ where
 }
 
 impl_core_ops!(BestSample<N, F, P, R>);
+
+impl<N, F, P, R> fmt::Display for BestSample<N, F, P, R>
+where
+    Self: Computation,
+    N: fmt::Display,
+    F: fmt::Display,
+    P: fmt::Display,
+    R: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "best_sample({}, {}, {}, {})",
+            self.num_samples, self.obj_func, self.probabilities, self.rng
+        )
+    }
+}
 
 mod run {
     use optimal_compute_core::{

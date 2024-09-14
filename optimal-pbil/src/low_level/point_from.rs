@@ -1,3 +1,5 @@
+use core::fmt;
+
 use optimal_compute_core::{impl_core_ops, peano::One, Args, Computation, ComputationFn};
 
 use super::Probability;
@@ -42,6 +44,16 @@ where
 }
 
 impl_core_ops!(PointFrom<P>);
+
+impl<P> fmt::Display for PointFrom<P>
+where
+    Self: Computation,
+    P: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "point_from({})", self.probabilities)
+    }
+}
 
 mod run {
     use optimal_compute_core::{

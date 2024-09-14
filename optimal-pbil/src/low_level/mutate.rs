@@ -1,3 +1,5 @@
+use core::fmt;
+
 use optimal_compute_core::{
     impl_core_ops,
     peano::{One, Zero},
@@ -70,6 +72,23 @@ where
 }
 
 impl_core_ops!(Mutate<C, A, P, R>);
+
+impl<C, A, P, R> fmt::Display for Mutate<C, A, P, R>
+where
+    Self: Computation,
+    C: fmt::Display,
+    A: fmt::Display,
+    P: fmt::Display,
+    R: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "mutate({}, {}, {}, {})",
+            self.chance, self.adjust_rate, self.probabilities, self.rng
+        )
+    }
+}
 
 mod run {
     use optimal_compute_core::{

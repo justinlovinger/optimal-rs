@@ -1,3 +1,5 @@
+use core::fmt;
+
 use optimal_compute_core::{
     impl_core_ops,
     peano::{One, Zero},
@@ -53,6 +55,17 @@ where
 }
 
 impl_core_ops!(Converged<T, P>);
+
+impl<T, P> fmt::Display for Converged<T, P>
+where
+    Self: Computation,
+    T: fmt::Display,
+    P: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "converged({}, {})", self.threshold, self.probabilities)
+    }
+}
 
 mod run {
     use optimal_compute_core::{

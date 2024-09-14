@@ -1,3 +1,5 @@
+use core::fmt;
+
 use optimal_compute_core::{impl_core_ops, peano::Zero, Args, Computation, ComputationFn};
 
 use super::{AdjustRate, Probability};
@@ -57,6 +59,22 @@ where
 }
 
 impl_core_ops!(Adjust<R, P, B>);
+
+impl<R, P, B> fmt::Display for Adjust<R, P, B>
+where
+    Self: Computation,
+    R: fmt::Display,
+    P: fmt::Display,
+    B: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "adjust({}, {}, {})",
+            self.rate, self.probability, self.sample
+        )
+    }
+}
 
 mod run {
     use optimal_compute_core::{
