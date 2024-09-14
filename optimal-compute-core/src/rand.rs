@@ -120,14 +120,14 @@ mod seeded_rand {
     impl<R, Sh, Dist, T> fmt::Display for SeededRand<R, Sh, Dist, T>
     where
         Self: Computation,
-        R: fmt::Display,
+        R: fmt::Debug,
         Sh: fmt::Debug,
         Dist: fmt::Debug,
     {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             write!(
                 f,
-                "seeded_random({}, {:?}, {:?})",
+                "seeded_random({:?}, {:?}, {:?})",
                 self.rng_comp, self.shape, self.distribution
             )
         }
@@ -281,8 +281,6 @@ mod seeded_rands {
 
 #[cfg(test)]
 mod tests {
-    use core::fmt;
-
     use proptest::prelude::*;
     use rand::{distributions::Standard, rngs::StdRng, SeedableRng};
     use test_strategy::proptest;
@@ -319,43 +317,43 @@ mod tests {
 
     #[proptest]
     fn seededrand_should_display(seed: u64) {
-        let rng = val!(Rng(StdRng::seed_from_u64(seed)));
+        let rng = val!(StdRng::seed_from_u64(seed));
         prop_assert_eq!(
             SeededRand::<_, _, _, i32>::new(rng.clone(), (), Standard).to_string(),
-            format!("seeded_random({}, (), Standard)", rng)
+            format!("seeded_random({:?}, (), Standard)", rng)
         );
     }
 
     #[proptest]
     fn seededrand_should_display_1d(seed: u64, x: usize) {
-        let rng = val!(Rng(StdRng::seed_from_u64(seed)));
+        let rng = val!(StdRng::seed_from_u64(seed));
         prop_assert_eq!(
             SeededRand::<_, _, _, i32>::new(rng.clone(), (x,), Standard).to_string(),
-            format!("seeded_random({}, ({},), Standard)", rng, x)
+            format!("seeded_random({:?}, ({},), Standard)", rng, x)
         );
     }
 
     #[proptest]
     fn seededrand_should_display_2d(seed: u64, x: usize, y: usize) {
-        let rng = val!(Rng(StdRng::seed_from_u64(seed)));
+        let rng = val!(StdRng::seed_from_u64(seed));
         prop_assert_eq!(
             SeededRand::<_, _, _, i32>::new(rng.clone(), (x, y), Standard).to_string(),
-            format!("seeded_random({}, ({}, {}), Standard)", rng, x, y)
+            format!("seeded_random({:?}, ({}, {}), Standard)", rng, x, y)
         );
     }
 
     #[test]
     fn rands_should_display() {
-        let dist = val!(Dist::new());
+        let dist = val!(Standard);
         assert_eq!(
-            Rands::<_, i32>::new(dist.clone()).to_string(),
+            Rands::<_, i32>::new(dist).to_string(),
             format!("randoms({})", dist)
         );
     }
 
     #[proptest]
     fn rands_should_display_1d(#[strategy(1_usize..10)] x: usize) {
-        let dist = val1!(std::iter::repeat(Dist::new()).take(x).collect::<Vec<_>>());
+        let dist = val1!(std::iter::repeat(Standard).take(x).collect::<Vec<_>>());
         prop_assert_eq!(
             Rands::<_, i32>::new(dist.clone()).to_string(),
             format!("randoms({})", dist)
@@ -369,9 +367,7 @@ mod tests {
     ) {
         let dist = val2!(Matrix::from_vec(
             (x, y),
-            std::iter::repeat(Dist::new())
-                .take(x * y)
-                .collect::<Vec<_>>()
+            std::iter::repeat(Standard).take(x * y).collect::<Vec<_>>()
         )
         .unwrap());
         prop_assert_eq!(
@@ -382,18 +378,18 @@ mod tests {
 
     #[proptest]
     fn seededrands_should_display(seed: u64) {
-        let rng = val!(Rng(StdRng::seed_from_u64(seed)));
-        let dist = val!(Dist::new());
+        let rng = val!(StdRng::seed_from_u64(seed));
+        let dist = val!(Standard);
         prop_assert_eq!(
-            SeededRands::<_, _, i32>::new(rng.clone(), dist.clone()).to_string(),
+            SeededRands::<_, _, i32>::new(rng.clone(), dist).to_string(),
             format!("seeded_randoms({}, {})", rng, dist)
         );
     }
 
     #[proptest]
     fn seededrands_should_display_1d(seed: u64, #[strategy(1_usize..10)] x: usize) {
-        let rng = val!(Rng(StdRng::seed_from_u64(seed)));
-        let dist = val1!(std::iter::repeat(Dist::new()).take(x).collect::<Vec<_>>());
+        let rng = val!(StdRng::seed_from_u64(seed));
+        let dist = val1!(std::iter::repeat(Standard).take(x).collect::<Vec<_>>());
         prop_assert_eq!(
             SeededRands::<_, _, i32>::new(rng.clone(), dist.clone()).to_string(),
             format!("seeded_randoms({}, {})", rng, dist)
@@ -406,41 +402,15 @@ mod tests {
         #[strategy(1_usize..10)] x: usize,
         #[strategy(1_usize..10)] y: usize,
     ) {
-        let rng = val!(Rng(StdRng::seed_from_u64(seed)));
+        let rng = val!(StdRng::seed_from_u64(seed));
         let dist = val2!(Matrix::from_vec(
             (x, y),
-            std::iter::repeat(Dist::new())
-                .take(x * y)
-                .collect::<Vec<_>>()
+            std::iter::repeat(Standard).take(x * y).collect::<Vec<_>>()
         )
         .unwrap());
         prop_assert_eq!(
             SeededRands::<_, _, i32>::new(rng.clone(), dist.clone()).to_string(),
             format!("seeded_randoms({}, {})", rng, dist)
         );
-    }
-
-    #[derive(Clone, Debug)]
-    struct Rng(StdRng);
-
-    impl fmt::Display for Rng {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            fmt::Debug::fmt(&self.0, f)
-        }
-    }
-
-    #[derive(Clone, Debug)]
-    struct Dist(Standard);
-
-    impl Dist {
-        fn new() -> Self {
-            Self(Standard)
-        }
-    }
-
-    impl fmt::Display for Dist {
-        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            fmt::Debug::fmt(&self.0, f)
-        }
     }
 }

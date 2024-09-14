@@ -506,7 +506,7 @@ impl_core_ops!(Arg<Dim, A>);
 
 impl<A> fmt::Display for Val<Zero, A>
 where
-    A: fmt::Display,
+    A: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
