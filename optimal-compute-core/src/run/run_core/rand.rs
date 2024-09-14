@@ -58,7 +58,7 @@ mod rand {
 }
 
 mod seeded_rand {
-    use rand::{distributions::Distribution, RngCore};
+    use rand::{distributions::Distribution, Rng};
 
     use crate::{
         rand::SeededRand,
@@ -70,7 +70,7 @@ mod seeded_rand {
     where
         Self: Computation,
         RComp: RunCore<Output = Value<R>>,
-        R: RngCore,
+        R: Rng,
         Dist: Distribution<T>,
     {
         type Output = (Value<R>, Value<T>);
@@ -86,7 +86,7 @@ mod seeded_rand {
     where
         Self: Computation,
         RComp: RunCore<Output = Value<R>>,
-        R: RngCore,
+        R: Rng,
         Dist: Distribution<T>,
     {
         type Output = (Value<R>, Value<Vec<T>>);
@@ -107,7 +107,7 @@ mod seeded_rand {
     where
         Self: Computation,
         RComp: RunCore<Output = Value<R>>,
-        R: RngCore,
+        R: Rng,
         Dist: Distribution<T>,
     {
         type Output = (Value<R>, Value<Matrix<Vec<T>>>);
@@ -207,7 +207,7 @@ mod rands {
 }
 
 mod seeded_rands {
-    use rand::{distributions::Distribution, RngCore};
+    use rand::{distributions::Distribution, Rng};
 
     use crate::{
         peano::{One, Two, Zero},
@@ -221,7 +221,7 @@ mod seeded_rands {
         Self: Computation,
         DistComp: Computation,
         (RComp, DistComp): DistributeArgs<Output = (Value<R>, Value<Dist>)>,
-        R: RngCore,
+        R: Rng,
         Dist: BroadcastSeededRands<DistComp::Dim, T, Output = Out>,
     {
         type Output = (Value<R>, Value<Out>);
@@ -238,7 +238,7 @@ mod seeded_rands {
 
         fn broadcast<R>(self, rng: &mut R) -> Self::Output
         where
-            R: RngCore;
+            R: Rng;
     }
 
     impl<Dist, T> BroadcastSeededRands<Zero, T> for Dist
@@ -249,7 +249,7 @@ mod seeded_rands {
 
         fn broadcast<R>(self, rng: &mut R) -> Self::Output
         where
-            R: RngCore,
+            R: Rng,
         {
             self.sample(rng)
         }
@@ -264,7 +264,7 @@ mod seeded_rands {
 
         fn broadcast<R>(self, rng: &mut R) -> Self::Output
         where
-            R: RngCore,
+            R: Rng,
         {
             self.into_iter().map(|dist| dist.sample(rng)).collect()
         }
@@ -279,7 +279,7 @@ mod seeded_rands {
 
         fn broadcast<R>(self, rng: &mut R) -> Self::Output
         where
-            R: RngCore,
+            R: Rng,
         {
             // Neither shape nor the length of `inner` will change,
             // so they should still be fine.
