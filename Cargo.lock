@@ -478,6 +478,7 @@ dependencies = [
 name = "optimal"
 version = "0.0.0"
 dependencies = [
+ "optimal-compute-core",
  "optimal-linesearch",
  "optimal-pbil",
  "rand",

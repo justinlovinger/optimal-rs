@@ -63,6 +63,7 @@
 
 use std::ops::{Add, Mul, RangeInclusive, Sub};
 
+use optimal_compute_core::run::Value;
 use optimal_linesearch::backtracking_line_search::BacktrackingLineSearchBuilder;
 use optimal_pbil::{types::*, Pbil, PbilStoppingCriteria};
 use rand::{distributions::Uniform, prelude::*};
@@ -253,7 +254,9 @@ impl<F> BinaryWith<F> {
         F: Fn(&[bool]) -> f64,
     {
         pbil_config(self.problem.agnostic.level, self.problem.len)
-            .for_(self.problem.len, self.problem.obj_func)
+            .for_(self.problem.len, |point| {
+                Value((self.problem.obj_func)(&point))
+            })
             .with(self.rng)
             .argmin()
     }

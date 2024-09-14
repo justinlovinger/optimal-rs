@@ -12,19 +12,14 @@ Population-based incremental learning (PBIL).
 ## Examples
 
 ```rust
+use optimal_compute_core::{argvals, run::Value, Run};
 use optimal_pbil::PbilBuilder;
 
-println!(
-    "{:?}",
-    PbilBuilder::default()
-        .for_(2, |point| point.iter().filter(|x| **x).count())
-        .argmin()
-)
+let pbil = PbilBuilder::default()
+    .for_(2, |point| Value(point.iter().filter(|x| **x).count()))
+    .computation();
+println!("{}", pbil);
+println!("{:?}", pbil.run(argvals![]));
 ```
-
-For greater flexibility,
-introspection,
-and customization,
-see [`low_level`].
 
 License: MIT

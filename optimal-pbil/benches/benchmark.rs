@@ -1,7 +1,7 @@
 use std::hint::black_box;
 
-use optimal_compute_core::run::ArgVal;
-use optimal_pbil::PbilBuilder;
+use optimal_compute_core::{run::Value, Run};
+use optimal_pbil::{PbilBuilder, PbilComputation};
 use rand::prelude::*;
 use tango_bench::{benchmark_fn, tango_benchmarks, tango_main, IntoBenchmarks};
 
@@ -21,8 +21,9 @@ pub fn pbil_benchmarks() -> impl IntoBenchmarks {
 
 fn run_pbil<F, R>(len: usize, obj_func: F, rng: R) -> Vec<bool>
 where
-    F: Fn(&[bool]) -> usize,
-    R: 'static + Clone + ArgVal + Rng,
+    F: Fn(Vec<bool>) -> Value<usize>,
+    R: 'static + Rng,
+    PbilComputation<F, usize, R>: Run<Output = Vec<bool>>,
 {
     PbilBuilder::default()
         .for_(len, obj_func)
@@ -30,8 +31,8 @@ where
         .argmin()
 }
 
-fn count(point: &[bool]) -> usize {
-    point.iter().filter(|x| **x).count()
+fn count(point: Vec<bool>) -> Value<usize> {
+    Value(point.iter().filter(|x| **x).count())
 }
 
 tango_benchmarks!(pbil_benchmarks());
