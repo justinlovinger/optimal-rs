@@ -168,10 +168,15 @@ impl<I, F, FD, R> RealDerivativeWith<I, F, FD, R> {
             .collect::<Vec<_>>();
 
         BacktrackingLineSearchBuilder::default()
-            .for_(
+            .for_combined(
                 initial_point.len(),
-                self.problem.obj_func,
-                self.problem.obj_func_d,
+                |point| Value((self.problem.obj_func)(&point)),
+                |point| {
+                    (
+                        Value((self.problem.obj_func)(&point)),
+                        Value((self.problem.obj_func_d)(&point)),
+                    )
+                },
             )
             .with_point(initial_point)
             .argmin()

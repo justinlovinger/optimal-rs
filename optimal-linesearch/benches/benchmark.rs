@@ -103,7 +103,11 @@ where
     BacktrackingLineSearchBuilder::default()
         .direction(step_direction)
         .stopping_criteria(BacktrackingLineSearchStoppingCriteria::Iteration(100))
-        .for_(initial_point.len(), obj_func, obj_func_d)
+        .for_combined(
+            initial_point.len(),
+            |point| Value(obj_func(&point)),
+            |point| (Value(obj_func(&point)), Value(obj_func_d(&point))),
+        )
         .with_point(initial_point)
         .argmin()
 }
