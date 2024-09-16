@@ -6,11 +6,16 @@
 //! # Examples
 //!
 //! ```
-//! use optimal_compute_core::{argvals, run::Value, Run};
+//! use optimal_compute_core::{arg1, argvals, peano::Zero, run::Value, Computation, Run};
 //! use optimal_pbil::PbilBuilder;
 //!
 //! let pbil = PbilBuilder::default()
-//!     .for_(2, |point| Value(point.iter().filter(|x| **x).count()))
+//!     .for_(
+//!         2,
+//!         arg1!("sample").black_box::<_, Zero, usize>(|sample: Vec<bool>| {
+//!             Value(sample.iter().filter(|x| **x).count())
+//!         }),
+//!     )
 //!     .computation();
 //! println!("{}", pbil);
 //! println!("{:?}", pbil.run(argvals![]));
