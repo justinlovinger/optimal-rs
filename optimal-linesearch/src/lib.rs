@@ -141,7 +141,12 @@ mod types {
 mod tests {
     use std::ops::RangeInclusive;
 
-    use optimal_compute_core::run::Value;
+    use optimal_compute_core::{
+        arg1,
+        peano::{One, Zero},
+        run::Value,
+        Computation,
+    };
     use rand::{rngs::SmallRng, SeedableRng};
 
     use crate::backtracking_line_search::{
@@ -264,10 +269,11 @@ mod tests {
         let point = BacktrackingLineSearchBuilder::default()
             .direction(direction)
             .stopping_criteria(stopping_criteria)
-            .for_combined(
+            .for_(
                 len,
-                |point| Value(obj_func(&point)),
-                |point| (Value(obj_func(&point)), Value(obj_func_d(&point))),
+                arg1!("point").black_box::<_, Zero, f64>(|point: Vec<f64>| Value(obj_func(&point))),
+                arg1!("point")
+                    .black_box::<_, One, f64>(|point: Vec<f64>| Value(obj_func_d(&point))),
             )
             .with_random_point_using(initial_bounds(len), SmallRng::seed_from_u64(seed))
             .argmin();

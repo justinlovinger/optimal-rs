@@ -7,13 +7,12 @@ use ndarray::{LinalgScalar, ScalarOperand};
 use num_traits::{AsPrimitive, Float, Signed};
 use optimal_compute_core::{
     arg, arg1, arg2, argvals,
-    black_box::BlackBox,
     cmp::{Eq, Ge, Le, Lt, Max, Not},
     control_flow::{If, LoopWhile, Then},
     linalg::{FromDiagElem, IdentityMatrix, MatMul, MulCol, MulOut, ScalarProduct},
     math::{Abs, Add, Div, Mul, Neg, Sub},
     peano::{One, Two, Zero},
-    run::{ArgVals, Value},
+    run::ArgVals,
     val, val1,
     zip::{Zip, Zip3, Zip4, Zip5, Zip6, Zip7, Zip8},
     Arg, Args, Computation, ComputationFn, Len, Run, Val,
@@ -40,11 +39,6 @@ use super::{
     low_level::search,
     types::{BacktrackingRate, SufficientDecreaseParameter},
 };
-
-#[allow(dead_code)]
-type DynObjFunc<A> = Box<dyn Fn(Vec<A>) -> Value<A>>;
-#[allow(dead_code)]
-type DynObjFuncAndD<A> = Box<dyn Fn(Vec<A>) -> (Value<A>, Value<Vec<A>>)>;
 
 /// Backtracking line-search independent of problem.
 #[derive(Clone, Debug, PartialEq, PartialOrd, Builder)]
@@ -119,35 +113,43 @@ pub enum BacktrackingLineSearchStoppingCriteria {
 }
 
 impl<A> BacktrackingLineSearch<A> {
-    // The `for_` methods will require `Fn*` traits,
-    // so a type implementing `Fn` and `Clone` can be constructed.
-    // /// Prepare backtracking line-search for a specific problem.
-    // pub fn for_<F, FD>(
-    //     self,
-    //     obj_func: F,
-    //     obj_func_d: FD,
-    // ) -> BacktrackingLineSearchFor<A, DynObjFunc<A>, DynObjFuncAndD<A>>
-    // where
-    //     F: 'static + Clone + Fn(&[A]) -> A,
-    //     FD: 'static + Fn(&[A]) -> Vec<A>,
-    // {
-    //     let obj_func_ = obj_func.clone();
-    //     self.for_combined(
-    //         Box::new(move |point: Vec<A>| Value(obj_func(&point))),
-    //         Box::new(move |point: Vec<A>| (Value(obj_func_(&point)), Value(obj_func_d(&point)))),
-    //     )
-    // }
+    /// Prepare backtracking line-search for a specific problem.
+    ///
+    /// Arguments:
+    ///
+    /// - `obj_func`: a computation-function taking a vector of `A` called `point`
+    ///               and returning a scalar of `A`.
+    /// - `obj_func_d`: a computation-function taking a vector of `A` called `point`
+    ///                 and returning a vector of `A`.
+    pub fn for_<F, FD>(
+        self,
+        obj_func: F,
+        obj_func_d: FD,
+    ) -> BacktrackingLineSearchFor<A, F, Zip<F, FD>>
+    where
+        F: Clone + ComputationFn<Dim = Zero, Item = A>,
+        FD: Clone + ComputationFn<Dim = One, Item = A>,
+    {
+        self.for_combined(obj_func.clone(), obj_func.zip(obj_func_d))
+    }
 
     /// Prepare backtracking line-search for a specific problem
     /// where value and derivatives can be efficiently calculated together.
+    ///
+    /// Arguments:
+    ///
+    /// - `obj_func`: a computation-function taking a vector of `A` called `point`
+    ///               and returning a scalar of `A`.
+    /// - `obj_func_and_d`: a computation-function taking a vector of `A` called `point`
+    ///                     and returning a tuple of (scalar `A`, vector `A`).
     pub fn for_combined<F, FFD>(
         self,
         obj_func: F,
         obj_func_and_d: FFD,
     ) -> BacktrackingLineSearchFor<A, F, FFD>
     where
-        F: Clone + Fn(Vec<A>) -> Value<A>,
-        FFD: Clone + Fn(Vec<A>) -> (Value<A>, Value<Vec<A>>),
+        F: Clone + ComputationFn<Dim = Zero, Item = A>,
+        FFD: Clone + ComputationFn<Dim = (Zero, One), Item = (A, A)>,
     {
         BacktrackingLineSearchFor {
             agnostic: self,
@@ -158,26 +160,38 @@ impl<A> BacktrackingLineSearch<A> {
 }
 
 impl<A> BacktrackingLineSearchBuilder<A> {
-    // The `for_` methods will require `Fn*` traits,
-    // so a type implementing `Fn` and `Clone` can be constructed.
-    // /// Prepare backtracking line-search for a specific problem.
-    // pub fn for_<F, FD>(
-    //     &mut self,
-    //     len: usize,
-    //     obj_func: F,
-    //     obj_func_d: FD,
-    // ) -> BacktrackingLineSearchFor<A, DynObjFunc<A>, DynObjFuncAndD<A>>
-    // where
-    //     A: 'static + Copy + std::fmt::Debug + Float,
-    //     f64: AsPrimitive<A>,
-    //     F: 'static + Clone + Fn(&[A]) -> A,
-    //     FD: 'static + Fn(&[A]) -> Vec<A>,
-    // {
-    //     self.build(len).for_(obj_func, obj_func_d)
-    // }
+    /// Prepare backtracking line-search for a specific problem.
+    ///
+    /// Arguments:
+    ///
+    /// - `obj_func`: a computation-function taking a vector of `A` called `point`
+    ///               and returning a scalar of `A`.
+    /// - `obj_func_d`: a computation-function taking a vector of `A` called `point`
+    ///                 and returning a vector of `A`.
+    pub fn for_<F, FD>(
+        &mut self,
+        len: usize,
+        obj_func: F,
+        obj_func_d: FD,
+    ) -> BacktrackingLineSearchFor<A, F, Zip<F, FD>>
+    where
+        A: 'static + Copy + std::fmt::Debug + Float,
+        f64: AsPrimitive<A>,
+        F: Clone + ComputationFn<Dim = Zero, Item = A>,
+        FD: Clone + ComputationFn<Dim = One, Item = A>,
+    {
+        self.build(len).for_(obj_func, obj_func_d)
+    }
 
     /// Prepare backtracking line-search for a specific problem
     /// where value and derivatives can be efficiently calculated together.
+    ///
+    /// Arguments:
+    ///
+    /// - `obj_func`: a computation-function taking a vector of `A` called `point`
+    ///               and returning a scalar of `A`.
+    /// - `obj_func_and_d`: a computation-function taking a vector of `A` called `point`
+    ///                     and returning a tuple of (scalar `A`, vector `A`).
     pub fn for_combined<F, FFD>(
         &mut self,
         len: usize,
@@ -187,8 +201,8 @@ impl<A> BacktrackingLineSearchBuilder<A> {
     where
         A: 'static + Copy + std::fmt::Debug + Float,
         f64: AsPrimitive<A>,
-        F: Clone + Fn(Vec<A>) -> Value<A>,
-        FFD: Clone + Fn(Vec<A>) -> (Value<A>, Value<Vec<A>>),
+        F: Clone + ComputationFn<Dim = Zero, Item = A>,
+        FFD: Clone + ComputationFn<Dim = (Zero, One), Item = (A, A)>,
     {
         self.build(len).for_combined(obj_func, obj_func_and_d)
     }
@@ -370,8 +384,8 @@ impl<A, F, FFD> BacktrackingLineSearchWith<A, F, FFD>
 where
     A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
     f64: AsPrimitive<A>,
-    F: Clone + Fn(Vec<A>) -> Value<A>,
-    FFD: Clone + Fn(Vec<A>) -> (Value<A>, Value<Vec<A>>),
+    F: Clone + ComputationFn<Dim = Zero, Item = A>,
+    FFD: Clone + ComputationFn<Dim = (Zero, One), Item = (A, A)>,
 {
     /// Return a point that attempts to minimize the given objective function.
     pub fn argmin(self) -> Vec<A>
@@ -445,9 +459,6 @@ where
         let c_1 = val!(self.problem.agnostic.c_1);
         let backtracking_rate = val!(self.problem.agnostic.backtracking_rate);
         let initial_step_size = val!(self.problem.agnostic.initial_step_size);
-        let obj_func = arg1!("point", A).black_box::<_, Zero, A>(self.problem.obj_func);
-        let obj_func_and_d =
-            arg1!("point", A).black_box::<_, (Zero, One), (A, A)>(self.problem.obj_func_and_d);
         Zip(
             val!(0_usize),
             initial_step_size.zip(val1!(self.initial_point)),
@@ -459,14 +470,14 @@ where
                 Zip3(
                     arg!("step_size", StepSize<A>),
                     arg1!("point", A),
-                    obj_func_and_d,
+                    self.problem.obj_func_and_d,
                 )
                 .then(
                     ("step_size", "point", ("value", "derivatives")),
                     search(
                         c_1,
                         backtracking_rate,
-                        obj_func,
+                        self.problem.obj_func,
                         arg!("step_size", StepSize<A>),
                         arg1!("point", A),
                         arg!("value", A),
@@ -491,9 +502,6 @@ where
         let c_1 = val!(self.problem.agnostic.c_1);
         let backtracking_rate = val!(self.problem.agnostic.backtracking_rate);
         let initial_step_size = val!(self.problem.agnostic.initial_step_size);
-        let obj_func = arg1!("point", A).black_box::<_, Zero, A>(self.problem.obj_func);
-        let obj_func_and_d =
-            arg1!("point", A).black_box::<_, (Zero, One), (A, A)>(self.problem.obj_func_and_d);
         initial_step_size
             .zip(val1!(self.initial_point))
             .then(
@@ -501,7 +509,7 @@ where
                 Zip3(
                     arg!("step_size", StepSize<A>),
                     arg1!("point", A),
-                    obj_func_and_d.clone(),
+                    self.problem.obj_func_and_d.clone(),
                 ),
             )
             .loop_while(
@@ -509,7 +517,7 @@ where
                 search(
                     c_1,
                     backtracking_rate,
-                    obj_func,
+                    self.problem.obj_func,
                     arg!("step_size", StepSize<A>),
                     arg1!("point", A),
                     arg!("value", A),
@@ -521,7 +529,7 @@ where
                     Zip3(
                         val!(incr_rate) * arg!("step_size", StepSize<A>),
                         arg1!("point", A),
-                        obj_func_and_d,
+                        self.problem.obj_func_and_d,
                     ),
                 ),
                 is_near_minima(arg!("value", A), arg1!("derivatives", A)).not(),
@@ -540,9 +548,6 @@ where
         let c_1 = val!(self.problem.agnostic.c_1);
         let backtracking_rate = val!(self.problem.agnostic.backtracking_rate);
         let initial_step_size = val!(self.problem.agnostic.initial_step_size);
-        let obj_func = arg1!("point", A).black_box::<_, Zero, A>(self.problem.obj_func);
-        let obj_func_and_d =
-            arg1!("point", A).black_box::<_, (Zero, One), (A, A)>(self.problem.obj_func_and_d);
         let len = self.initial_point.len();
         val!(0_usize).zip(val1!(self.initial_point)).if_(
             ("i", "point"),
@@ -551,7 +556,10 @@ where
             Zip(
                 arg!("i", usize) + val!(1_usize),
                 arg1!("point", A)
-                    .then("point", arg1!("point", A).zip(obj_func_and_d.clone()))
+                    .then(
+                        "point",
+                        arg1!("point", A).zip(self.problem.obj_func_and_d.clone()),
+                    )
                     .then(
                         ("point", ("value", "derivatives")),
                         Zip3(
@@ -560,7 +568,7 @@ where
                             search(
                                 c_1,
                                 backtracking_rate,
-                                obj_func.clone(),
+                                self.problem.obj_func.clone(),
                                 initial_step_size,
                                 arg1!("point", A),
                                 arg!("value", A),
@@ -601,7 +609,7 @@ where
                         arg1!("point", A) - arg1!("prev_point", A),
                         arg!("step_size", StepSize<A>),
                         arg1!("point", A),
-                        obj_func_and_d,
+                        self.problem.obj_func_and_d,
                     )
                     .then(
                         (
@@ -612,7 +620,7 @@ where
                             "point",
                             ("value", "derivatives"),
                         ),
-                        bfgs_loop!(c_1, backtracking_rate, obj_func, incr_rate),
+                        bfgs_loop!(c_1, backtracking_rate, self.problem.obj_func, incr_rate),
                     ),
                 ),
                 arg!("i", usize).lt(val!(i)),
@@ -640,9 +648,6 @@ where
         let c_1 = val!(self.problem.agnostic.c_1);
         let backtracking_rate = val!(self.problem.agnostic.backtracking_rate);
         let initial_step_size = val!(self.problem.agnostic.initial_step_size);
-        let obj_func = arg1!("point", A).black_box::<_, Zero, A>(self.problem.obj_func);
-        let obj_func_and_d =
-            arg1!("point", A).black_box::<_, (Zero, One), (A, A)>(self.problem.obj_func_and_d);
         let len = self.initial_point.len();
         val!(0_usize).zip(val1!(self.initial_point)).if_(
             ("i", "point"),
@@ -651,7 +656,10 @@ where
             Zip(
                 arg!("i", usize) + val!(1_usize),
                 arg1!("point", A)
-                    .then("point", arg1!("point", A).zip(obj_func_and_d.clone()))
+                    .then(
+                        "point",
+                        arg1!("point", A).zip(self.problem.obj_func_and_d.clone()),
+                    )
                     .then(
                         ("point", ("value", "derivatives")),
                         Zip3(
@@ -660,7 +668,7 @@ where
                             search(
                                 c_1,
                                 backtracking_rate,
-                                obj_func.clone(),
+                                self.problem.obj_func.clone(),
                                 initial_step_size,
                                 arg1!("point", A),
                                 arg!("value", A),
@@ -696,7 +704,7 @@ where
                         arg1!("point", A) - arg1!("prev_point", A),
                         arg!("step_size", StepSize<A>),
                         arg1!("point", A),
-                        obj_func_and_d.clone(),
+                        self.problem.obj_func_and_d.clone(),
                     )
                     .then(
                         (
@@ -737,7 +745,7 @@ where
                             search(
                                 c_1,
                                 backtracking_rate,
-                                obj_func.clone(),
+                                self.problem.obj_func.clone(),
                                 arg!("step_size", StepSize<A>),
                                 arg1!("point", A),
                                 arg!("value", A),
@@ -783,7 +791,7 @@ where
                             arg1!("point", A) - arg1!("prev_point", A),
                             arg!("step_size", StepSize<A>),
                             arg1!("point", A),
-                            obj_func_and_d,
+                            self.problem.obj_func_and_d,
                         )
                         .then(
                             (
@@ -794,7 +802,7 @@ where
                                 "point",
                                 ("value", "derivatives"),
                             ),
-                            bfgs_loop!(c_1, backtracking_rate, obj_func, incr_rate),
+                            bfgs_loop!(c_1, backtracking_rate, self.problem.obj_func, incr_rate),
                         ),
                     ),
                     arg!("i", usize).lt(val!(i)),
@@ -822,12 +830,12 @@ where
         let c_1 = val!(self.problem.agnostic.c_1);
         let backtracking_rate = val!(self.problem.agnostic.backtracking_rate);
         let initial_step_size = val!(self.problem.agnostic.initial_step_size);
-        let obj_func = arg1!("point", A).black_box::<_, Zero, A>(self.problem.obj_func);
-        let obj_func_and_d =
-            arg1!("point", A).black_box::<_, (Zero, One), (A, A)>(self.problem.obj_func_and_d);
         let len = self.initial_point.len();
         val1!(self.initial_point)
-            .then("point", arg1!("point", A).zip(obj_func_and_d.clone()))
+            .then(
+                "point",
+                arg1!("point", A).zip(self.problem.obj_func_and_d.clone()),
+            )
             .if_(
                 ("point", ("value", "derivatives")),
                 is_near_minima(arg!("value", A), arg1!("derivatives", A)),
@@ -852,7 +860,7 @@ where
                         search(
                             c_1,
                             backtracking_rate,
-                            obj_func.clone(),
+                            self.problem.obj_func.clone(),
                             initial_step_size,
                             arg1!("point", A),
                             arg!("value", A),
@@ -877,7 +885,7 @@ where
                         arg2!("prev_approx_inv_snd_derivatives", A),
                         val!(incr_rate) * arg!("step_size", StepSize<A>),
                         arg1!("point", A),
-                        obj_func_and_d.clone(),
+                        self.problem.obj_func_and_d.clone(),
                     ),
                 )
                 .loop_while(
@@ -908,7 +916,7 @@ where
                             "value",
                             "derivatives",
                         ),
-                        bfgs_loop!(c_1, backtracking_rate, obj_func, incr_rate),
+                        bfgs_loop!(c_1, backtracking_rate, self.problem.obj_func, incr_rate),
                     )
                     .then(
                         (
@@ -923,7 +931,7 @@ where
                             arg2!("prev_approx_inv_snd_derivatives", A),
                             arg!("step_size", StepSize<A>),
                             arg1!("point", A),
-                            obj_func_and_d,
+                            self.problem.obj_func_and_d,
                         ),
                     ),
                     is_near_minima(arg!("value", A), arg1!("derivatives", A)).not(),
@@ -949,12 +957,12 @@ where
         let c_1 = val!(self.problem.agnostic.c_1);
         let backtracking_rate = val!(self.problem.agnostic.backtracking_rate);
         let initial_step_size = val!(self.problem.agnostic.initial_step_size);
-        let obj_func = arg1!("point", A).black_box::<_, Zero, A>(self.problem.obj_func);
-        let obj_func_and_d =
-            arg1!("point", A).black_box::<_, (Zero, One), (A, A)>(self.problem.obj_func_and_d);
         let len = self.initial_point.len();
         val1!(self.initial_point)
-            .then("point", arg1!("point", A).zip(obj_func_and_d.clone()))
+            .then(
+                "point",
+                arg1!("point", A).zip(self.problem.obj_func_and_d.clone()),
+            )
             .if_(
                 ("point", ("value", "derivatives")),
                 is_near_minima(arg!("value", A), arg1!("derivatives", A)),
@@ -965,7 +973,7 @@ where
                     search(
                         c_1,
                         backtracking_rate,
-                        obj_func.clone(),
+                        self.problem.obj_func.clone(),
                         initial_step_size,
                         arg1!("point", A),
                         arg!("value", A),
@@ -983,7 +991,7 @@ where
                         arg1!("prev_derivatives", A),
                         val!(incr_rate) * arg!("step_size", StepSize<A>),
                         arg1!("point", A),
-                        obj_func_and_d.clone(),
+                        self.problem.obj_func_and_d.clone(),
                     ),
                 )
                 .if_(
@@ -1044,7 +1052,7 @@ where
                             search(
                                 c_1,
                                 backtracking_rate,
-                                obj_func.clone(),
+                                self.problem.obj_func.clone(),
                                 arg!("step_size", StepSize<A>),
                                 arg1!("point", A),
                                 arg!("value", A),
@@ -1069,7 +1077,7 @@ where
                             arg2!("prev_approx_inv_snd_derivatives", A),
                             val!(incr_rate) * arg!("step_size", StepSize<A>),
                             arg1!("point", A),
-                            obj_func_and_d.clone(),
+                            self.problem.obj_func_and_d.clone(),
                         ),
                     )
                     .loop_while(
@@ -1100,7 +1108,7 @@ where
                                 "value",
                                 "derivatives",
                             ),
-                            bfgs_loop!(c_1, backtracking_rate, obj_func, incr_rate),
+                            bfgs_loop!(c_1, backtracking_rate, self.problem.obj_func, incr_rate),
                         )
                         .then(
                             (
@@ -1115,7 +1123,7 @@ where
                                 arg2!("prev_approx_inv_snd_derivatives", A),
                                 arg!("step_size", StepSize<A>),
                                 arg1!("point", A),
-                                obj_func_and_d,
+                                self.problem.obj_func_and_d,
                             ),
                         ),
                         is_near_minima(arg!("value", A), arg1!("derivatives", A)).not(),
@@ -1142,6 +1150,8 @@ pub enum BacktrackingLineSearchComputation<A, F, FFD>
 where
     A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
     f64: AsPrimitive<A>,
+    F: ComputationFn<Dim = Zero, Item = A>,
+    FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
 {
     /// See [`BacktrackingLineSearchSteepestIncrPrevIteration`].
     SteepestIncrPrevIteration(BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>),
@@ -1161,6 +1171,8 @@ impl<A, F, FFD> Computation for BacktrackingLineSearchComputation<A, F, FFD>
 where
     A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
     f64: AsPrimitive<A>,
+    F: ComputationFn<Dim = Zero, Item = A>,
+    FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
     BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>: Computation<Dim = One, Item = A>,
     BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD>: Computation<Dim = One, Item = A>,
     BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD>: Computation<Dim = One, Item = A>,
@@ -1177,6 +1189,8 @@ where
     Self: Computation,
     A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
     f64: AsPrimitive<A>,
+    F: ComputationFn<Dim = Zero, Item = A>,
+    FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
     BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>: ComputationFn,
     BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD>: ComputationFn,
     BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD>: ComputationFn,
@@ -1201,6 +1215,8 @@ where
     Self: Computation,
     A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
     f64: AsPrimitive<A>,
+    F: ComputationFn<Dim = Zero, Item = A>,
+    FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
     BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>: fmt::Display,
     BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD>: fmt::Display,
     BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD>: fmt::Display,
@@ -1225,6 +1241,8 @@ where
     Self: Computation,
     A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
     f64: AsPrimitive<A>,
+    F: ComputationFn<Dim = Zero, Item = A>,
+    FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
     BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>: Run<Output = Vec<A>>,
     BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD>: Run<Output = Vec<A>>,
     BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD>: Run<Output = Vec<A>>,
@@ -1258,11 +1276,7 @@ pub type BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD> = Then<
             Add<Arg<Zero, usize>, Val<Zero, usize>>,
             Then<
                 Then<
-                    Zip3<
-                        Arg<Zero, StepSize<A>>,
-                        Arg<One, A>,
-                        BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
-                    >,
+                    Zip3<Arg<Zero, StepSize<A>>, Arg<One, A>, FFD>,
                     (&'static str, &'static str, (&'static str, &'static str)),
                     Then<
                         LoopWhile<
@@ -1320,10 +1334,7 @@ pub type BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD> = Then<
                                 Mul<Arg<Zero, BacktrackingRate<A>>, Arg<Zero, StepSize<A>>>,
                             >,
                             Not<
-                                Le<
-                                    BlackBox<Arg<One, A>, F, Zero, A>,
-                                    Add<Arg<Zero, A>, Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>>,
-                                >,
+                                Le<F, Add<Arg<Zero, A>, Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>>>,
                             >,
                         >,
                         (
@@ -1358,11 +1369,7 @@ pub type BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD> = Then<
         Then<
             Zip<Val<Zero, StepSize<A>>, Val<One, Vec<A>>>,
             (&'static str, &'static str),
-            Zip3<
-                Arg<Zero, StepSize<A>>,
-                Arg<One, A>,
-                BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
-            >,
+            Zip3<Arg<Zero, StepSize<A>>, Arg<One, A>, FFD>,
         >,
         (&'static str, &'static str, (&'static str, &'static str)),
         Then<
@@ -1421,12 +1428,7 @@ pub type BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD> = Then<
                         Add<Arg<One, A>, Mul<Arg<Zero, StepSize<A>>, Arg<One, A>>>,
                         Mul<Arg<Zero, BacktrackingRate<A>>, Arg<Zero, StepSize<A>>>,
                     >,
-                    Not<
-                        Le<
-                            BlackBox<Arg<One, A>, F, Zero, A>,
-                            Add<Arg<Zero, A>, Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>>,
-                        >,
-                    >,
+                    Not<Le<F, Add<Arg<Zero, A>, Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>>>>,
                 >,
                 (
                     &'static str,
@@ -1441,11 +1443,7 @@ pub type BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD> = Then<
                 Zip<Arg<Zero, StepSize<A>>, Arg<One, A>>,
             >,
             (&'static str, &'static str),
-            Zip3<
-                Mul<Val<Zero, IncrRate<A>>, Arg<Zero, StepSize<A>>>,
-                Arg<One, A>,
-                BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
-            >,
+            Zip3<Mul<Val<Zero, IncrRate<A>>, Arg<Zero, StepSize<A>>>, Arg<One, A>, FFD>,
         >,
         Not<Lt<Max<Abs<Arg<One, A>>>, Mul<Val<Zero, A>, Add<Val<Zero, A>, Abs<Arg<Zero, A>>>>>>,
     >,
@@ -1468,11 +1466,7 @@ pub type BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD> = If<
             Zip<
                 Add<Arg<Zero, usize>, Val<Zero, usize>>,
                 Then<
-                    Then<
-                        Arg<One, A>,
-                        &'static str,
-                        Zip<Arg<One, A>, BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>>,
-                    >,
+                    Then<Arg<One, A>, &'static str, Zip<Arg<One, A>, FFD>>,
                     (&'static str, (&'static str, &'static str)),
                     Then<
                         Zip3<
@@ -1546,7 +1540,7 @@ pub type BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD> = If<
                                     >,
                                     Not<
                                         Le<
-                                            BlackBox<Arg<One, A>, F, Zero, A>,
+                                            F,
                                             Add<
                                                 Arg<Zero, A>,
                                                 Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>,
@@ -1595,7 +1589,7 @@ pub type BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD> = If<
                         Sub<Arg<One, A>, Arg<One, A>>,
                         Arg<Zero, StepSize<A>>,
                         Arg<One, A>,
-                        BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
+                        FFD,
                     >,
                     (
                         &'static str,
@@ -1771,7 +1765,7 @@ pub type BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD> = If<
                                         >,
                                         Not<
                                             Le<
-                                                BlackBox<Arg<One, A>, F, Zero, A>,
+                                                F,
                                                 Add<
                                                     Arg<Zero, A>,
                                                     Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>,
@@ -1837,11 +1831,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevIteration<A, F, FFD> = If<
         Zip<
             Add<Arg<Zero, usize>, Val<Zero, usize>>,
             Then<
-                Then<
-                    Arg<One, A>,
-                    &'static str,
-                    Zip<Arg<One, A>, BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>>,
-                >,
+                Then<Arg<One, A>, &'static str, Zip<Arg<One, A>, FFD>>,
                 (&'static str, (&'static str, &'static str)),
                 Then<
                     Zip3<
@@ -1909,7 +1899,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevIteration<A, F, FFD> = If<
                                 >,
                                 Not<
                                     Le<
-                                        BlackBox<Arg<One, A>, F, Zero, A>,
+                                        F,
                                         Add<
                                             Arg<Zero, A>,
                                             Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>,
@@ -1956,7 +1946,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevIteration<A, F, FFD> = If<
                                 Sub<Arg<One, A>, Arg<One, A>>,
                                 Arg<Zero, StepSize<A>>,
                                 Arg<One, A>,
-                                BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
+                                FFD,
                             >,
                             (
                                 &'static str,
@@ -2075,7 +2065,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevIteration<A, F, FFD> = If<
                                         >,
                                         Not<
                                             Le<
-                                                BlackBox<Arg<One, A>, F, Zero, A>,
+                                                F,
                                                 Add<
                                                     Arg<Zero, A>,
                                                     Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>,
@@ -2132,7 +2122,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevIteration<A, F, FFD> = If<
                             Sub<Arg<One, A>, Arg<One, A>>,
                             Arg<Zero, StepSize<A>>,
                             Arg<One, A>,
-                            BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
+                            FFD,
                         >,
                         (
                             &'static str,
@@ -2308,7 +2298,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevIteration<A, F, FFD> = If<
                                             >,
                                             Not<
                                                 Le<
-                                                    BlackBox<Arg<One, A>, F, Zero, A>,
+                                                    F,
                                                     Add<
                                                         Arg<Zero, A>,
                                                         Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>,
@@ -2370,11 +2360,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevIteration<A, F, FFD> = If<
 /// increment-previous step-size update,
 /// and near-minima stopping criteria.
 pub type BacktrackingLineSearchBfgsIdIncrPrevNearMinima<A, F, FFD> = If<
-    Then<
-        Val<One, Vec<A>>,
-        &'static str,
-        Zip<Arg<One, A>, BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>>,
-    >,
+    Then<Val<One, Vec<A>>, &'static str, Zip<Arg<One, A>, FFD>>,
     (&'static str, (&'static str, &'static str)),
     Lt<Max<Abs<Arg<One, A>>>, Mul<Val<Zero, A>, Add<Val<Zero, A>, Abs<Arg<Zero, A>>>>>,
     Arg<One, A>,
@@ -2450,7 +2436,7 @@ pub type BacktrackingLineSearchBfgsIdIncrPrevNearMinima<A, F, FFD> = If<
                                 >,
                                 Not<
                                     Le<
-                                        BlackBox<Arg<One, A>, F, Zero, A>,
+                                        F,
                                         Add<
                                             Arg<Zero, A>,
                                             Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>,
@@ -2484,7 +2470,7 @@ pub type BacktrackingLineSearchBfgsIdIncrPrevNearMinima<A, F, FFD> = If<
                     Arg<Two, A>,
                     Mul<Val<Zero, IncrRate<A>>, Arg<Zero, StepSize<A>>>,
                     Arg<One, A>,
-                    BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
+                    FFD,
                 >,
             >,
             (
@@ -2681,7 +2667,7 @@ pub type BacktrackingLineSearchBfgsIdIncrPrevNearMinima<A, F, FFD> = If<
                                         >,
                                         Not<
                                             Le<
-                                                BlackBox<Arg<One, A>, F, Zero, A>,
+                                                F,
                                                 Add<
                                                     Arg<Zero, A>,
                                                     Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>,
@@ -2729,7 +2715,7 @@ pub type BacktrackingLineSearchBfgsIdIncrPrevNearMinima<A, F, FFD> = If<
                     Arg<Two, A>,
                     Arg<Zero, StepSize<A>>,
                     Arg<One, A>,
-                    BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
+                    FFD,
                 >,
             >,
             Not<Lt<Max<Abs<Arg<One, A>>>, Mul<Val<Zero, A>, Add<Val<Zero, A>, Abs<Arg<Zero, A>>>>>>,
@@ -2752,11 +2738,7 @@ pub type BacktrackingLineSearchBfgsIdIncrPrevNearMinima<A, F, FFD> = If<
 /// increment-previous step-size update,
 /// and near-minima stopping criteria.
 pub type BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD> = If<
-    Then<
-        Val<One, Vec<A>>,
-        &'static str,
-        Zip<Arg<One, A>, BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>>,
-    >,
+    Then<Val<One, Vec<A>>, &'static str, Zip<Arg<One, A>, FFD>>,
     (&'static str, (&'static str, &'static str)),
     Lt<Max<Abs<Arg<One, A>>>, Mul<Val<Zero, A>, Add<Val<Zero, A>, Abs<Arg<Zero, A>>>>>,
     Arg<One, A>,
@@ -2820,12 +2802,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD> = If<
                             Add<Arg<One, A>, Mul<Arg<Zero, StepSize<A>>, Arg<One, A>>>,
                             Mul<Arg<Zero, BacktrackingRate<A>>, Arg<Zero, StepSize<A>>>,
                         >,
-                        Not<
-                            Le<
-                                BlackBox<Arg<One, A>, F, Zero, A>,
-                                Add<Arg<Zero, A>, Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>>,
-                            >,
-                        >,
+                        Not<Le<F, Add<Arg<Zero, A>, Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>>>>,
                     >,
                     (
                         &'static str,
@@ -2846,7 +2823,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD> = If<
                 Arg<One, A>,
                 Mul<Val<Zero, IncrRate<A>>, Arg<Zero, StepSize<A>>>,
                 Arg<One, A>,
-                BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
+                FFD,
             >,
         >,
         (
@@ -2982,7 +2959,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD> = If<
                                     >,
                                     Not<
                                         Le<
-                                            BlackBox<Arg<One, A>, F, Zero, A>,
+                                            F,
                                             Add<
                                                 Arg<Zero, A>,
                                                 Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>,
@@ -3016,7 +2993,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD> = If<
                         Arg<Two, A>,
                         Mul<Val<Zero, IncrRate<A>>, Arg<Zero, StepSize<A>>>,
                         Arg<One, A>,
-                        BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
+                        FFD,
                     >,
                 >,
                 (
@@ -3213,7 +3190,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD> = If<
                                             >,
                                             Not<
                                                 Le<
-                                                    BlackBox<Arg<One, A>, F, Zero, A>,
+                                                    F,
                                                     Add<
                                                         Arg<Zero, A>,
                                                         Mul<Arg<Zero, StepSize<A>>, Arg<Zero, A>>,
@@ -3264,7 +3241,7 @@ pub type BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD> = If<
                         Arg<Two, A>,
                         Arg<Zero, StepSize<A>>,
                         Arg<One, A>,
-                        BlackBox<Arg<One, A>, FFD, (Zero, One), (A, A)>,
+                        FFD,
                     >,
                 >,
                 Not<

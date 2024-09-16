@@ -63,7 +63,12 @@
 
 use std::ops::{Add, Mul, RangeInclusive, Sub};
 
-use optimal_compute_core::{arg1, peano::Zero, run::Value, Computation};
+use optimal_compute_core::{
+    arg1,
+    peano::{One, Zero},
+    run::Value,
+    Computation,
+};
 use optimal_linesearch::backtracking_line_search::BacktrackingLineSearchBuilder;
 use optimal_pbil::{types::*, Pbil, PbilStoppingCriteria};
 use rand::{distributions::Uniform, prelude::*};
@@ -168,15 +173,14 @@ impl<I, F, FD, R> RealDerivativeWith<I, F, FD, R> {
             .collect::<Vec<_>>();
 
         BacktrackingLineSearchBuilder::default()
-            .for_combined(
+            .for_(
                 initial_point.len(),
-                |point| Value((self.problem.obj_func)(&point)),
-                |point| {
-                    (
-                        Value((self.problem.obj_func)(&point)),
-                        Value((self.problem.obj_func_d)(&point)),
-                    )
-                },
+                arg1!("point").black_box::<_, Zero, f64>(|point: Vec<f64>| {
+                    Value((self.problem.obj_func)(&point))
+                }),
+                arg1!("point").black_box::<_, One, f64>(|point: Vec<f64>| {
+                    Value((self.problem.obj_func_d)(&point))
+                }),
             )
             .with_point(initial_point)
             .argmin()
