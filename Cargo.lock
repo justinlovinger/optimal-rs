@@ -489,6 +489,7 @@ name = "optimal-binary"
 version = "0.0.0"
 dependencies = [
  "num-traits",
+ "optimal-compute-core",
  "serde",
 ]
 

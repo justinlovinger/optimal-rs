@@ -9,4 +9,10 @@ and infrequent releases.
 
 Utilities for working with binary optimizers.
 
+Chunks of bits can be converted like:
+
+```rust
+todo!()
+```
+
 License: MIT
