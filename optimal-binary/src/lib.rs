@@ -3,36 +3,29 @@
 use num_traits::{pow, AsPrimitive};
 use optimal_compute_core::{
     arg, arg1,
-    cmp::Eq,
-    control_flow::If,
+    control_flow::Then,
     enumerate::Enumerate,
-    math::{Add, Div, Mul, Pow, Sub},
-    peano::{self, One, Suc, Zero},
+    math::{Add, Div, Mul, Pow, SameOrZero, Sub},
+    peano::{One, Zero},
     sum::Sum,
-    val,
-    zip::Zip3,
-    Arg, Computation, Val,
+    val, Arg, Computation, ComputationFn, Val,
 };
 use std::ops;
 
 pub use self::from_bit::*;
 
-type ToRealLe<Start, End, Bits, T> = If<
-    Zip3<Start, End, Bits>,
-    (&'static str, &'static str, &'static str),
-    Eq<Val<Zero, usize>, Val<Zero, usize>>,
+type ToRealLe<ToMin, ToMax, Bits, T> = optimal_compute_core::control_flow::If<
+    ToMin,
+    &'static str,
+    optimal_compute_core::cmp::Eq<Val<Zero, usize>, Val<Zero, usize>>,
     Arg<Zero, T>,
-    Add<
-        Mul<Div<Sub<Arg<Zero, T>, Arg<Zero, T>>, Val<Zero, T>>, ToIntLe<Arg<One, bool>, T>>,
-        Arg<Zero, T>,
-    >,
+    Scale<Val<Zero, T>, Arg<Zero, T>, ToMax, ToIntLe<Bits, T>>,
 >;
 
-/// Reduce innermost axis
-/// to numbers within range.
+/// Return base 10 representations of bits scaled to range `to_min..=to_max`.
 /// Leftmost is least significant.
-/// `end` must be >= `start`.
-/// `start` and `end` are inclusive.
+///
+/// `to_max` must be >= `to_min`.
 ///
 /// # Examples
 ///
@@ -55,16 +48,16 @@ type ToRealLe<Start, End, Bits, T> = If<
 /// assert_eq!(to_real_le(2, val!(1.0), val!(4.0), val1!([true, false])).run(argvals![]), 2.);
 /// assert_eq!(to_real_le(2, val!(1.0), val!(4.0), val1!([false, true])).run(argvals![]), 3.);
 /// ```
-pub fn to_real_le<Start, End, Bits, T>(
+pub fn to_real_le<ToMin, ToMax, Bits, T>(
     len: usize,
-    start: Start,
-    end: End,
+    to_min: ToMin,
+    to_max: ToMax,
     bits: Bits,
-) -> ToRealLe<Start, End, Bits, T>
+) -> ToRealLe<ToMin, ToMax, Bits, T>
 where
-    Start: Computation<Dim = Zero, Item = T>,
-    End: Computation<Dim = Zero, Item = T>,
-    Bits: Computation<Dim = peano::One, Item = bool>,
+    ToMin: Computation<Dim = Zero, Item = T>,
+    ToMax: ComputationFn<Dim = Zero, Item = T>,
+    Bits: ComputationFn<Dim = One, Item = bool>,
     T: 'static
         + Copy
         + ops::Add<Output = T>
@@ -77,35 +70,76 @@ where
     u8: AsPrimitive<T>,
     usize: AsPrimitive<T>,
 {
-    let two = 2_usize.as_();
-    let a = pow(two, len) - T::one();
-    Zip3(start, end, bits).if_(
-        ("start", "end", "bits"),
+    to_min.if_(
+        "to_min",
         val!(len).eq(val!(0_usize)),
-        arg!("start", T),
-        ((arg!("end", T) - arg!("start", T)) / val!(a)) * to_int_le::<_, T>(arg1!("bits", bool))
-            + arg!("start", T),
+        arg!("to_min", T),
+        scale(
+            val!(to_int_max(len)),
+            arg!("to_min", T),
+            to_max,
+            to_int_le::<_, T>(bits),
+        ),
     )
-    // The following would be possible
-    // if we could raise to the power of a `usize`:
-    // ```
-    // let two = T::one() + T::one();
-    // Zip3(start, end, bits).if_(
-    //     ("start", "end", "bits"),
-    //     arg1!("bits", bool).len().eq(val!(0_usize)),
-    //     arg!("start", T),
-    //     ((arg!("end", T) - arg!("start", T))
-    //         / (val!(two).pow(arg1!("bits", bool).len()) - val!(T::one())))
-    //         * to_int_le::<_, T>(arg1!("bits", bool))
-    //         + arg!("start", T),
-    // )
-    // ```
+}
+
+type Scale<FromMax, ToMin, ToMax, Num> = Then<
+    ToMin,
+    &'static str,
+    Add<
+        Mul<Div<Sub<ToMax, Arg<Zero, <Num as Computation>::Item>>, FromMax>, Num>,
+        Arg<Zero, <Num as Computation>::Item>,
+    >,
+>;
+
+/// Scale numbers from `0..=from_max` to `to_min..=to_max`.
+///
+/// This is meant to be used alongside a function to convert bits to integers.
+/// In which case,
+/// `from_max` can be obtained using [`to_int_max`].
+///
+/// `to_max` must be >= `to_min`.
+/// Passing `0` for `from_max` is an error.
+/// Passing a number > `from_max` will result in an output > `to_max`.
+pub fn scale<FromMax, ToMin, ToMax, Num>(
+    from_max: FromMax,
+    to_min: ToMin,
+    to_max: ToMax,
+    num: Num,
+) -> Scale<FromMax, ToMin, ToMax, Num>
+where
+    FromMax: ComputationFn<Dim = Zero, Item = Num::Item>,
+    ToMin: Computation<Dim = Zero, Item = Num::Item>,
+    ToMax: ComputationFn<Dim = Zero, Item = Num::Item>,
+    Num: ComputationFn,
+    Num::Dim: SameOrZero<Zero, Max = Num::Dim>,
+    Zero: SameOrZero<Num::Dim, Max = Num::Dim>,
+    Zero: SameOrZero<Zero, Max = Zero>,
+    Num::Item: ops::Add<Output = Num::Item>
+        + ops::Sub<Output = Num::Item>
+        + ops::Mul<Output = Num::Item>
+        + ops::Div<Output = Num::Item>,
+{
+    to_min.then(
+        "to_min",
+        (((to_max.sub(arg!("to_min", Num::Item))).div(from_max)).mul(num))
+            .add(arg!("to_min", Num::Item)),
+    )
+}
+
+/// Return the largest integer `to_int_...` can return.
+pub fn to_int_max<T>(len: usize) -> T
+where
+    T: 'static + Copy + num_traits::One + ops::Sub<Output = T>,
+    usize: AsPrimitive<T>,
+{
+    pow(2.as_(), len) - T::one()
 }
 
 type ToIntLe<Bits, T> =
-    Sum<Enumerate<FromBit<Bits, T>, Mul<Arg<Suc<Zero>, T>, Pow<Val<Zero, T>, Arg<Suc<Zero>, T>>>>>;
+    Sum<Enumerate<FromBit<Bits, T>, Mul<Arg<One, T>, Pow<Val<Zero, T>, Arg<One, T>>>>>;
 
-/// Reduce to base 10 integer representations of bits.
+/// Return base 10 integer representations of bits.
 /// Leftmost is least significant.
 ///
 /// # Examples
@@ -131,7 +165,7 @@ type ToIntLe<Bits, T> =
 /// ```
 pub fn to_int_le<Bits, T>(bits: Bits) -> ToIntLe<Bits, T>
 where
-    Bits: Computation<Dim = Suc<Zero>, Item = bool>,
+    Bits: Computation<Dim = One, Item = bool>,
     T: 'static
         + Copy
         + ops::Add<Output = T>
