@@ -3,7 +3,6 @@
 use num_traits::{pow, AsPrimitive};
 use optimal_compute_core::{
     arg, arg1,
-    control_flow::Then,
     enumerate::Enumerate,
     math::{Add, Div, Mul, Pow, SameOrZero, Sub},
     peano::{One, Zero},
@@ -83,14 +82,7 @@ where
     )
 }
 
-type Scale<FromMax, ToMin, ToMax, Num> = Then<
-    ToMin,
-    &'static str,
-    Add<
-        Mul<Div<Sub<ToMax, Arg<Zero, <Num as Computation>::Item>>, FromMax>, Num>,
-        Arg<Zero, <Num as Computation>::Item>,
-    >,
->;
+type Scale<FromMax, ToMin, ToMax, Num> = Add<Mul<Div<Sub<ToMax, ToMin>, FromMax>, Num>, ToMin>;
 
 /// Scale numbers from `0..=from_max` to `to_min..=to_max`.
 ///
@@ -101,6 +93,11 @@ type Scale<FromMax, ToMin, ToMax, Num> = Then<
 /// `to_max` must be >= `to_min`.
 /// Passing `0` for `from_max` is an error.
 /// Passing a number > `from_max` will result in an output > `to_max`.
+///
+/// Note,
+/// `to_min` will be cloned,
+/// so it should be a simple computation
+/// or an arg.
 pub fn scale<FromMax, ToMin, ToMax, Num>(
     from_max: FromMax,
     to_min: ToMin,
@@ -108,23 +105,21 @@ pub fn scale<FromMax, ToMin, ToMax, Num>(
     num: Num,
 ) -> Scale<FromMax, ToMin, ToMax, Num>
 where
-    FromMax: ComputationFn<Dim = Zero, Item = Num::Item>,
-    ToMin: Computation<Dim = Zero, Item = Num::Item>,
-    ToMax: ComputationFn<Dim = Zero, Item = Num::Item>,
+    FromMax: ComputationFn<Item = Num::Item>,
+    ToMin: Clone + Computation<Item = Num::Item>,
+    ToMax: ComputationFn<Item = Num::Item>,
     Num: ComputationFn,
-    Num::Dim: SameOrZero<Zero, Max = Num::Dim>,
-    Zero: SameOrZero<Num::Dim, Max = Num::Dim>,
-    Zero: SameOrZero<Zero, Max = Zero>,
     Num::Item: ops::Add<Output = Num::Item>
         + ops::Sub<Output = Num::Item>
         + ops::Mul<Output = Num::Item>
         + ops::Div<Output = Num::Item>,
+    ToMax::Dim: SameOrZero<ToMin::Dim>,
+    <ToMax::Dim as SameOrZero<ToMin::Dim>>::Max: SameOrZero<FromMax::Dim>,
+    <<ToMax::Dim as SameOrZero<ToMin::Dim>>::Max as SameOrZero<FromMax::Dim>>::Max:
+        SameOrZero<Num::Dim, Max = Num::Dim>,
+    Num::Dim: SameOrZero<ToMin::Dim, Max = Num::Dim>,
 {
-    to_min.then(
-        "to_min",
-        (((to_max.sub(arg!("to_min", Num::Item))).div(from_max)).mul(num))
-            .add(arg!("to_min", Num::Item)),
-    )
+    (((to_max.sub(to_min.clone())).div(from_max)).mul(num)).add(to_min)
 }
 
 /// Return the largest integer `to_int_...` can return.
