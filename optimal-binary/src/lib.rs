@@ -3,6 +3,7 @@
 use num_traits::{pow, AsPrimitive};
 use optimal_compute_core::{
     arg, arg1,
+    control_flow::Then,
     enumerate::Enumerate,
     math::{Add, Div, Mul, Pow, SameOrZero, Sub},
     peano::{One, Zero},
@@ -48,7 +49,7 @@ pub fn chunks_to_real_le<ToMin, ToMax, Bits, T>(
     bits: Bits,
 ) -> ChunksToRealLe<ToMin, ToMax, Bits, T>
 where
-    ToMin: Clone + Computation<Item = T>,
+    ToMin: Computation<Item = T>,
     ToMax: ComputationFn<Item = T>,
     Bits: ComputationFn<Dim = One, Item = bool>,
     T: 'static
@@ -145,7 +146,17 @@ where
     )
 }
 
-pub type Scale<FromMax, ToMin, ToMax, Num> = Add<Mul<Div<Sub<ToMax, ToMin>, FromMax>, Num>, ToMin>;
+pub type Scale<FromMax, ToMin, ToMax, Num> = Then<
+    ToMin,
+    &'static str,
+    Add<
+        Mul<
+            Div<Sub<ToMax, Arg<<ToMin as Computation>::Dim, <Num as Computation>::Item>>, FromMax>,
+            Num,
+        >,
+        Arg<<ToMin as Computation>::Dim, <Num as Computation>::Item>,
+    >,
+>;
 
 /// Scale numbers from `0..=from_max` to `to_min..=to_max`.
 ///
@@ -156,11 +167,6 @@ pub type Scale<FromMax, ToMin, ToMax, Num> = Add<Mul<Div<Sub<ToMax, ToMin>, From
 /// `to_max` must be >= `to_min`.
 /// Passing `0` for `from_max` is an error.
 /// Passing a number > `from_max` will result in an output > `to_max`.
-///
-/// Note,
-/// `to_min` will be cloned,
-/// so it should be a simple computation
-/// or an arg.
 pub fn scale<FromMax, ToMin, ToMax, Num>(
     from_max: FromMax,
     to_min: ToMin,
@@ -169,7 +175,7 @@ pub fn scale<FromMax, ToMin, ToMax, Num>(
 ) -> Scale<FromMax, ToMin, ToMax, Num>
 where
     FromMax: ComputationFn<Item = Num::Item>,
-    ToMin: Clone + Computation<Item = Num::Item>,
+    ToMin: Computation<Item = Num::Item>,
     ToMax: ComputationFn<Item = Num::Item>,
     Num: ComputationFn,
     Num::Item: ops::Add<Output = Num::Item>
@@ -182,7 +188,11 @@ where
         SameOrZero<Num::Dim, Max = Num::Dim>,
     Num::Dim: SameOrZero<ToMin::Dim, Max = Num::Dim>,
 {
-    (((to_max.sub(to_min.clone())).div(from_max)).mul(num)).add(to_min)
+    to_min.then(
+        "to_min",
+        (((to_max.sub(Arg::<ToMin::Dim, ToMin::Item>::new("to_min"))).div(from_max)).mul(num))
+            .add(Arg::<ToMin::Dim, ToMin::Item>::new("to_min")),
+    )
 }
 
 /// Return the largest integer `to_int_...` can return.
