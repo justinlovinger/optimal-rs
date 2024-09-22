@@ -11,9 +11,72 @@ use optimal_compute_core::{
 };
 use std::ops;
 
-pub use self::from_bit::*;
+pub use self::{chunks_to_int_le::*, from_bit::*};
 
-type ToRealLe<ToMin, ToMax, Bits, T> = optimal_compute_core::control_flow::If<
+type ChunksToRealLe<ToMin, ToMax, Bits, T> =
+    Scale<Val<Zero, T>, ToMin, ToMax, ChunksToIntLe<Bits, T>>;
+
+/// Return base 10 representations of each chunk of bits,
+/// scaled to range `to_min..=to_max`.
+/// Leftmost is least significant.
+///
+/// `to_max` must be >= `to_min`.
+/// `chunk_size` must be > `0`.
+/// `bits.len() % chunk_size` must be == `0`.
+///
+/// # Examples
+///
+/// ```
+/// use optimal_compute_core::{argvals, val, val1, Run};
+/// use optimal_binary::chunks_to_real_le;
+///
+/// // It returns lower bound when all bits are false:
+/// assert_eq!(chunks_to_real_le(1, val!(0.0), val!(1.0), val1!([false, false, false])).run(argvals![]), [0., 0., 0.]);
+/// assert_eq!(chunks_to_real_le(2, val!(1.0), val!(2.0), val1!([false, false, false, false])).run(argvals![]), [1., 1.]);
+///
+/// // It returns upper bound when all bits are true:
+/// assert_eq!(chunks_to_real_le(1, val!(0.0), val!(1.0), val1!([true, true, true])).run(argvals![]), [1., 1., 1.]);
+/// assert_eq!(chunks_to_real_le(2, val!(1.0), val!(2.0), val1!([true, true, true, true])).run(argvals![]), [2., 2.]);
+///
+/// // It returns a number between lower and upper bound when some bits are true:
+/// assert_eq!(chunks_to_real_le(2, val!(1.0), val!(4.0), val1!([true, false, false, true])).run(argvals![]), [2., 3.]);
+/// ```
+pub fn chunks_to_real_le<ToMin, ToMax, Bits, T>(
+    chunk_size: usize,
+    to_min: ToMin,
+    to_max: ToMax,
+    bits: Bits,
+) -> ChunksToRealLe<ToMin, ToMax, Bits, T>
+where
+    ToMin: Clone + Computation<Item = T>,
+    ToMax: ComputationFn<Item = T>,
+    Bits: ComputationFn<Dim = One, Item = bool>,
+    T: 'static
+        + Copy
+        + ops::Add<Output = T>
+        + ops::Sub<Output = T>
+        + ops::Mul<Output = T>
+        + ops::Div<Output = T>
+        + num_traits::One
+        + num_traits::Pow<T, Output = T>
+        + std::iter::Sum,
+    u8: AsPrimitive<T>,
+    usize: AsPrimitive<T>,
+    ToMax::Dim: SameOrZero<ToMin::Dim>,
+    <ToMax::Dim as SameOrZero<ToMin::Dim>>::Max: SameOrZero<Zero>,
+    <<ToMax::Dim as SameOrZero<ToMin::Dim>>::Max as SameOrZero<Zero>>::Max:
+        SameOrZero<One, Max = One>,
+    One: SameOrZero<ToMin::Dim, Max = One>,
+{
+    scale(
+        val!(to_int_max(chunk_size)),
+        to_min,
+        to_max,
+        ChunksToIntLe::new(chunk_size, bits),
+    )
+}
+
+pub type ToRealLe<ToMin, ToMax, Bits, T> = optimal_compute_core::control_flow::If<
     ToMin,
     &'static str,
     optimal_compute_core::cmp::Eq<Val<Zero, usize>, Val<Zero, usize>>,
@@ -82,7 +145,7 @@ where
     )
 }
 
-type Scale<FromMax, ToMin, ToMax, Num> = Add<Mul<Div<Sub<ToMax, ToMin>, FromMax>, Num>, ToMin>;
+pub type Scale<FromMax, ToMin, ToMax, Num> = Add<Mul<Div<Sub<ToMax, ToMin>, FromMax>, Num>, ToMin>;
 
 /// Scale numbers from `0..=from_max` to `to_min..=to_max`.
 ///
@@ -131,7 +194,7 @@ where
     pow(2.as_(), len) - T::one()
 }
 
-type ToIntLe<Bits, T> =
+pub type ToIntLe<Bits, T> =
     Sum<Enumerate<FromBit<Bits, T>, Mul<Arg<One, T>, Pow<Val<Zero, T>, Arg<One, T>>>>>;
 
 /// Return base 10 integer representations of bits.
@@ -174,6 +237,113 @@ where
     FromBit::<_, T>::new(bits)
         .enumerate(arg1!("x", T) * val!(two).pow(arg1!("i", T)))
         .sum()
+}
+
+mod chunks_to_int_le {
+    use core::fmt;
+    use std::marker::PhantomData;
+
+    use optimal_compute_core::{impl_core_ops, peano::One, Computation, ComputationFn};
+
+    #[derive(Clone, Copy, Debug)]
+    pub struct ChunksToIntLe<A, T>
+    where
+        Self: Computation,
+    {
+        pub chunk_size: usize,
+        pub child: A,
+        ty: PhantomData<T>,
+    }
+
+    impl<A, T> ChunksToIntLe<A, T>
+    where
+        Self: Computation,
+    {
+        pub fn new(chunk_size: usize, child: A) -> Self {
+            Self {
+                chunk_size,
+                child,
+                ty: PhantomData,
+            }
+        }
+    }
+
+    impl<A, T> Computation for ChunksToIntLe<A, T>
+    where
+        A: Computation<Dim = One, Item = bool>,
+    {
+        type Dim = One;
+        type Item = T;
+    }
+
+    impl<A, T> ComputationFn for ChunksToIntLe<A, T>
+    where
+        Self: Computation,
+        A: ComputationFn,
+    {
+        fn args(&self) -> optimal_compute_core::Args {
+            self.child.args()
+        }
+    }
+
+    impl_core_ops!(ChunksToIntLe<A, T>);
+
+    impl<A, T> fmt::Display for ChunksToIntLe<A, T>
+    where
+        Self: Computation,
+        A: fmt::Display,
+    {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            write!(f, "chunks_to_int_le({}, {})", self.chunk_size, self.child)
+        }
+    }
+
+    mod run {
+        use std::ops;
+
+        use itertools::Itertools;
+        use num_traits::AsPrimitive;
+        use optimal_compute_core::{
+            argvals,
+            run::{ArgVals, RunCore, Unwrap, Value},
+            val1, Run,
+        };
+
+        use crate::to_int_le;
+
+        use super::*;
+
+        impl<A, T, AOut> RunCore for ChunksToIntLe<A, T>
+        where
+            Self: Computation,
+            A: RunCore<Output = Value<AOut>>,
+            AOut: IntoIterator<Item = bool>,
+            T: 'static
+                + Copy
+                + fmt::Debug
+                + ops::Add<Output = T>
+                + ops::Mul<Output = T>
+                + num_traits::Pow<T, Output = T>
+                + std::iter::Sum,
+            u8: AsPrimitive<T>,
+            usize: AsPrimitive<T>,
+        {
+            type Output = Value<Vec<T>>;
+
+            fn run_core(self, args: ArgVals) -> Self::Output {
+                Value(
+                    self.child
+                        .run_core(args)
+                        .unwrap()
+                        .into_iter()
+                        .chunks(self.chunk_size)
+                        .into_iter()
+                        .map(|bits| to_int_le(val1!(bits)).run(argvals![]))
+                        .collect(),
+                )
+            }
+        }
+    }
 }
 
 mod from_bit {
