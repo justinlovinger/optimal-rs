@@ -70,13 +70,17 @@ impl ArgVals {
         self
     }
 
+    pub fn contains_args(&self, args: &Args) -> bool {
+        args.iter().all(|arg| self.0.contains_key(arg))
+    }
+
     /// Return a (map with `fst_args`, map with `snd_args`) tuple if all arguments are present.
     pub fn partition(self, fst_args: &Args, snd_args: &Args) -> Result<(Self, Self), PartitionErr> {
         // We want to avoid making a new map
         // if we can simply return this map
         // as the partition with all arguments.
         if snd_args.is_empty() && fst_args.len() == self.0.len() {
-            if fst_args.iter().all(|arg| self.0.contains_key(arg)) {
+            if self.contains_args(fst_args) {
                 Ok((self, Self::new()))
             } else {
                 Err(PartitionErr::Missing(
@@ -87,7 +91,7 @@ impl ArgVals {
                 ))
             }
         } else if fst_args.is_empty() && snd_args.len() == self.0.len() {
-            if snd_args.iter().all(|arg| self.0.contains_key(arg)) {
+            if self.contains_args(snd_args) {
                 Ok((Self::new(), self))
             } else {
                 Err(PartitionErr::Missing(
@@ -117,9 +121,7 @@ impl ArgVals {
                 }
             }
 
-            if fst_args.iter().all(|arg| fst_map.0.contains_key(arg))
-                && snd_args.iter().all(|arg| snd_map.0.contains_key(arg))
-            {
+            if fst_map.contains_args(fst_args) && snd_map.contains_args(snd_args) {
                 Ok((fst_map, snd_map))
             } else {
                 Err(PartitionErr::Missing(
@@ -162,6 +164,13 @@ impl ArgVals {
                 },
             )
             .map(|x: Box<T>| *x)
+    }
+
+    /// This function is unstable and likely to change.
+    ///
+    /// Use at your own risk.
+    pub fn insert_raw(&mut self, name: Name, value: Box<dyn ArgVal>) {
+        self.0.insert(name, value);
     }
 
     #[cfg(test)]
