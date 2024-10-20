@@ -14,6 +14,9 @@ macro_rules! impl_run_core_for_binary_op {
         impl_run_core_for_binary_op!($op, ops);
     };
     ( $op:ident, $package:ident ) => {
+        impl_run_core_for_binary_op!($op, $package, $op);
+    };
+    ( $op:ident, $package:ident, $bound:ident ) => {
         paste! {
             impl<A, B, OutA, OutB> RunCore for $op<A, B>
             where
@@ -39,35 +42,35 @@ macro_rules! impl_run_core_for_binary_op {
 
             impl<Lhs, Rhs> [<Broadcast $op>]<Rhs, Zero, Zero> for Lhs
             where
-                Lhs: $package::$op<Rhs>,
+                Lhs: $package::$bound<Rhs>,
             {
                 type Output = Lhs::Output;
 
                 fn [<broadcast_ $op:lower>](self, rhs: Rhs) -> Self::Output {
-                    $package::$op::[<$op:lower>](self, rhs)
+                    $package::$bound::[<$op:lower>](self, rhs)
                 }
             }
 
-            impl<Lhs, Rhs> [<Broadcast $op>]<Rhs, One, One> for Lhs
+            impl<Lhs, Rhs, Item> [<Broadcast $op>]<Rhs, One, One> for Lhs
             where
-                Lhs: IntoIterator,
-                Lhs::Item: $package::$op<Rhs::Item>,
+                Lhs: IntoIterator<Item = Item>,
+                Item: $package::$bound<Rhs::Item>,
                 Rhs: IntoIterator,
             {
-                type Output = std::iter::Map<std::iter::Zip<Lhs::IntoIter, Rhs::IntoIter>, fn((Lhs::Item, Rhs::Item)) -> <Lhs::Item as $package::$op<Rhs::Item>>::Output>;
+                type Output = std::iter::Map<std::iter::Zip<Lhs::IntoIter, Rhs::IntoIter>, fn((Lhs::Item, Rhs::Item)) -> Item::Output>;
 
                 fn [<broadcast_ $op:lower>](self, rhs: Rhs) -> Self::Output {
-                    self.into_iter().zip(rhs).map(|(x, y)| $package::$op::[<$op:lower>](x, y))
+                    self.into_iter().zip(rhs).map(|(x, y)| $package::$bound::[<$op:lower>](x, y))
                 }
             }
 
-            impl<Lhs, Rhs> [<Broadcast $op>]<Matrix<Rhs>, Two, Two> for Matrix<Lhs>
+            impl<Lhs, Rhs, Item> [<Broadcast $op>]<Matrix<Rhs>, Two, Two> for Matrix<Lhs>
             where
-                Lhs: IntoIterator,
-                Lhs::Item: $package::$op<Rhs::Item>,
+                Lhs: IntoIterator<Item = Item>,
+                Item: $package::$bound<Rhs::Item>,
                 Rhs: IntoIterator,
             {
-                type Output = Matrix<std::iter::Map<std::iter::Zip<Lhs::IntoIter, Rhs::IntoIter>, fn((Lhs::Item, Rhs::Item)) -> <Lhs::Item as $package::$op<Rhs::Item>>::Output>>;
+                type Output = Matrix<std::iter::Map<std::iter::Zip<Lhs::IntoIter, Rhs::IntoIter>, fn((Lhs::Item, Rhs::Item)) -> Item::Output>>;
 
                 fn [<broadcast_ $op:lower>](self, rhs: Matrix<Rhs>) -> Self::Output {
                     debug_assert_eq!(self.shape(), rhs.shape());
@@ -80,44 +83,44 @@ macro_rules! impl_run_core_for_binary_op {
                             self.into_inner()
                                 .into_iter()
                                 .zip(rhs.into_inner())
-                                .map(|(x, y)| $package::$op::[<$op:lower>](x, y)),
+                                .map(|(x, y)| $package::$bound::[<$op:lower>](x, y)),
                         )
                     }
                 }
             }
 
-            impl<Lhs, Rhs> [<Broadcast $op>]<Rhs, One, Zero> for Lhs
+            impl<Lhs, Rhs, Item> [<Broadcast $op>]<Rhs, One, Zero> for Lhs
             where
-                Lhs: IntoIterator,
-                Lhs::Item: $package::$op<Rhs>,
+                Lhs: IntoIterator<Item = Item>,
+                Item: $package::$bound<Rhs>,
                 Rhs: Clone,
             {
-                type Output = std::iter::Map<std::iter::Zip<Lhs::IntoIter, std::iter::Repeat<Rhs>>, fn((Lhs::Item, Rhs)) -> <Lhs::Item as $package::$op<Rhs>>::Output>;
+                type Output = std::iter::Map<std::iter::Zip<Lhs::IntoIter, std::iter::Repeat<Rhs>>, fn((Lhs::Item, Rhs)) -> Item::Output>;
 
                 fn [<broadcast_ $op:lower>](self, rhs: Rhs) -> Self::Output {
-                    self.into_iter().zip(std::iter::repeat(rhs)).map(|(x, y)| $package::$op::[<$op:lower>](x, y))
+                    self.into_iter().zip(std::iter::repeat(rhs)).map(|(x, y)| $package::$bound::[<$op:lower>](x, y))
                 }
             }
 
             impl<Lhs, Rhs> [<Broadcast $op>]<Rhs, Zero, One> for Lhs
             where
-                Lhs: Clone + $package::$op<Rhs::Item>,
+                Lhs: Clone + $package::$bound<Rhs::Item>,
                 Rhs: IntoIterator,
             {
-                type Output = std::iter::Map<std::iter::Zip<std::iter::Repeat<Lhs>, Rhs::IntoIter>, fn((Lhs, Rhs::Item)) -> <Lhs as $package::$op<Rhs::Item>>::Output>;
+                type Output = std::iter::Map<std::iter::Zip<std::iter::Repeat<Lhs>, Rhs::IntoIter>, fn((Lhs, Rhs::Item)) -> Lhs::Output>;
 
                 fn [<broadcast_ $op:lower>](self, rhs: Rhs) -> Self::Output {
-                    std::iter::repeat(self).zip(rhs).map(|(x, y)| $package::$op::[<$op:lower>](x, y))
+                    std::iter::repeat(self).zip(rhs).map(|(x, y)| $package::$bound::[<$op:lower>](x, y))
                 }
             }
 
-            impl<Lhs, Rhs> [<Broadcast $op>]<Rhs, Two, Zero> for Matrix<Lhs>
+            impl<Lhs, Rhs, Item> [<Broadcast $op>]<Rhs, Two, Zero> for Matrix<Lhs>
             where
-                Lhs: IntoIterator,
-                Lhs::Item: $package::$op<Rhs>,
+                Lhs: IntoIterator<Item = Item>,
+                Item: $package::$bound<Rhs>,
                 Rhs: Clone,
             {
-                type Output = Matrix<std::iter::Map<std::iter::Zip<Lhs::IntoIter, std::iter::Repeat<Rhs>>, fn((Lhs::Item, Rhs)) -> <Lhs::Item as $package::$op<Rhs>>::Output>>;
+                type Output = Matrix<std::iter::Map<std::iter::Zip<Lhs::IntoIter, std::iter::Repeat<Rhs>>, fn((Lhs::Item, Rhs)) -> Item::Output>>;
 
                 fn [<broadcast_ $op:lower>](self, rhs: Rhs) -> Self::Output {
                     // Neither shape nor the length of `inner` will change,
@@ -128,7 +131,7 @@ macro_rules! impl_run_core_for_binary_op {
                             self.into_inner()
                                 .into_iter()
                                 .zip(std::iter::repeat(rhs))
-                                .map(|(x, y)| $package::$op::[<$op:lower>](x, y)),
+                                .map(|(x, y)| $package::$bound::[<$op:lower>](x, y)),
                         )
                     }
                 }
@@ -136,10 +139,10 @@ macro_rules! impl_run_core_for_binary_op {
 
             impl<Lhs, Rhs> [<Broadcast $op>]<Matrix<Rhs>, Zero, Two> for Lhs
             where
-                Lhs: Clone + $package::$op<Rhs::Item>,
+                Lhs: Clone + $package::$bound<Rhs::Item>,
                 Rhs: IntoIterator,
             {
-                type Output = Matrix<std::iter::Map<std::iter::Zip<std::iter::Repeat<Lhs>, Rhs::IntoIter>, fn((Lhs, Rhs::Item)) -> <Lhs as $package::$op<Rhs::Item>>::Output>>;
+                type Output = Matrix<std::iter::Map<std::iter::Zip<std::iter::Repeat<Lhs>, Rhs::IntoIter>, fn((Lhs, Rhs::Item)) -> Lhs::Output>>;
 
                 fn [<broadcast_ $op:lower>](self, rhs: Matrix<Rhs>) -> Self::Output {
                     // Neither shape nor the length of `inner` will change,
@@ -149,7 +152,7 @@ macro_rules! impl_run_core_for_binary_op {
                             rhs.shape(),
                             std::iter::repeat(self)
                                 .zip(rhs.into_inner())
-                                .map(|(x, y)| $package::$op::[<$op:lower>](x, y)),
+                                .map(|(x, y)| $package::$bound::[<$op:lower>](x, y)),
                         )
                     }
                 }
@@ -158,11 +161,17 @@ macro_rules! impl_run_core_for_binary_op {
     };
 }
 
-macro_rules! impl_run_for_unary_op {
+macro_rules! impl_run_core_for_unary_op {
     ( $op:ident ) => {
-        impl_run_for_unary_op!($op, ops);
+        impl_run_core_for_unary_op!($op, ops);
     };
     ( $op:ident, $package:ident ) => {
+        impl_run_core_for_unary_op!($op, $package, $op);
+    };
+    ( $op:ident, $package:ident, $bound:ident ) => {
+        impl_run_core_for_unary_op!($op, $package, $bound, Item::Output);
+    };
+    ( $op:ident, $package:ident, $bound:ident, Item $( :: $Output:ident )? ) => {
         paste! {
             impl<A, Out> RunCore for $op<A>
             where
@@ -183,35 +192,35 @@ macro_rules! impl_run_for_unary_op {
                 fn [<broadcast_ $op:lower>](self) -> Self::Output;
             }
 
-            impl<Lhs> [<Broadcast $op>]<Zero> for Lhs
+            impl<Item> [<Broadcast $op>]<Zero> for Item
             where
-                Lhs: $package::$op,
+                Item: $package::$bound,
             {
-                type Output = Lhs::Output;
+                type Output = Item $( :: $Output )?;
 
                 fn [<broadcast_ $op:lower>](self) -> Self::Output {
-                    $package::$op::[<$op:lower>](self)
+                    $package::$bound::[<$op:lower>](self)
                 }
             }
 
-            impl<Lhs> [<Broadcast $op>]<One> for Lhs
+            impl<Lhs, Item> [<Broadcast $op>]<One> for Lhs
             where
-                Lhs: IntoIterator,
-                Lhs::Item: $package::$op,
+                Lhs: IntoIterator<Item = Item>,
+                Item: $package::$bound,
             {
-                type Output = std::iter::Map<Lhs::IntoIter, fn(Lhs::Item) -> <Lhs::Item as $package::$op>::Output>;
+                type Output = std::iter::Map<Lhs::IntoIter, fn(Item) -> Item $( :: $Output )?>;
 
                 fn [<broadcast_ $op:lower>](self) -> Self::Output {
-                    self.into_iter().map($package::$op::[<$op:lower>])
+                    self.into_iter().map($package::$bound::[<$op:lower>])
                 }
             }
 
-            impl<Lhs> [<Broadcast $op>]<Two> for Matrix<Lhs>
+            impl<Lhs, Item> [<Broadcast $op>]<Two> for Matrix<Lhs>
             where
-                Lhs: IntoIterator,
-                Lhs::Item: $package::$op,
+                Lhs: IntoIterator<Item = Item>,
+                Item: $package::$bound,
             {
-                type Output = Matrix<std::iter::Map<Lhs::IntoIter, fn(Lhs::Item) -> <Lhs::Item as $package::$op>::Output>>;
+                type Output = Matrix<std::iter::Map<Lhs::IntoIter, fn(Item) -> Item $( :: $Output )?>>;
 
                 fn [<broadcast_ $op:lower>](self) -> Self::Output {
                     // Neither shape nor the length of `inner` will change,
@@ -221,7 +230,7 @@ macro_rules! impl_run_for_unary_op {
                             self.shape(),
                             self.into_inner()
                                 .into_iter()
-                                .map($package::$op::[<$op:lower>])
+                                .map($package::$bound::[<$op:lower>])
                         )
                     }
                 }
@@ -235,7 +244,7 @@ impl_run_core_for_binary_op!(Sub);
 impl_run_core_for_binary_op!(Mul);
 impl_run_core_for_binary_op!(Div);
 impl_run_core_for_binary_op!(Pow, num_traits);
-impl_run_for_unary_op!(Neg);
+impl_run_core_for_unary_op!(Neg);
 
 mod abs {
     use num_traits::Signed;
@@ -299,6 +308,19 @@ mod abs {
             }
         }
     }
+}
+
+mod trig {
+    use num_traits::real;
+
+    use super::*;
+
+    impl_run_core_for_unary_op!(Sin, real, Real, Item);
+    impl_run_core_for_unary_op!(Cos, real, Real, Item);
+    impl_run_core_for_unary_op!(Tan, real, Real, Item);
+    impl_run_core_for_unary_op!(Asin, real, Real, Item);
+    impl_run_core_for_unary_op!(Acos, real, Real, Item);
+    impl_run_core_for_unary_op!(Atan, real, Real, Item);
 }
 
 #[cfg(test)]
@@ -446,4 +468,18 @@ mod tests {
     test_binary_op!(pow, (0_u32..10), u32);
     test_unary_op!(neg);
     test_unary_op!(abs);
+
+    mod trig {
+        use super::*;
+
+        test_unary_op!(sin, (-10.0_f32..10.0), f32);
+        test_unary_op!(cos, (-10.0_f32..10.0), f32);
+        test_unary_op!(tan, (-10.0_f32..10.0), f32);
+
+        // The following are not defined for values outside `[-1, 1]`:
+        test_unary_op!(asin, (-1.0_f32..1.0), f32);
+        test_unary_op!(acos, (-1.0_f32..1.0), f32);
+
+        test_unary_op!(atan, (-10.0_f32..10.0), f32);
+    }
 }

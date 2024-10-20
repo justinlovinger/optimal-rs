@@ -55,6 +55,8 @@ pub trait Computation {
     type Dim;
     type Item;
 
+    // `math`
+
     fn add<Rhs>(self, rhs: Rhs) -> math::Add<Self, Rhs>
     where
         Self: Sized,
@@ -110,6 +112,58 @@ pub trait Computation {
     {
         math::Abs(self)
     }
+
+    // `math::trig`
+
+    fn sin(self) -> math::Sin<Self>
+    where
+        Self: Sized,
+        math::Sin<Self>: Computation,
+    {
+        math::Sin(self)
+    }
+
+    fn cos(self) -> math::Cos<Self>
+    where
+        Self: Sized,
+        math::Cos<Self>: Computation,
+    {
+        math::Cos(self)
+    }
+
+    fn tan(self) -> math::Tan<Self>
+    where
+        Self: Sized,
+        math::Tan<Self>: Computation,
+    {
+        math::Tan(self)
+    }
+
+    fn asin(self) -> math::Asin<Self>
+    where
+        Self: Sized,
+        math::Asin<Self>: Computation,
+    {
+        math::Asin(self)
+    }
+
+    fn acos(self) -> math::Acos<Self>
+    where
+        Self: Sized,
+        math::Acos<Self>: Computation,
+    {
+        math::Acos(self)
+    }
+
+    fn atan(self) -> math::Atan<Self>
+    where
+        Self: Sized,
+        math::Atan<Self>: Computation,
+    {
+        math::Atan(self)
+    }
+
+    // `cmp`
 
     fn eq<Rhs>(self, rhs: Rhs) -> cmp::Eq<Self, Rhs>
     where
@@ -175,6 +229,8 @@ pub trait Computation {
         cmp::Not(self)
     }
 
+    // `enumerate`
+
     fn enumerate<F>(self, f: F) -> enumerate::Enumerate<Self, F>
     where
         Self: Sized,
@@ -183,6 +239,8 @@ pub trait Computation {
         enumerate::Enumerate { child: self, f }
     }
 
+    // `sum`
+
     fn sum(self) -> sum::Sum<Self>
     where
         Self: Sized,
@@ -190,6 +248,8 @@ pub trait Computation {
     {
         sum::Sum(self)
     }
+
+    // `zip`
 
     fn zip<Rhs>(self, rhs: Rhs) -> zip::Zip<Self, Rhs>
     where
