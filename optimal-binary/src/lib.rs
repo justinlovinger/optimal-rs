@@ -14,7 +14,7 @@ use std::ops;
 
 pub use self::{chunks_to_int_le::*, from_bit::*};
 
-type ChunksToRealLe<ToMin, ToMax, Bits, T> =
+pub type ChunksToRealLe<ToMin, ToMax, Bits, T> =
     Scale<Val<Zero, T>, ToMin, ToMax, ChunksToIntLe<Bits, T>>;
 
 /// Return base 10 representations of each chunk of bits,
