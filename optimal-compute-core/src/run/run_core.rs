@@ -8,8 +8,6 @@ mod rand;
 mod sum;
 mod zip;
 
-use blanket::blanket;
-
 use crate::{
     peano::{One, Two, Zero},
     run::{ArgVal, ArgVals},
@@ -25,11 +23,76 @@ use super::{Matrix, Unwrap, Value};
 /// or difficult-to-use types.
 /// Outside implementing `RunCore`,
 /// `run` should be used.
-#[blanket(derive(Box))]
 pub trait RunCore {
     type Output;
 
     fn run_core(self, args: ArgVals) -> Self::Output;
+}
+
+impl<T> RunCore for &T
+where
+    T: RunCore + ?Sized,
+{
+    type Output = T::Output;
+
+    fn run_core(self, _args: ArgVals) -> Self::Output {
+        unimplemented!("Unsized types cannot run")
+    }
+}
+
+impl<T> RunCore for &mut T
+where
+    T: RunCore + ?Sized,
+{
+    type Output = T::Output;
+
+    fn run_core(self, _args: ArgVals) -> Self::Output {
+        unimplemented!("Unsized types cannot run")
+    }
+}
+
+impl<T> RunCore for Box<T>
+where
+    T: RunCore + ?Sized,
+{
+    type Output = T::Output;
+
+    fn run_core(self, _args: ArgVals) -> Self::Output {
+        unimplemented!("Unsized types cannot run")
+    }
+}
+
+impl<T> RunCore for std::rc::Rc<T>
+where
+    T: RunCore + ?Sized,
+{
+    type Output = T::Output;
+
+    fn run_core(self, _args: ArgVals) -> Self::Output {
+        unimplemented!("Unsized types cannot run")
+    }
+}
+
+impl<T> RunCore for std::sync::Arc<T>
+where
+    T: RunCore + ?Sized,
+{
+    type Output = T::Output;
+
+    fn run_core(self, _args: ArgVals) -> Self::Output {
+        unimplemented!("Unsized types cannot run")
+    }
+}
+
+impl<'a, T> RunCore for std::borrow::Cow<'a, T>
+where
+    T: RunCore + ToOwned + ?Sized,
+{
+    type Output = T::Output;
+
+    fn run_core(self, _args: ArgVals) -> Self::Output {
+        unimplemented!("Unsized types cannot run, only associated types are available.")
+    }
 }
 
 impl<Dim, A> RunCore for Val<Dim, A>
