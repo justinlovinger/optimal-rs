@@ -39,6 +39,8 @@ pub mod zip;
 use core::fmt;
 use std::marker::PhantomData;
 
+use blanket::blanket;
+
 use crate::peano::{One, Suc, Two, Zero};
 
 pub use crate::{args::*, run::Run};
@@ -421,10 +423,59 @@ pub trait Computation {
     }
 }
 
+impl<T> Computation for &T
+where
+    T: Computation + ?Sized,
+{
+    type Dim = T::Dim;
+    type Item = T::Item;
+}
+
+impl<T> Computation for &mut T
+where
+    T: Computation + ?Sized,
+{
+    type Dim = T::Dim;
+    type Item = T::Item;
+}
+
+impl<T> Computation for Box<T>
+where
+    T: Computation + ?Sized,
+{
+    type Dim = T::Dim;
+    type Item = T::Item;
+}
+
+impl<T> Computation for std::rc::Rc<T>
+where
+    T: Computation + ?Sized,
+{
+    type Dim = T::Dim;
+    type Item = T::Item;
+}
+
+impl<T> Computation for std::sync::Arc<T>
+where
+    T: Computation + ?Sized,
+{
+    type Dim = T::Dim;
+    type Item = T::Item;
+}
+
+impl<'a, T> Computation for std::borrow::Cow<'a, T>
+where
+    T: Computation + ToOwned + ?Sized,
+{
+    type Dim = T::Dim;
+    type Item = T::Item;
+}
+
 /// A type representing a function-like computation.
 ///
 /// Most computations should implement this,
 /// even if they represent a function with zero arguments.
+#[blanket(derive(Ref, Mut, Box, Rc, Arc, Cow))]
 pub trait ComputationFn: Computation {
     fn args(&self) -> Args;
 }

@@ -8,6 +8,8 @@ mod rand;
 mod sum;
 mod zip;
 
+use blanket::blanket;
+
 use crate::{
     peano::{One, Two, Zero},
     run::{ArgVal, ArgVals},
@@ -23,6 +25,7 @@ use super::{Matrix, Unwrap, Value};
 /// or difficult-to-use types.
 /// Outside implementing `RunCore`,
 /// `run` should be used.
+#[blanket(derive(Box))]
 pub trait RunCore {
     type Output;
 
