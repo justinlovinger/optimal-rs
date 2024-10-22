@@ -3,12 +3,14 @@
 use num_traits::{pow, AsPrimitive};
 use optimal_compute_core::{
     arg, arg1,
-    control_flow::Then,
+    control_flow::{If, Then},
     enumerate::Enumerate,
     math::{Add, Div, Mul, Pow, SameOrZero, Sub},
     peano::{One, Zero},
     sum::Sum,
-    val, Arg, Computation, ComputationFn, Val,
+    val,
+    zip::{Zip3, Zip4},
+    Arg, Computation, ComputationFn, Val,
 };
 use std::ops;
 
@@ -28,7 +30,7 @@ pub type ChunksToRealLe<ToMin, ToMax, Bits, T> =
 /// # Examples
 ///
 /// ```
-/// use optimal_compute_core::{argvals, val, val1, Run};
+/// use optimal_compute_core::{argvals, arg1, val, val1, Run};
 /// use optimal_binary::chunks_to_real_le;
 ///
 /// // It returns lower bound when all bits are false:
@@ -41,6 +43,9 @@ pub type ChunksToRealLe<ToMin, ToMax, Bits, T> =
 ///
 /// // It returns a number between lower and upper bound when some bits are true:
 /// assert_eq!(chunks_to_real_le(2, val!(1.0), val!(4.0), val1!([true, false, false, true])).run(argvals![]), [2., 3.]);
+///
+/// // It can construct a computation-function:
+/// assert_eq!(chunks_to_real_le(2, val!(0.0), val!(3.0), arg1!("point", bool)).run(argvals![("point", vec![true, false])]), [1.]);
 /// ```
 pub fn chunks_to_real_le<ToMin, ToMax, Bits, T>(
     chunk_size: usize,
@@ -77,12 +82,12 @@ where
     )
 }
 
-pub type ToRealLe<ToMin, ToMax, Bits, T> = optimal_compute_core::control_flow::If<
-    ToMin,
-    &'static str,
+pub type ToRealLe<ToMin, ToMax, Bits, T> = If<
+    Zip3<ToMin, ToMax, Bits>,
+    (&'static str, &'static str, &'static str),
     optimal_compute_core::cmp::Eq<Val<Zero, usize>, Val<Zero, usize>>,
     Arg<Zero, T>,
-    Scale<Val<Zero, T>, Arg<Zero, T>, ToMax, ToIntLe<Bits, T>>,
+    Scale<Val<Zero, T>, Arg<Zero, T>, Arg<Zero, T>, ToIntLe<Arg<One, bool>, T>>,
 >;
 
 /// Return base 10 representations of bits scaled to range `to_min..=to_max`.
@@ -93,7 +98,7 @@ pub type ToRealLe<ToMin, ToMax, Bits, T> = optimal_compute_core::control_flow::I
 /// # Examples
 ///
 /// ```
-/// use optimal_compute_core::{argvals, val, val1, Run};
+/// use optimal_compute_core::{argvals, arg1, val, val1, Run};
 /// use optimal_binary::to_real_le;
 ///
 /// // It returns lower bound for empty arrays:
@@ -110,6 +115,9 @@ pub type ToRealLe<ToMin, ToMax, Bits, T> = optimal_compute_core::control_flow::I
 /// // It returns a number between lower and upper bound when some bits are true:
 /// assert_eq!(to_real_le(2, val!(1.0), val!(4.0), val1!([true, false])).run(argvals![]), 2.);
 /// assert_eq!(to_real_le(2, val!(1.0), val!(4.0), val1!([false, true])).run(argvals![]), 3.);
+///
+/// // It can construct a computation-function:
+/// assert_eq!(to_real_le(2, val!(0.0), val!(3.0), arg1!("point", bool)).run(argvals![("point", vec![true, false])]), 1.);
 /// ```
 pub fn to_real_le<ToMin, ToMax, Bits, T>(
     len: usize,
@@ -133,26 +141,32 @@ where
     u8: AsPrimitive<T>,
     usize: AsPrimitive<T>,
 {
-    to_min.if_(
-        "to_min",
+    Zip3(to_min, to_max, bits).if_(
+        ("to_min", "to_max", "bits"),
         val!(len).eq(val!(0_usize)),
         arg!("to_min", T),
         scale(
             val!(to_int_max(len)),
             arg!("to_min", T),
-            to_max,
-            to_int_le::<_, T>(bits),
+            arg!("to_max", T),
+            to_int_le::<_, T>(arg1!("bits", bool)),
         ),
     )
 }
 
 pub type Scale<FromMax, ToMin, ToMax, Num> = Then<
-    ToMin,
-    &'static str,
+    Zip4<FromMax, ToMin, ToMax, Num>,
+    (&'static str, &'static str, &'static str, &'static str),
     Add<
         Mul<
-            Div<Sub<ToMax, Arg<<ToMin as Computation>::Dim, <Num as Computation>::Item>>, FromMax>,
-            Num,
+            Div<
+                Sub<
+                    Arg<<ToMax as Computation>::Dim, <ToMax as Computation>::Item>,
+                    Arg<<ToMin as Computation>::Dim, <ToMin as Computation>::Item>,
+                >,
+                Arg<<FromMax as Computation>::Dim, <FromMax as Computation>::Item>,
+            >,
+            Arg<<Num as Computation>::Dim, <Num as Computation>::Item>,
         >,
         Arg<<ToMin as Computation>::Dim, <Num as Computation>::Item>,
     >,
@@ -188,10 +202,13 @@ where
         SameOrZero<Num::Dim, Max = Num::Dim>,
     Num::Dim: SameOrZero<ToMin::Dim, Max = Num::Dim>,
 {
-    to_min.then(
-        "to_min",
-        (((to_max.sub(Arg::<ToMin::Dim, ToMin::Item>::new("to_min"))).div(from_max)).mul(num))
-            .add(Arg::<ToMin::Dim, ToMin::Item>::new("to_min")),
+    Zip4(from_max, to_min, to_max, num).then(
+        ("from_max", "to_min", "to_max", "num"),
+        (((Arg::<ToMax::Dim, ToMax::Item>::new("to_max")
+            .sub(Arg::<ToMin::Dim, ToMin::Item>::new("to_min")))
+        .div(Arg::<FromMax::Dim, FromMax::Item>::new("from_max")))
+        .mul(Arg::<Num::Dim, Num::Item>::new("num")))
+        .add(Arg::<ToMin::Dim, ToMin::Item>::new("to_min")),
     )
 }
 
@@ -213,7 +230,7 @@ pub type ToIntLe<Bits, T> =
 /// # Examples
 ///
 /// ```
-/// use optimal_compute_core::{argvals, val1, Run};
+/// use optimal_compute_core::{argvals, arg1, val1, Run};
 /// use optimal_binary::to_int_le;
 ///
 /// // It returns 0 when empty:
@@ -230,6 +247,9 @@ pub type ToIntLe<Bits, T> =
 /// // It treats leftmost as least significant:
 /// assert_eq!(to_int_le::<_, u8>(val1!([false, true])).run(argvals![]), 2_u8);
 /// assert_eq!(to_int_le::<_, u8>(val1!([false, false, true])).run(argvals![]), 4_u8);
+///
+/// // It can construct a computation-function:
+/// assert_eq!(to_int_le::<_, u8>(arg1!("point", bool)).run(argvals![("point", vec![false])]), 0_u8);
 /// ```
 pub fn to_int_le<Bits, T>(bits: Bits) -> ToIntLe<Bits, T>
 where
