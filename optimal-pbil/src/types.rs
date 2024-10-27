@@ -39,6 +39,30 @@ derive_into_inner!(NumSamples(usize));
 derive_try_from_from_new!(NumSamples(usize));
 derive_from_str_from_try_into!(NumSamples(usize));
 
+impl PartialOrd<NumSamples> for usize {
+    fn partial_cmp(&self, other: &NumSamples) -> Option<std::cmp::Ordering> {
+        self.partial_cmp(&other.0)
+    }
+}
+
+impl PartialEq<NumSamples> for usize {
+    fn eq(&self, other: &NumSamples) -> bool {
+        self.eq(&other.0)
+    }
+}
+
+impl PartialOrd<usize> for NumSamples {
+    fn partial_cmp(&self, other: &usize) -> Option<std::cmp::Ordering> {
+        self.0.partial_cmp(other)
+    }
+}
+
+impl PartialEq<usize> for NumSamples {
+    fn eq(&self, other: &usize) -> bool {
+        self.0.eq(other)
+    }
+}
+
 /// Degree to adjust probabilities towards best point
 /// during steps.
 #[derive(Clone, Copy, Debug, Display, PartialEq, PartialOrd, Into)]

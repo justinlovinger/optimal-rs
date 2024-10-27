@@ -1,136 +1,200 @@
-use core::fmt;
-
 use optimal_compute_core::{
-    impl_core_ops,
+    arg, arg1,
+    black_box::BlackBox,
+    cmp::Lt,
+    control_flow::{If, LoopWhile, Then},
+    math::Add,
     peano::{One, Zero},
-    Args, Computation, ComputationFn,
+    rand::SeededRand,
+    run::Value,
+    val,
+    zip::{Zip, Zip3, Zip4},
+    Arg, Computation, ComputationFn, Val,
 };
-use rand::Rng;
+use rand::{distributions::Bernoulli, Rng};
 
-use super::{NumSamples, Probability};
+use crate::types::{NumSamples, Probability};
 
-/// See [`Sampleable::best_sample`].
-#[derive(Clone, Copy, Debug)]
-pub struct BestSample<N, F, P, R>
-where
-    Self: Computation,
-{
-    /// Computation representing [`NumSamples`].
-    pub num_samples: N,
-    /// Computation representing objective function.
-    pub obj_func: F,
-    /// Computation representing probabilities to sample from.
-    pub probabilities: P,
-    /// Computation representing a source of randomness.
-    pub rng: R,
-}
+/// See [`best_sample`].
+pub type BestSample<N, F, P, R> = Then<
+    LoopWhile<
+        Zip<
+            Zip<Val<Zero, usize>, N>,
+            Then<
+                Zip<BlackBox<P, fn(Vec<Probability>) -> Value<Vec<Bernoulli>>, One, Bernoulli>, R>,
+                (&'static str, &'static str),
+                Zip<
+                    Arg<One, Bernoulli>,
+                    Then<
+                        SeededRand<Arg<Zero, <R as Computation>::Item>, Arg<One, Bernoulli>, bool>,
+                        (&'static str, &'static str),
+                        Zip<Arg<Zero, <R as Computation>::Item>, Zip<Arg<One, bool>, F>>,
+                    >,
+                >,
+            >,
+        >,
+        (
+            (&'static str, &'static str),
+            (&'static str, (&'static str, (&'static str, &'static str))),
+        ),
+        Zip<
+            Zip<Add<Arg<Zero, usize>, Val<Zero, usize>>, Arg<Zero, NumSamples>>,
+            Zip<
+                Arg<One, Bernoulli>,
+                Then<
+                    Zip3<
+                        Arg<One, bool>,
+                        Arg<Zero, <F as Computation>::Item>,
+                        SeededRand<Arg<Zero, <R as Computation>::Item>, Arg<One, Bernoulli>, bool>,
+                    >,
+                    (&'static str, &'static str, (&'static str, &'static str)),
+                    Zip<
+                        Arg<Zero, <R as Computation>::Item>,
+                        Then<
+                            Zip4<
+                                Arg<One, bool>,
+                                Arg<Zero, <F as Computation>::Item>,
+                                Arg<One, bool>,
+                                F,
+                            >,
+                            (&'static str, &'static str, &'static str, &'static str),
+                            If<
+                                Zip4<
+                                    Arg<One, bool>,
+                                    Arg<Zero, <F as Computation>::Item>,
+                                    Arg<One, bool>,
+                                    Arg<Zero, <F as Computation>::Item>,
+                                >,
+                                (&'static str, &'static str, &'static str, &'static str),
+                                Lt<
+                                    Arg<Zero, <F as Computation>::Item>,
+                                    Arg<Zero, <F as Computation>::Item>,
+                                >,
+                                Zip<Arg<One, bool>, Arg<Zero, <F as Computation>::Item>>,
+                                Zip<Arg<One, bool>, Arg<Zero, <F as Computation>::Item>>,
+                            >,
+                        >,
+                    >,
+                >,
+            >,
+        >,
+        Lt<Arg<Zero, usize>, Arg<Zero, NumSamples>>,
+    >,
+    (
+        (&'static str, &'static str),
+        (&'static str, (&'static str, (&'static str, &'static str))),
+    ),
+    Zip<Arg<Zero, <R as Computation>::Item>, Arg<One, bool>>,
+>;
 
-impl<N, F, P, R> BestSample<N, F, P, R>
-where
-    Self: Computation,
-{
-    #[allow(missing_docs)]
-    pub fn new(num_samples: N, obj_func: F, probabilities: P, rng: R) -> Self {
-        Self {
-            num_samples,
-            obj_func,
-            probabilities,
-            rng,
-        }
-    }
-}
-
-impl<N, F, P, R> Computation for BestSample<N, F, P, R>
+/// Return the sample that minimizes the objective function
+/// among `num_samples` samples
+/// sampled from `probabilities`.
+pub fn best_sample<N, F, P, R>(
+    num_samples: N,
+    obj_func: F,
+    probabilities: P,
+    rng: R,
+) -> BestSample<N, F, P, R>
 where
     N: Computation<Dim = Zero, Item = NumSamples>,
-    F: ComputationFn<Dim = Zero>,
+    F: Clone + ComputationFn<Dim = Zero>,
     F::Item: PartialOrd,
     P: Computation<Dim = One, Item = Probability>,
     R: Computation<Dim = Zero>,
     R::Item: Rng,
 {
-    type Dim = (Zero, One);
-    type Item = (R::Item, bool);
-}
-
-impl<N, F, P, R> ComputationFn for BestSample<N, F, P, R>
-where
-    Self: Computation,
-    N: ComputationFn,
-    P: ComputationFn,
-    R: ComputationFn,
-{
-    fn args(&self) -> Args {
-        self.num_samples
-            .args()
-            .union(self.probabilities.args())
-            .union(self.rng.args())
-    }
-}
-
-impl_core_ops!(BestSample<N, F, P, R>);
-
-impl<N, F, P, R> fmt::Display for BestSample<N, F, P, R>
-where
-    Self: Computation,
-    N: fmt::Display,
-    F: fmt::Display,
-    P: fmt::Display,
-    R: fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "best_sample({}, {}, {}, {})",
-            self.num_samples, self.obj_func, self.probabilities, self.rng
+    Zip(
+        Zip(val!(1_usize), num_samples),
+        Zip(
+            probabilities.black_box::<_, One, Bernoulli>(
+                bernoullis_from_probabilities as fn(Vec<Probability>) -> Value<Vec<Bernoulli>>,
+            ),
+            rng,
         )
-    }
+        .then(
+            ("distributions", "rng"),
+            Zip(
+                arg1!("distributions", Bernoulli),
+                SeededRand::<_, _, bool>::new(
+                    arg!("rng", R::Item),
+                    arg1!("distributions", Bernoulli),
+                )
+                .then(
+                    ("rng", "sample"),
+                    Zip(
+                        arg!("rng", R::Item),
+                        Zip(arg1!("sample", bool), obj_func.clone()),
+                    ),
+                ),
+            ),
+        ),
+    )
+    .loop_while(
+        (
+            ("i", "num_samples"),
+            ("distributions", ("rng", ("best_sample", "best_value"))),
+        ),
+        Zip(
+            Zip(
+                arg!("i", usize) + val!(1_usize),
+                arg!("num_samples", NumSamples),
+            ),
+            Zip(
+                arg1!("distributions", Bernoulli),
+                Zip3(
+                    arg1!("best_sample", bool),
+                    arg!("best_value", F::Item),
+                    SeededRand::<_, _, bool>::new(
+                        arg!("rng", R::Item),
+                        arg1!("distributions", Bernoulli),
+                    ),
+                )
+                .then(
+                    ("best_sample", "best_value", ("rng", "sample")),
+                    Zip(
+                        arg!("rng", R::Item),
+                        Zip4(
+                            arg1!("best_sample", bool),
+                            arg!("best_value", F::Item),
+                            arg1!("sample", bool),
+                            obj_func,
+                        )
+                        .then(
+                            ("best_sample", "best_value", "sample", "value"),
+                            Zip4(
+                                arg1!("best_sample", bool),
+                                arg!("best_value", F::Item),
+                                arg1!("sample", bool),
+                                arg!("value", F::Item),
+                            )
+                            .if_(
+                                ("best_sample", "best_value", "sample", "value"),
+                                arg!("value", F::Item).lt(arg!("best_value", F::Item)),
+                                Zip(arg1!("sample", bool), arg!("value", F::Item)),
+                                Zip(arg1!("best_sample", bool), arg!("best_value", F::Item)),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
+        arg!("i", usize).lt(arg!("num_samples", NumSamples)),
+    )
+    .then(
+        (
+            ("i", "num_samples"),
+            ("distributions", ("rng", ("best_sample", "best_value"))),
+        ),
+        Zip(arg!("rng", R::Item), arg1!("best_sample", bool)),
+    )
 }
 
-mod run {
-    use optimal_compute_core::{
-        argvals,
-        peano::One,
-        run::{Collect, DistributeArgs, RunCore, Unwrap, Value},
-        Computation, Run,
-    };
-    use rand::Rng;
-
-    use crate::low_level::{NumSamples, Probability, Sampleable};
-
-    use super::BestSample;
-
-    impl<N, F, P, R, POut, ROut> RunCore for BestSample<N, F, P, R>
-    where
-        Self: Computation,
-        (N, P, R): DistributeArgs<Output = (Value<NumSamples>, POut, Value<ROut>)>,
-        POut: Collect<One, Collected = Value<Vec<Probability>>>,
-        ROut: Rng,
-        F: Clone + Run,
-        F::Output: PartialOrd,
-    {
-        type Output = (Value<ROut>, Value<Vec<bool>>);
-
-        fn run_core(self, args: optimal_compute_core::run::ArgVals) -> Self::Output {
-            let (num_samples, probabilities, mut rng) =
-                (self.num_samples, self.probabilities, self.rng)
-                    .distribute(args)
-                    .collect()
-                    .unwrap();
-            let out = Sampleable::new(&probabilities).best_sample(
-                num_samples,
-                |sample| {
-                    // Note,
-                    // this is likely inefficient,
-                    // but it lets us treat a computation-function
-                    // like a closure.
-                    self.obj_func
-                        .clone()
-                        .run(argvals![("sample", sample.to_owned())])
-                },
-                &mut rng,
-            );
-            (Value(rng), Value(out))
-        }
-    }
+fn bernoullis_from_probabilities(probabilities: Vec<Probability>) -> Value<Vec<Bernoulli>> {
+    Value(
+        probabilities
+            .into_iter()
+            .map(|p| Bernoulli::new(f64::from(p)).expect("Probability should be valid"))
+            .collect::<Vec<_>>(),
+    )
 }

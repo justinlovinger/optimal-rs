@@ -12,7 +12,7 @@
 //! let pbil = PbilBuilder::default()
 //!     .for_(
 //!         2,
-//!         arg1!("sample").black_box::<_, Zero, usize>(|sample: Vec<bool>| {
+//!         arg1!("sample").black_box(|sample: Vec<bool>| {
 //!             Value(sample.iter().filter(|x| **x).count())
 //!         }),
 //!     )

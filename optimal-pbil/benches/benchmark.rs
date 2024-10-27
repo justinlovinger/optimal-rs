@@ -12,7 +12,7 @@ pub fn pbil_benchmarks() -> impl IntoBenchmarks {
         b.iter(move || {
             run_pbil(
                 black_box(len),
-                black_box(arg1!("sample").black_box::<_, Zero, usize>(count)),
+                black_box(arg1!("sample").black_box(count)),
                 black_box(SmallRng::seed_from_u64(0)),
             )
         })
@@ -21,7 +21,7 @@ pub fn pbil_benchmarks() -> impl IntoBenchmarks {
 
 fn run_pbil<F, R>(len: usize, obj_func: F, rng: R) -> Vec<bool>
 where
-    F: ComputationFn<Dim = Zero, Item = usize>,
+    F: Clone + ComputationFn<Dim = Zero, Item = usize>,
     R: Rng,
     PbilComputation<F, R>: Run<Output = Vec<bool>>,
 {

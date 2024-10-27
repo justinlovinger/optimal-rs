@@ -265,9 +265,8 @@ impl<F> BinaryWith<F> {
         pbil_config(self.problem.agnostic.level, self.problem.len)
             .for_(
                 self.problem.len,
-                arg1!("sample").black_box::<_, Zero, usize>(|sample: Vec<bool>| {
-                    Value((self.problem.obj_func)(&sample))
-                }),
+                arg1!("sample")
+                    .black_box(|sample: Vec<bool>| Value((self.problem.obj_func)(&sample))),
             )
             .with(self.rng)
             .argmin()

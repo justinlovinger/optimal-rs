@@ -11,8 +11,12 @@ use std::ops::{Add, Mul, Sub};
 use crate::types::*;
 
 pub use self::{
-    adjust::Adjust, best_sample::BestSample, converged::Converged, mutate::Mutate,
-    point_from::PointFrom, sampleable::Sampleable,
+    adjust::Adjust,
+    best_sample::{best_sample, BestSample},
+    converged::Converged,
+    mutate::Mutate,
+    point_from::PointFrom,
+    sampleable::Sampleable,
 };
 
 /// Adjust a number from `x` to `y`
