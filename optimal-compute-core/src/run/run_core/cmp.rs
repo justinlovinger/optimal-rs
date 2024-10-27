@@ -6,7 +6,7 @@ use crate::{
     Computation,
 };
 
-macro_rules! impl_into_cpu_for_comparison {
+macro_rules! impl_run_core_for_comparison {
     ( $op:ident, $where:ident ) => {
         paste! {
             impl<A, B, AOut, BOut> RunCore for $op<A, B>
@@ -26,12 +26,12 @@ macro_rules! impl_into_cpu_for_comparison {
     };
 }
 
-impl_into_cpu_for_comparison!(Eq, PartialEq);
-impl_into_cpu_for_comparison!(Ne, PartialEq);
-impl_into_cpu_for_comparison!(Lt, PartialOrd);
-impl_into_cpu_for_comparison!(Le, PartialOrd);
-impl_into_cpu_for_comparison!(Gt, PartialOrd);
-impl_into_cpu_for_comparison!(Ge, PartialOrd);
+impl_run_core_for_comparison!(Eq, PartialEq);
+impl_run_core_for_comparison!(Ne, PartialEq);
+impl_run_core_for_comparison!(Lt, PartialOrd);
+impl_run_core_for_comparison!(Le, PartialOrd);
+impl_run_core_for_comparison!(Gt, PartialOrd);
+impl_run_core_for_comparison!(Ge, PartialOrd);
 
 impl<A, Out> RunCore for Max<A>
 where
