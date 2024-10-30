@@ -1,6 +1,6 @@
 use core::fmt;
 
-use optimal_compute_core::{impl_core_ops, peano::One, Computation, ComputationFn, Names};
+use computation_types::{impl_core_ops, peano::One, Computation, ComputationFn, Names};
 
 use super::Probability;
 
@@ -56,8 +56,8 @@ where
 }
 
 mod run {
-    use optimal_compute_core::{
-        run::{RunCore, Unwrap, Value},
+    use computation_types::{
+        run::{NamedArgs, RunCore, Unwrap, Value},
         Computation,
     };
 
@@ -73,7 +73,7 @@ mod run {
     {
         type Output = Value<std::iter::Map<POut::IntoIter, fn(Probability) -> bool>>;
 
-        fn run_core(self, args: optimal_compute_core::run::NamedArgs) -> Self::Output {
+        fn run_core(self, args: NamedArgs) -> Self::Output {
             Value(
                 self.probabilities
                     .run_core(args)

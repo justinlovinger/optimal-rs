@@ -13,7 +13,7 @@
 //! # Examples
 //!
 //! ```
-//! use optimal_compute_core::{peano::*, run::Value, zip::*, *};
+//! use computation_types::{peano::*, run::Value, zip::*, *};
 //! use optimal_linesearch::{step_direction::bfgs::*, StepSize};
 //!
 //! fn main() {
@@ -142,18 +142,18 @@
 
 use std::ops;
 
-use ndarray::{LinalgScalar, ScalarOperand};
-use optimal_compute_core::{
+use computation_types::{
     arg, arg1, arg2,
     cmp::Eq,
     control_flow::{If, Then},
-    linalg::{FromDiagElem, IdentityMatrix, MatMul, MulOut, ScalarProduct},
-    math::{Add, Div, Mul, Sub},
+    linalg::{FromDiagElem, IdentityMatrix, MatMul, MulCol, MulOut, ScalarProduct},
+    math::{Add, Div, Mul, Neg, Sub},
     peano::{One, Two, Zero},
     val,
     zip::{Zip, Zip3, Zip4, Zip5, Zip7},
     Arg, Computation, ComputationFn, Len, Val,
 };
+use ndarray::{LinalgScalar, ScalarOperand};
 
 /// Return a placeholder for approximate inverse second-derivatives,
 /// useful for starting BFGS.
@@ -233,8 +233,7 @@ where
 }
 
 /// See [`bfgs_direction`].
-pub type BFGSDirection<AISD, D> =
-    optimal_compute_core::math::Neg<optimal_compute_core::linalg::MulCol<AISD, D>>;
+pub type BFGSDirection<AISD, D> = Neg<MulCol<AISD, D>>;
 
 /// Return a direction of descent informed by approximate second-derivative information.
 pub fn bfgs_direction<AISD, D, A>(
@@ -275,7 +274,7 @@ pub type ApproxInvSndDerivatives<PISD, PD, PS, D, A> = If<
                 &'static str,
                 &'static str,
             ),
-            optimal_compute_core::zip::Zip7<
+            Zip7<
                 Arg<Two, A>,
                 Arg<One, A>,
                 Arg<One, A>,
@@ -413,7 +412,7 @@ where
 #[cfg(test)]
 mod tests {
     use approx::assert_ulps_eq;
-    use optimal_compute_core::{named_args, val, val1, val2, Run};
+    use computation_types::{named_args, val, val1, val2, Run};
 
     use crate::{descend, step_direction::steepest_descent, StepSize};
 

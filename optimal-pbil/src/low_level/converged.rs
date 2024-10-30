@@ -1,6 +1,6 @@
 use core::fmt;
 
-use optimal_compute_core::{
+use computation_types::{
     impl_core_ops,
     peano::{One, Zero},
     Computation, ComputationFn, Names,
@@ -70,7 +70,7 @@ where
 }
 
 mod run {
-    use optimal_compute_core::{
+    use computation_types::{
         run::{DistributeArgs, NamedArgs, RunCore, Unwrap, Value},
         Computation,
     };

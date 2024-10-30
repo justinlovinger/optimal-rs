@@ -1,4 +1,4 @@
-use optimal_compute_core::{
+use computation_types::{
     arg, arg1,
     black_box::BlackBox,
     cmp::Lt,

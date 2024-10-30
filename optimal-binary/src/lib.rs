@@ -1,8 +1,8 @@
 //! Utilities for working with binary optimizers.
 
-use num_traits::{pow, AsPrimitive};
-use optimal_compute_core::{
+use computation_types::{
     arg, arg1,
+    cmp::Eq,
     control_flow::{If, Then},
     enumerate::Enumerate,
     math::{Add, Div, Mul, Pow, SameOrZero, Sub},
@@ -12,6 +12,7 @@ use optimal_compute_core::{
     zip::{Zip3, Zip4},
     Arg, Computation, ComputationFn, Val,
 };
+use num_traits::{pow, AsPrimitive};
 use std::ops;
 
 pub use self::{chunks_to_int_le::*, from_bit::*};
@@ -30,7 +31,7 @@ pub type ChunksToRealLe<ToMin, ToMax, Bits, T> =
 /// # Examples
 ///
 /// ```
-/// use optimal_compute_core::{named_args, arg1, val, val1, Run};
+/// use computation_types::{named_args, arg1, val, val1, Run};
 /// use optimal_binary::chunks_to_real_le;
 ///
 /// // It returns lower bound when all bits are false:
@@ -85,7 +86,7 @@ where
 pub type ToRealLe<ToMin, ToMax, Bits, T> = If<
     Zip3<ToMin, ToMax, Bits>,
     (&'static str, &'static str, &'static str),
-    optimal_compute_core::cmp::Eq<Val<Zero, usize>, Val<Zero, usize>>,
+    Eq<Val<Zero, usize>, Val<Zero, usize>>,
     Arg<Zero, T>,
     Scale<Val<Zero, T>, Arg<Zero, T>, Arg<Zero, T>, ToIntLe<Arg<One, bool>, T>>,
 >;
@@ -98,7 +99,7 @@ pub type ToRealLe<ToMin, ToMax, Bits, T> = If<
 /// # Examples
 ///
 /// ```
-/// use optimal_compute_core::{named_args, arg1, val, val1, Run};
+/// use computation_types::{named_args, arg1, val, val1, Run};
 /// use optimal_binary::to_real_le;
 ///
 /// // It returns lower bound for empty arrays:
@@ -230,7 +231,7 @@ pub type ToIntLe<Bits, T> =
 /// # Examples
 ///
 /// ```
-/// use optimal_compute_core::{named_args, arg1, val1, Run};
+/// use computation_types::{named_args, arg1, val1, Run};
 /// use optimal_binary::to_int_le;
 ///
 /// // It returns 0 when empty:
@@ -273,7 +274,7 @@ mod chunks_to_int_le {
     use core::fmt;
     use std::marker::PhantomData;
 
-    use optimal_compute_core::{impl_core_ops, peano::One, Computation, ComputationFn};
+    use computation_types::{impl_core_ops, peano::One, Computation, ComputationFn, Names};
 
     #[derive(Clone, Copy, Debug)]
     pub struct ChunksToIntLe<A, T>
@@ -311,7 +312,7 @@ mod chunks_to_int_le {
         Self: Computation,
         A: ComputationFn,
     {
-        fn arg_names(&self) -> optimal_compute_core::Names {
+        fn arg_names(&self) -> Names {
             self.child.arg_names()
         }
     }
@@ -331,13 +332,13 @@ mod chunks_to_int_le {
     mod run {
         use std::ops;
 
-        use itertools::Itertools;
-        use num_traits::AsPrimitive;
-        use optimal_compute_core::{
+        use computation_types::{
             named_args,
             run::{NamedArgs, RunCore, Unwrap, Value},
             val1, Run,
         };
+        use itertools::Itertools;
+        use num_traits::AsPrimitive;
 
         use crate::to_int_le;
 
@@ -380,8 +381,8 @@ mod from_bit {
     use core::fmt;
     use std::marker::PhantomData;
 
+    use computation_types::{impl_core_ops, Computation, ComputationFn, Names};
     use num_traits::AsPrimitive;
-    use optimal_compute_core::{impl_core_ops, Computation, ComputationFn, Names};
 
     #[derive(Clone, Copy, Debug)]
     pub struct FromBit<A, T>
@@ -437,7 +438,7 @@ mod from_bit {
     }
 
     mod run {
-        use optimal_compute_core::{
+        use computation_types::{
             peano::{One, Two, Zero},
             run::{Matrix, NamedArgs, RunCore, Unwrap, Value},
         };

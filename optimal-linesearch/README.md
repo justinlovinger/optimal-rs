@@ -13,7 +13,7 @@ Fixed step-size optimization can also be performed
 using this package:
 
 ```rust
-use optimal_compute_core::*;
+use computation_types::*;
 use optimal_linesearch::{descend, step_direction::steepest_descent, StepSize};
 
 println!(

@@ -1,6 +1,6 @@
 #![warn(missing_debug_implementations)]
 
-//! Core types for abstract mathematical computation.
+//! Types for abstract mathematical computation.
 //!
 //! Note,
 //! this framework is highly experimental.
@@ -14,7 +14,7 @@
 //! # Examples
 //!
 //! ```
-//! use optimal_compute_core::{named_args, val, Run};
+//! use computation_types::{named_args, val, Run};
 //!
 //! let one_plus_one = val!(1) + val!(1);
 //! assert_eq!(one_plus_one.to_string(), "(1 + 1)");

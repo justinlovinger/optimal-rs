@@ -4,7 +4,7 @@ pub mod bfgs;
 
 use core::ops;
 
-use optimal_compute_core::{math::Neg, peano, Computation};
+use computation_types::{math::Neg, peano, Computation};
 
 /// Return the direction of steepest descent.
 pub fn steepest_descent<D, Dim>(derivatives: D) -> Neg<D>

@@ -24,7 +24,7 @@ and specialization that may improve performance,
 see individual optimizer packages.
 
 For the computation-framework powering Optimal,
-see `optimal-compute-core`.
+see `computation-types`.
 
 Note: more specific support for machine-learning will be added in the future.
 Currently,

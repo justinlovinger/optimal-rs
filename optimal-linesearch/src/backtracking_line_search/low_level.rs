@@ -2,7 +2,7 @@
 
 use core::ops;
 
-use optimal_compute_core::{
+use computation_types::{
     arg, arg1,
     cmp::{Le, Not},
     control_flow::{LoopWhile, Then},

@@ -1,10 +1,10 @@
 [package]
-name = "optimal-compute-core"
+name = "computation-types"
 version = "0.0.0"
 edition = "2021"
 authors = ["Justin Lovinger"]
-description = "Core types for abstract mathematical computation"
-repository = "https://github.com/justinlovinger/optimal-rs/tree/master/optimal-compute-core"
+description = "Types for abstract mathematical computation"
+repository = "https://github.com/justinlovinger/optimal-rs/tree/master/computation-types"
 readme = "README.md"
 keywords = ["math", "linear-algebra", "gpu"]
 categories = ["mathematics"]

@@ -1,6 +1,6 @@
 use core::fmt;
 
-use optimal_compute_core::{impl_core_ops, peano::Zero, Names, Computation, ComputationFn};
+use computation_types::{impl_core_ops, peano::Zero, Computation, ComputationFn, Names};
 
 use super::{AdjustRate, Probability};
 
@@ -77,9 +77,9 @@ where
 }
 
 mod run {
-    use optimal_compute_core::{
+    use computation_types::{
         peano::{One, Two, Zero},
-        run::{NamedArgs, DistributeArgs, Matrix, RunCore, Unwrap, Value},
+        run::{DistributeArgs, Matrix, NamedArgs, RunCore, Unwrap, Value},
         Computation,
     };
 

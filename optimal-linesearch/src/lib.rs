@@ -7,7 +7,7 @@
 //! using this package:
 //!
 //! ```
-//! use optimal_compute_core::*;
+//! use computation_types::*;
 //! use optimal_linesearch::{descend, step_direction::steepest_descent, StepSize};
 //!
 //! println!(
@@ -36,12 +36,12 @@ pub mod step_direction;
 
 use core::ops;
 
-use num_traits::{AsPrimitive, One, Signed};
-use optimal_compute_core::{
+use computation_types::{
     cmp::{Lt, Max},
     math::{Abs, Add, Mul},
     peano, val, Computation, Val0,
 };
+use num_traits::{AsPrimitive, One, Signed};
 
 pub use self::types::*;
 
@@ -141,7 +141,7 @@ mod types {
 mod tests {
     use std::ops::RangeInclusive;
 
-    use optimal_compute_core::{
+    use computation_types::{
         arg1,
         peano::{One, Zero},
         run::Value,

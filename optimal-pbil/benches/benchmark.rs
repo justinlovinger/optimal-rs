@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use optimal_compute_core::{arg1, peano::Zero, run::Value, Computation, ComputationFn, Run};
+use computation_types::{arg1, peano::Zero, run::Value, Computation, ComputationFn, Run};
 use optimal_pbil::{PbilBuilder, PbilComputation};
 use rand::prelude::*;
 use tango_bench::{benchmark_fn, tango_benchmarks, tango_main, IntoBenchmarks};

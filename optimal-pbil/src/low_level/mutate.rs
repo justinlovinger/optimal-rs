@@ -1,9 +1,9 @@
 use core::fmt;
 
-use optimal_compute_core::{
+use computation_types::{
     impl_core_ops,
     peano::{One, Zero},
-    Names, Computation, ComputationFn,
+    Computation, ComputationFn, Names,
 };
 use rand::Rng;
 
@@ -91,8 +91,8 @@ where
 }
 
 mod run {
-    use optimal_compute_core::{
-        run::{NamedArgs, DistributeArgs, RunCore, Unwrap, Value},
+    use computation_types::{
+        run::{DistributeArgs, NamedArgs, RunCore, Unwrap, Value},
         Computation,
     };
     use rand::{distributions::Standard, Rng};

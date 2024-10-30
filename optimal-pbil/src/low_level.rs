@@ -102,8 +102,8 @@ mod sampleable {
 
 #[cfg(test)]
 mod tests {
+    use computation_types::{named_args, val, val1, Computation, Run};
     use num_traits::bounds::{LowerBounded, UpperBounded};
-    use optimal_compute_core::{named_args, val, val1, Computation, Run};
     use proptest::prelude::*;
     use rand::{rngs::SmallRng, SeedableRng};
     use test_strategy::proptest;

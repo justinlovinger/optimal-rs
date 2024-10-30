@@ -26,7 +26,7 @@ derive-getters = "0.3.0"
 derive_more = "0.99.17"
 derive-num-bounded = { path = "../derive-num-bounded", version = "0.0.0" }
 num-traits = "0.2.16"
-optimal-compute-core = { path = "../optimal-compute-core", version = "0.0.0" }
+computation-types = { path = "../computation-types", version = "0.0.0" }
 rand = { version = "0.8.5", features = ["small_rng"] }
 serde = { version = "1.0.185", features = ["derive"], optional = true }
 thiserror = "1.0.47"

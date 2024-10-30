@@ -19,7 +19,7 @@
 //! see individual optimizer packages.
 //!
 //! For the computation-framework powering Optimal,
-//! see `optimal-compute-core`.
+//! see `computation-types`.
 //!
 //! Note: more specific support for machine-learning will be added in the future.
 //! Currently,
@@ -63,7 +63,7 @@
 
 use std::ops::{Add, Mul, RangeInclusive, Sub};
 
-use optimal_compute_core::{
+use computation_types::{
     arg1,
     peano::{One, Zero},
     run::Value,

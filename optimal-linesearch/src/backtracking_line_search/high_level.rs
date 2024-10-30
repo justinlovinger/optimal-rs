@@ -1,11 +1,7 @@
 use core::fmt;
 use std::{iter::Sum, ops::RangeInclusive};
 
-use derive_builder::Builder;
-use derive_getters::{Dissolve, Getters};
-use ndarray::{LinalgScalar, ScalarOperand};
-use num_traits::{AsPrimitive, Float, Signed};
-use optimal_compute_core::{
+use computation_types::{
     arg, arg1, arg2,
     cmp::{Eq, Ge, Le, Lt, Max, Not},
     control_flow::{If, LoopWhile, Then},
@@ -18,6 +14,10 @@ use optimal_compute_core::{
     zip::{Zip, Zip3, Zip4, Zip5, Zip6, Zip7, Zip8},
     Arg, Computation, ComputationFn, Len, Names, Run, Val,
 };
+use derive_builder::Builder;
+use derive_getters::{Dissolve, Getters};
+use ndarray::{LinalgScalar, ScalarOperand};
+use num_traits::{AsPrimitive, Float, Signed};
 use rand::{
     distributions::{uniform::SampleUniform, Uniform},
     prelude::*,

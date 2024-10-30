@@ -3,7 +3,7 @@
 //! # Examples
 //!
 //! ```
-//! use optimal_compute_core::{arg1, named_args, val, Computation, Run};
+//! use computation_types::{arg1, named_args, val, Computation, Run};
 //! use optimal_linesearch::backtracking_line_search::BacktrackingLineSearchBuilder;
 //!
 //! let line_search = BacktrackingLineSearchBuilder::default()

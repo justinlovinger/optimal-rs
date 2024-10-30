@@ -19,7 +19,7 @@ serde = ["dep:serde"]
 [dependencies]
 itertools = "0.13.0"
 num-traits = "0.2.16"
-optimal-compute-core = { path = "../optimal-compute-core", version = "0.0.0" }
+computation-types = { path = "../computation-types", version = "0.0.0" }
 serde = { version = "1.0.185", features = ["derive"], optional = true }
 
 [dev-dependencies]

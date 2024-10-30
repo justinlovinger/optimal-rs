@@ -1,8 +1,6 @@
 use core::fmt;
 
-use derive_builder::Builder;
-use derive_getters::{Dissolve, Getters};
-use optimal_compute_core::{
+use computation_types::{
     arg, arg1,
     cmp::{Lt, Not},
     control_flow::{LoopWhile, Then},
@@ -14,6 +12,8 @@ use optimal_compute_core::{
     zip::Zip,
     Arg, Computation, ComputationFn, Names, Run, Val,
 };
+use derive_builder::Builder;
+use derive_getters::{Dissolve, Getters};
 use rand::prelude::*;
 
 use crate::{low_level::*, types::*};

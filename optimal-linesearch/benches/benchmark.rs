@@ -1,16 +1,17 @@
 use std::{hint::black_box, vec::Vec};
 
-use fixed_step_size::FixedStepSize;
-use optimal_compute_core::{
-    arg1, named_args,
+use computation_types::{
+    arg1,
     enumerate::Enumerate,
     math::{Add, Div, Mul, Pow},
+    named_args,
     peano::{One, Zero},
     sum::Sum,
     val,
     zip::Zip,
     Arg, Computation, ComputationFn, Run, Val,
 };
+use fixed_step_size::FixedStepSize;
 use optimal_linesearch::backtracking_line_search::{
     BacktrackingLineSearchBuilder, BacktrackingLineSearchComputation,
     BacktrackingLineSearchStoppingCriteria, BfgsInitializer, StepDirection,
@@ -131,7 +132,7 @@ tango_benchmarks!(linesearch_benchmarks());
 tango_main!();
 
 mod fixed_step_size {
-    use optimal_compute_core::{
+    use computation_types::{
         arg, arg1,
         cmp::Lt,
         control_flow::LoopWhile,
