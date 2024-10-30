@@ -84,7 +84,7 @@ where
     }
 }
 
-impl<'a, T> RunCore for std::borrow::Cow<'a, T>
+impl<T> RunCore for std::borrow::Cow<'_, T>
 where
     T: RunCore + ToOwned + ?Sized,
 {

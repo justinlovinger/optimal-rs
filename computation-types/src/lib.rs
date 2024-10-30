@@ -463,7 +463,7 @@ where
     type Item = T::Item;
 }
 
-impl<'a, T> Computation for std::borrow::Cow<'a, T>
+impl<T> Computation for std::borrow::Cow<'_, T>
 where
     T: Computation + ToOwned + ?Sized,
 {
