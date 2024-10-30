@@ -6,16 +6,17 @@ use derive_getters::{Dissolve, Getters};
 use ndarray::{LinalgScalar, ScalarOperand};
 use num_traits::{AsPrimitive, Float, Signed};
 use optimal_compute_core::{
-    arg, arg1, arg2, argvals,
+    arg, arg1, arg2,
     cmp::{Eq, Ge, Le, Lt, Max, Not},
     control_flow::{If, LoopWhile, Then},
     linalg::{FromDiagElem, IdentityMatrix, MatMul, MulCol, MulOut, ScalarProduct},
     math::{Abs, Add, Div, Mul, Neg, Sub},
+    named_args,
     peano::{One, Two, Zero},
-    run::ArgVals,
+    run::NamedArgs,
     val, val1,
     zip::{Zip, Zip3, Zip4, Zip5, Zip6, Zip7, Zip8},
-    Arg, Names, Computation, ComputationFn, Len, Run, Val,
+    Arg, Computation, ComputationFn, Len, Names, Run, Val,
 };
 use rand::{
     distributions::{uniform::SampleUniform, Uniform},
@@ -392,7 +393,7 @@ where
     where
         BacktrackingLineSearchComputation<A, F, FFD>: Run<Output = Vec<A>>,
     {
-        self.computation().run(argvals![])
+        self.computation().run(named_args![])
     }
 
     /// Return a computation representing this algorithm.
@@ -1252,7 +1253,7 @@ where
 {
     type Output = Vec<A>;
 
-    fn run(self, args: ArgVals) -> Self::Output {
+    fn run(self, args: NamedArgs) -> Self::Output {
         match self {
             BacktrackingLineSearchComputation::SteepestIncrPrevIteration(x) => x.run(args),
             BacktrackingLineSearchComputation::SteepestIncrPrevNearMinima(x) => x.run(args),

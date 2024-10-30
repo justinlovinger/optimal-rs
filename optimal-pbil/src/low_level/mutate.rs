@@ -92,7 +92,7 @@ where
 
 mod run {
     use optimal_compute_core::{
-        run::{ArgVals, DistributeArgs, RunCore, Unwrap, Value},
+        run::{NamedArgs, DistributeArgs, RunCore, Unwrap, Value},
         Computation,
     };
     use rand::{distributions::Standard, Rng};
@@ -117,7 +117,7 @@ mod run {
     {
         type Output = (Value<ROut>, Value<Vec<Probability>>);
 
-        fn run_core(self, args: ArgVals) -> Self::Output {
+        fn run_core(self, args: NamedArgs) -> Self::Output {
             let (chance, adjust_rate, probabilities, mut rng) =
                 (self.chance, self.adjust_rate, self.probabilities, self.rng)
                     .distribute(args)

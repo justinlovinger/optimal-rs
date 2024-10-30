@@ -1,6 +1,6 @@
 use crate::{
     control_flow::{If, LoopWhile, Then},
-    run::{ArgVals, Collect, FromArgsVals, RunCore},
+    run::{Collect, FromNamesArgs, NamedArgs, RunCore},
     Computation, Run,
 };
 
@@ -11,7 +11,7 @@ where
     A::Output: Collect<A::Dim, Collected = Collected>,
     Collected: Clone,
     Args: Clone,
-    ArgVals: FromArgsVals<Args, Collected>,
+    NamedArgs: FromNamesArgs<Args, Collected>,
     P: Run<Output = bool>,
     FTrue: Computation + RunCore,
     FTrue::Output: Collect<FTrue::Dim, Collected = Out>,
@@ -20,18 +20,18 @@ where
 {
     type Output = Out;
 
-    fn run_core(self, args: ArgVals) -> Self::Output {
+    fn run_core(self, args: NamedArgs) -> Self::Output {
         let vals = self.child.run_core(args).collect();
         if self
             .predicate
-            .run(ArgVals::from_args_vals(self.args.clone(), vals.clone()))
+            .run(NamedArgs::from_names_args(self.args.clone(), vals.clone()))
         {
             self.f_true
-                .run_core(ArgVals::from_args_vals(self.args, vals))
+                .run_core(NamedArgs::from_names_args(self.args, vals))
                 .collect()
         } else {
             self.f_false
-                .run_core(ArgVals::from_args_vals(self.args, vals))
+                .run_core(NamedArgs::from_names_args(self.args, vals))
                 .collect()
         }
     }
@@ -44,27 +44,27 @@ where
     A::Output: Collect<A::Dim, Collected = Collected>,
     Collected: Clone,
     Args: Clone,
-    ArgVals: FromArgsVals<Args, Collected>,
+    NamedArgs: FromNamesArgs<Args, Collected>,
     F: Clone + Computation + RunCore,
     F::Output: Collect<F::Dim, Collected = Collected>,
     P: Clone + Run<Output = bool>,
 {
     type Output = Collected;
 
-    fn run_core(self, args: ArgVals) -> Self::Output {
+    fn run_core(self, args: NamedArgs) -> Self::Output {
         let mut out = self.child.run_core(args).collect();
         loop {
             if !self
                 .predicate
                 .clone()
-                .run(ArgVals::from_args_vals(self.args.clone(), out.clone()))
+                .run(NamedArgs::from_names_args(self.args.clone(), out.clone()))
             {
                 return out;
             }
             out = self
                 .f
                 .clone()
-                .run_core(ArgVals::from_args_vals(self.args.clone(), out))
+                .run_core(NamedArgs::from_names_args(self.args.clone(), out))
                 .collect();
         }
     }
@@ -75,13 +75,13 @@ where
     Self: Computation,
     A: Computation + RunCore,
     A::Output: Collect<A::Dim, Collected = Collected>,
-    ArgVals: FromArgsVals<Args, Collected>,
+    NamedArgs: FromNamesArgs<Args, Collected>,
     F: RunCore,
 {
     type Output = F::Output;
 
-    fn run_core(self, args: ArgVals) -> Self::Output {
-        self.f.run_core(ArgVals::from_args_vals(
+    fn run_core(self, args: NamedArgs) -> Self::Output {
+        self.f.run_core(NamedArgs::from_names_args(
             self.args,
             self.child.run_core(args).collect(),
         ))
@@ -93,7 +93,7 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{arg, arg1, arg2, argvals, run::Matrix, val, val1, val2, Computation, Run};
+    use crate::{arg, arg1, arg2, named_args, run::Matrix, val, val1, val2, Computation, Run};
 
     #[test]
     fn if_should_run_f_true_if_predicate_is_true() {
@@ -113,7 +113,7 @@ mod tests {
                 arg!("x", i32) + val!(1),
                 arg!("x", i32) - val!(1),
             )
-            .run(argvals![])
+            .run(named_args![])
     }
 
     #[test]
@@ -134,7 +134,7 @@ mod tests {
                 arg1!("x", i32) + val!(1),
                 arg1!("x", i32) - val!(1),
             )
-            .run(argvals![])
+            .run(named_args![])
     }
 
     #[proptest]
@@ -142,7 +142,7 @@ mod tests {
         prop_assert_eq!(
             val!(x)
                 .loop_while("x", arg!("x", i32) + val!(1), arg!("x", i32).lt(val!(10)))
-                .run(argvals![]),
+                .run(named_args![]),
             10
         );
     }
@@ -156,7 +156,7 @@ mod tests {
                     arg1!("x", i32) + val!(1),
                     arg1!("x", i32).sum().lt(val!(19))
                 )
-                .run(argvals![]),
+                .run(named_args![]),
             [10, 10]
         );
     }
@@ -170,7 +170,7 @@ mod tests {
                     arg2!("x", i32) + val!(1),
                     arg2!("x", i32).sum().lt(val!(37))
                 )
-                .run(argvals![]),
+                .run(named_args![]),
             Matrix::from_vec((2, 2), vec![10, 10, 10, 10]).unwrap()
         );
     }
@@ -185,7 +185,7 @@ mod tests {
                     (arg!("x", i32) + val!(1)).zip(arg!("y", i32) + val!(1)),
                     arg!("x", i32).lt(val!(10))
                 )
-                .run(argvals![]),
+                .run(named_args![]),
             (10, 10 - x)
         );
     }
@@ -195,7 +195,7 @@ mod tests {
         prop_assert_eq!(
             (val!(x) + val!(1))
                 .then("x", arg!("x", i32) + val!(1))
-                .run(argvals![]),
+                .run(named_args![]),
             x + 2
         );
     }
@@ -209,14 +209,14 @@ mod tests {
             val!(x)
                 .zip(val!(y))
                 .then(("x", "y"), arg!("x", i32))
-                .run(argvals![]),
+                .run(named_args![]),
             x
         );
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y))
                 .then(("x", "y"), arg!("y", i32))
-                .run(argvals![]),
+                .run(named_args![]),
             y
         );
     }
@@ -230,7 +230,7 @@ mod tests {
             val!(x)
                 .zip(val!(y))
                 .then(("x", "y"), arg!("y", i32).zip(arg!("x", i32)))
-                .run(argvals![]),
+                .run(named_args![]),
             (y, x)
         );
     }
@@ -245,21 +245,21 @@ mod tests {
             val!(x)
                 .zip(val!(y).zip(val!(z)))
                 .then(("x", ("y", "z")), arg!("x", i32))
-                .run(argvals![]),
+                .run(named_args![]),
             x
         );
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y).zip(val!(z)))
                 .then(("x", ("y", "z")), arg!("y", i32))
-                .run(argvals![]),
+                .run(named_args![]),
             y
         );
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y).zip(val!(z)))
                 .then(("x", ("y", "z")), arg!("z", i32))
-                .run(argvals![]),
+                .run(named_args![]),
             z
         );
     }

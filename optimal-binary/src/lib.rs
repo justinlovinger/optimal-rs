@@ -30,22 +30,22 @@ pub type ChunksToRealLe<ToMin, ToMax, Bits, T> =
 /// # Examples
 ///
 /// ```
-/// use optimal_compute_core::{argvals, arg1, val, val1, Run};
+/// use optimal_compute_core::{named_args, arg1, val, val1, Run};
 /// use optimal_binary::chunks_to_real_le;
 ///
 /// // It returns lower bound when all bits are false:
-/// assert_eq!(chunks_to_real_le(1, val!(0.0), val!(1.0), val1!([false, false, false])).run(argvals![]), [0., 0., 0.]);
-/// assert_eq!(chunks_to_real_le(2, val!(1.0), val!(2.0), val1!([false, false, false, false])).run(argvals![]), [1., 1.]);
+/// assert_eq!(chunks_to_real_le(1, val!(0.0), val!(1.0), val1!([false, false, false])).run(named_args![]), [0., 0., 0.]);
+/// assert_eq!(chunks_to_real_le(2, val!(1.0), val!(2.0), val1!([false, false, false, false])).run(named_args![]), [1., 1.]);
 ///
 /// // It returns upper bound when all bits are true:
-/// assert_eq!(chunks_to_real_le(1, val!(0.0), val!(1.0), val1!([true, true, true])).run(argvals![]), [1., 1., 1.]);
-/// assert_eq!(chunks_to_real_le(2, val!(1.0), val!(2.0), val1!([true, true, true, true])).run(argvals![]), [2., 2.]);
+/// assert_eq!(chunks_to_real_le(1, val!(0.0), val!(1.0), val1!([true, true, true])).run(named_args![]), [1., 1., 1.]);
+/// assert_eq!(chunks_to_real_le(2, val!(1.0), val!(2.0), val1!([true, true, true, true])).run(named_args![]), [2., 2.]);
 ///
 /// // It returns a number between lower and upper bound when some bits are true:
-/// assert_eq!(chunks_to_real_le(2, val!(1.0), val!(4.0), val1!([true, false, false, true])).run(argvals![]), [2., 3.]);
+/// assert_eq!(chunks_to_real_le(2, val!(1.0), val!(4.0), val1!([true, false, false, true])).run(named_args![]), [2., 3.]);
 ///
 /// // It can construct a computation-function:
-/// assert_eq!(chunks_to_real_le(2, val!(0.0), val!(3.0), arg1!("point", bool)).run(argvals![("point", vec![true, false])]), [1.]);
+/// assert_eq!(chunks_to_real_le(2, val!(0.0), val!(3.0), arg1!("point", bool)).run(named_args![("point", vec![true, false])]), [1.]);
 /// ```
 pub fn chunks_to_real_le<ToMin, ToMax, Bits, T>(
     chunk_size: usize,
@@ -98,26 +98,26 @@ pub type ToRealLe<ToMin, ToMax, Bits, T> = If<
 /// # Examples
 ///
 /// ```
-/// use optimal_compute_core::{argvals, arg1, val, val1, Run};
+/// use optimal_compute_core::{named_args, arg1, val, val1, Run};
 /// use optimal_binary::to_real_le;
 ///
 /// // It returns lower bound for empty arrays:
-/// assert_eq!(to_real_le(0, val!(1.0), val!(2.0), val1!([])).run(argvals![]), 1.);
+/// assert_eq!(to_real_le(0, val!(1.0), val!(2.0), val1!([])).run(named_args![]), 1.);
 ///
 /// // It returns lower bound when all bits are false:
-/// assert_eq!(to_real_le(1, val!(0.0), val!(1.0), val1!([false])).run(argvals![]), 0.);
-/// assert_eq!(to_real_le(2, val!(1.0), val!(2.0), val1!([false, false])).run(argvals![]), 1.);
+/// assert_eq!(to_real_le(1, val!(0.0), val!(1.0), val1!([false])).run(named_args![]), 0.);
+/// assert_eq!(to_real_le(2, val!(1.0), val!(2.0), val1!([false, false])).run(named_args![]), 1.);
 ///
 /// // It returns upper bound when all bits are true:
-/// assert_eq!(to_real_le(1, val!(0.0), val!(1.0), val1!([true])).run(argvals![]), 1.);
-/// assert_eq!(to_real_le(2, val!(1.0), val!(2.0), val1!([true, true])).run(argvals![]), 2.);
+/// assert_eq!(to_real_le(1, val!(0.0), val!(1.0), val1!([true])).run(named_args![]), 1.);
+/// assert_eq!(to_real_le(2, val!(1.0), val!(2.0), val1!([true, true])).run(named_args![]), 2.);
 ///
 /// // It returns a number between lower and upper bound when some bits are true:
-/// assert_eq!(to_real_le(2, val!(1.0), val!(4.0), val1!([true, false])).run(argvals![]), 2.);
-/// assert_eq!(to_real_le(2, val!(1.0), val!(4.0), val1!([false, true])).run(argvals![]), 3.);
+/// assert_eq!(to_real_le(2, val!(1.0), val!(4.0), val1!([true, false])).run(named_args![]), 2.);
+/// assert_eq!(to_real_le(2, val!(1.0), val!(4.0), val1!([false, true])).run(named_args![]), 3.);
 ///
 /// // It can construct a computation-function:
-/// assert_eq!(to_real_le(2, val!(0.0), val!(3.0), arg1!("point", bool)).run(argvals![("point", vec![true, false])]), 1.);
+/// assert_eq!(to_real_le(2, val!(0.0), val!(3.0), arg1!("point", bool)).run(named_args![("point", vec![true, false])]), 1.);
 /// ```
 pub fn to_real_le<ToMin, ToMax, Bits, T>(
     len: usize,
@@ -230,26 +230,26 @@ pub type ToIntLe<Bits, T> =
 /// # Examples
 ///
 /// ```
-/// use optimal_compute_core::{argvals, arg1, val1, Run};
+/// use optimal_compute_core::{named_args, arg1, val1, Run};
 /// use optimal_binary::to_int_le;
 ///
 /// // It returns 0 when empty:
-/// assert_eq!(to_int_le::<_, u8>(val1!([])).run(argvals![]), 0_u8);
+/// assert_eq!(to_int_le::<_, u8>(val1!([])).run(named_args![]), 0_u8);
 ///
 /// // It returns the base 10 integer represented by binary bits:
-/// assert_eq!(to_int_le::<_, u8>(val1!([false])).run(argvals![]), 0_u8);
-/// assert_eq!(to_int_le::<_, u8>(val1!([false, false])).run(argvals![]), 0_u8);
-/// assert_eq!(to_int_le::<_, u8>(val1!([false, false, false])).run(argvals![]), 0_u8);
-/// assert_eq!(to_int_le::<_, u8>(val1!([true])).run(argvals![]), 1_u8);
-/// assert_eq!(to_int_le::<_, u8>(val1!([true, true])).run(argvals![]), 3_u8);
-/// assert_eq!(to_int_le::<_, u8>(val1!([true, true, true])).run(argvals![]), 7_u8);
+/// assert_eq!(to_int_le::<_, u8>(val1!([false])).run(named_args![]), 0_u8);
+/// assert_eq!(to_int_le::<_, u8>(val1!([false, false])).run(named_args![]), 0_u8);
+/// assert_eq!(to_int_le::<_, u8>(val1!([false, false, false])).run(named_args![]), 0_u8);
+/// assert_eq!(to_int_le::<_, u8>(val1!([true])).run(named_args![]), 1_u8);
+/// assert_eq!(to_int_le::<_, u8>(val1!([true, true])).run(named_args![]), 3_u8);
+/// assert_eq!(to_int_le::<_, u8>(val1!([true, true, true])).run(named_args![]), 7_u8);
 ///
 /// // It treats leftmost as least significant:
-/// assert_eq!(to_int_le::<_, u8>(val1!([false, true])).run(argvals![]), 2_u8);
-/// assert_eq!(to_int_le::<_, u8>(val1!([false, false, true])).run(argvals![]), 4_u8);
+/// assert_eq!(to_int_le::<_, u8>(val1!([false, true])).run(named_args![]), 2_u8);
+/// assert_eq!(to_int_le::<_, u8>(val1!([false, false, true])).run(named_args![]), 4_u8);
 ///
 /// // It can construct a computation-function:
-/// assert_eq!(to_int_le::<_, u8>(arg1!("point", bool)).run(argvals![("point", vec![false])]), 0_u8);
+/// assert_eq!(to_int_le::<_, u8>(arg1!("point", bool)).run(named_args![("point", vec![false])]), 0_u8);
 /// ```
 pub fn to_int_le<Bits, T>(bits: Bits) -> ToIntLe<Bits, T>
 where
@@ -334,8 +334,8 @@ mod chunks_to_int_le {
         use itertools::Itertools;
         use num_traits::AsPrimitive;
         use optimal_compute_core::{
-            argvals,
-            run::{ArgVals, RunCore, Unwrap, Value},
+            named_args,
+            run::{NamedArgs, RunCore, Unwrap, Value},
             val1, Run,
         };
 
@@ -360,7 +360,7 @@ mod chunks_to_int_le {
         {
             type Output = Value<Vec<T>>;
 
-            fn run_core(self, args: ArgVals) -> Self::Output {
+            fn run_core(self, args: NamedArgs) -> Self::Output {
                 Value(
                     self.child
                         .run_core(args)
@@ -368,7 +368,7 @@ mod chunks_to_int_le {
                         .into_iter()
                         .chunks(self.chunk_size)
                         .into_iter()
-                        .map(|bits| to_int_le(val1!(bits)).run(argvals![]))
+                        .map(|bits| to_int_le(val1!(bits)).run(named_args![]))
                         .collect(),
                 )
             }
@@ -439,7 +439,7 @@ mod from_bit {
     mod run {
         use optimal_compute_core::{
             peano::{One, Two, Zero},
-            run::{ArgVals, Matrix, RunCore, Unwrap, Value},
+            run::{Matrix, NamedArgs, RunCore, Unwrap, Value},
         };
 
         use super::*;
@@ -452,7 +452,7 @@ mod from_bit {
         {
             type Output = Value<AOut::Output>;
 
-            fn run_core(self, args: ArgVals) -> Self::Output {
+            fn run_core(self, args: NamedArgs) -> Self::Output {
                 Value(self.child.run_core(args).unwrap().broadcast_from_bit())
             }
         }

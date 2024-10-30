@@ -3,7 +3,7 @@ use core::fmt;
 use optimal_compute_core::{
     impl_core_ops,
     peano::{One, Zero},
-    Names, Computation, ComputationFn,
+    Computation, ComputationFn, Names,
 };
 
 use super::{Probability, ProbabilityThreshold};
@@ -50,7 +50,9 @@ where
     P: ComputationFn,
 {
     fn arg_names(&self) -> Names {
-        self.threshold.arg_names().union(self.probabilities.arg_names())
+        self.threshold
+            .arg_names()
+            .union(self.probabilities.arg_names())
     }
 }
 
@@ -69,7 +71,7 @@ where
 
 mod run {
     use optimal_compute_core::{
-        run::{ArgVals, DistributeArgs, RunCore, Unwrap, Value},
+        run::{DistributeArgs, NamedArgs, RunCore, Unwrap, Value},
         Computation,
     };
 
@@ -85,7 +87,7 @@ mod run {
     {
         type Output = Value<bool>;
 
-        fn run_core(self, args: ArgVals) -> Self::Output {
+        fn run_core(self, args: NamedArgs) -> Self::Output {
             let (threshold, probabilities) = (self.threshold, self.probabilities)
                 .distribute(args)
                 .unwrap();

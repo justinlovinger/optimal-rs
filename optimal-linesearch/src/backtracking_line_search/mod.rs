@@ -3,7 +3,7 @@
 //! # Examples
 //!
 //! ```
-//! use optimal_compute_core::{arg1, argvals, val, Computation, Run};
+//! use optimal_compute_core::{arg1, named_args, val, Computation, Run};
 //! use optimal_linesearch::backtracking_line_search::BacktrackingLineSearchBuilder;
 //!
 //! let line_search = BacktrackingLineSearchBuilder::default()
@@ -15,7 +15,7 @@
 //!     .with_point(vec![10.0, 10.0])
 //!     .computation();
 //! println!("{}", line_search);
-//! println!("{:?}", line_search.run(argvals![]));
+//! println!("{:?}", line_search.run(named_args![]));
 //! ```
 
 mod high_level;

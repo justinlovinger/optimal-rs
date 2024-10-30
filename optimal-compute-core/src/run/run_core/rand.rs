@@ -4,7 +4,7 @@ mod rands {
     use crate::{
         peano::{One, Two, Zero},
         rand::Rand,
-        run::{ArgVals, Matrix, RunCore, Value},
+        run::{NamedArgs, Matrix, RunCore, Value},
         Computation,
     };
 
@@ -15,7 +15,7 @@ mod rands {
     {
         type Output = Value<Out>;
 
-        fn run_core(self, args: ArgVals) -> Self::Output {
+        fn run_core(self, args: NamedArgs) -> Self::Output {
             Value(self.distribution.run_core(args).0.broadcast())
         }
     }
@@ -80,7 +80,7 @@ mod seeded_rands {
     use crate::{
         peano::{One, Two, Zero},
         rand::SeededRand,
-        run::{ArgVals, DistributeArgs, Matrix, RunCore, Value},
+        run::{NamedArgs, DistributeArgs, Matrix, RunCore, Value},
         Computation,
     };
 
@@ -94,7 +94,7 @@ mod seeded_rands {
     {
         type Output = (Value<R>, Value<Out>);
 
-        fn run_core(self, args: ArgVals) -> Self::Output {
+        fn run_core(self, args: NamedArgs) -> Self::Output {
             let (mut rng, dist) = (self.rng, self.distribution).distribute(args);
             let out = Value(dist.0.broadcast(&mut rng.0));
             (rng, out)
@@ -171,7 +171,7 @@ mod tests {
     use test_strategy::proptest;
 
     use crate::{
-        arg, argvals,
+        arg, named_args,
         rand::{Rand, SeededRand},
         run::Matrix,
         val, val1, val2, Computation, Run,
@@ -179,7 +179,7 @@ mod tests {
 
     #[test]
     fn rands_should_generate_scalars() {
-        let x = Rand::<_, f64>::new(val!(Standard)).run(argvals![]);
+        let x = Rand::<_, f64>::new(val!(Standard)).run(named_args![]);
 
         assert!((0.0..1.0).contains(&x));
     }
@@ -189,7 +189,7 @@ mod tests {
         let xs = Rand::<_, f64>::new(val1!(std::iter::repeat(Standard)
             .take(len)
             .collect::<Vec<_>>()))
-        .run(argvals![]);
+        .run(named_args![]);
 
         prop_assert_eq!(xs.len(), len);
         for x in xs {
@@ -210,7 +210,7 @@ mod tests {
                 .collect::<Vec<_>>()
         )
         .unwrap()))
-        .run(argvals![]);
+        .run(named_args![]);
 
         prop_assert_eq!(xs.shape(), shape);
         let xs = xs.into_inner();
@@ -224,7 +224,7 @@ mod tests {
     fn seededrands_should_generate_scalars(seed: u64) {
         let (_rng, x) =
             SeededRand::<_, _, f64>::new(val!(StdRng::seed_from_u64(seed)), val!(Standard))
-                .run(argvals![]);
+                .run(named_args![]);
 
         prop_assert!((0.0..1.0).contains(&x));
     }
@@ -235,7 +235,7 @@ mod tests {
             val!(StdRng::seed_from_u64(seed)),
             val1!(std::iter::repeat(Standard).take(len).collect::<Vec<_>>()),
         )
-        .run(argvals![]);
+        .run(named_args![]);
 
         prop_assert_eq!(xs.len(), len);
         for x in xs {
@@ -260,7 +260,7 @@ mod tests {
             )
             .unwrap()),
         )
-        .run(argvals![]);
+        .run(named_args![]);
 
         prop_assert_eq!(xs.shape(), shape);
         let xs = xs.into_inner();
@@ -279,7 +279,7 @@ mod tests {
                 SeededRand::<_, _, f64>::new(arg!("rng", StdRng), val!(Standard)),
                 arg!("x", f64).gt(val!(0.5)).not(),
             )
-            .run(argvals![]);
+            .run(named_args![]);
         prop_assert!(x > 0.5);
     }
 }

@@ -79,7 +79,7 @@ where
 mod run {
     use optimal_compute_core::{
         peano::{One, Two, Zero},
-        run::{ArgVals, DistributeArgs, Matrix, RunCore, Unwrap, Value},
+        run::{NamedArgs, DistributeArgs, Matrix, RunCore, Unwrap, Value},
         Computation,
     };
 
@@ -98,7 +98,7 @@ mod run {
     {
         type Output = Value<OutP::Output>;
 
-        fn run_core(self, args: ArgVals) -> Self::Output {
+        fn run_core(self, args: NamedArgs) -> Self::Output {
             let (rate, p, b) = (self.rate, self.probability, self.sample)
                 .distribute(args)
                 .unwrap();

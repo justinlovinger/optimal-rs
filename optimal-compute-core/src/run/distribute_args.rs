@@ -2,12 +2,12 @@ use paste::paste;
 
 use crate::ComputationFn;
 
-use super::{ArgVals, RunCore};
+use super::{NamedArgs, RunCore};
 
 pub trait DistributeArgs {
     type Output;
 
-    fn distribute(self, args: ArgVals) -> Self::Output;
+    fn distribute(self, args: NamedArgs) -> Self::Output;
 }
 
 impl<A, B> DistributeArgs for (A, B)
@@ -17,7 +17,7 @@ where
 {
     type Output = (A::Output, B::Output);
 
-    fn distribute(self, args: ArgVals) -> Self::Output {
+    fn distribute(self, args: NamedArgs) -> Self::Output {
         let (lhs_args, rhs_args) = args
             .partition(&self.0.arg_names(), &self.1.arg_names())
             .unwrap_or_else(|e| panic!("{}", e,));
@@ -34,7 +34,7 @@ macro_rules! impl_distribute_args_for_n_tuple {
             {
                 type Output = ( $( [<T $i>]::Output ),* );
 
-                fn distribute(self, args: ArgVals) -> Self::Output {
+                fn distribute(self, args: NamedArgs) -> Self::Output {
                     let ( $( [<args_ $i>] ),* ) = args
                         .[<partition $n>]( $( &self.$i.arg_names() ),* )
                         .unwrap_or_else(|e| panic!("{}", e,));
@@ -65,26 +65,26 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{arg, argvals, run::Value, val};
+    use crate::{arg, named_args, run::Value, val};
 
     use super::*;
 
     #[proptest]
     fn distribute_args_should_properly_route_args(x: i32, y: i32) {
         prop_assert_eq!(
-            (val!(x), val!(y)).distribute(argvals![]),
+            (val!(x), val!(y)).distribute(named_args![]),
             (Value(x), Value(y))
         );
         prop_assert_eq!(
-            (arg!("foo"), val!(y)).distribute(argvals![("foo", x)]),
+            (arg!("foo"), val!(y)).distribute(named_args![("foo", x)]),
             (Value(x), Value(y))
         );
         prop_assert_eq!(
-            (val!(x), arg!("bar")).distribute(argvals![("bar", y)]),
+            (val!(x), arg!("bar")).distribute(named_args![("bar", y)]),
             (Value(x), Value(y))
         );
         prop_assert_eq!(
-            (arg!("foo"), arg!("bar")).distribute(argvals![("foo", x), ("bar", y)]),
+            (arg!("foo"), arg!("bar")).distribute(named_args![("foo", x), ("bar", y)]),
             (Value(x), Value(y))
         );
     }
@@ -92,31 +92,31 @@ mod tests {
     #[proptest]
     fn distribute_args_should_properly_route_args_for_three_tuples(x: i32, y: i32, z: i32) {
         prop_assert_eq!(
-            (val!(x), val!(y), val!(z)).distribute(argvals![]),
+            (val!(x), val!(y), val!(z)).distribute(named_args![]),
             (Value(x), Value(y), Value(z))
         );
         prop_assert_eq!(
-            (arg!("foo"), val!(y), val!(z)).distribute(argvals![("foo", x)]),
+            (arg!("foo"), val!(y), val!(z)).distribute(named_args![("foo", x)]),
             (Value(x), Value(y), Value(z))
         );
         prop_assert_eq!(
-            (val!(x), arg!("bar"), val!(z)).distribute(argvals![("bar", y)]),
+            (val!(x), arg!("bar"), val!(z)).distribute(named_args![("bar", y)]),
             (Value(x), Value(y), Value(z))
         );
         prop_assert_eq!(
-            (arg!("foo"), arg!("bar"), val!(z)).distribute(argvals![("foo", x), ("bar", y)]),
+            (arg!("foo"), arg!("bar"), val!(z)).distribute(named_args![("foo", x), ("bar", y)]),
             (Value(x), Value(y), Value(z))
         );
         prop_assert_eq!(
-            (arg!("foo"), val!(y), arg!("baz")).distribute(argvals![("foo", x), ("baz", z)]),
+            (arg!("foo"), val!(y), arg!("baz")).distribute(named_args![("foo", x), ("baz", z)]),
             (Value(x), Value(y), Value(z))
         );
         prop_assert_eq!(
-            (val!(x), arg!("bar"), arg!("baz")).distribute(argvals![("bar", y), ("baz", z)]),
+            (val!(x), arg!("bar"), arg!("baz")).distribute(named_args![("bar", y), ("baz", z)]),
             (Value(x), Value(y), Value(z))
         );
         prop_assert_eq!(
-            (arg!("foo"), arg!("bar"), arg!("baz")).distribute(argvals![
+            (arg!("foo"), arg!("bar"), arg!("baz")).distribute(named_args![
                 ("foo", x),
                 ("bar", y),
                 ("baz", z)

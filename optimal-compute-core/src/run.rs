@@ -1,13 +1,13 @@
-mod argvals;
 mod distribute_args;
 mod into_vec;
 mod matrix;
+mod named_args;
 mod run_core;
 
 use crate::ComputationFn;
 
 pub use self::{
-    argvals::*, collect::*, distribute_args::*, into_vec::*, matrix::*, run_core::*, unwrap::*,
+    collect::*, distribute_args::*, into_vec::*, matrix::*, named_args::*, run_core::*, unwrap::*,
 };
 
 /// A computation that can be run
@@ -18,7 +18,7 @@ pub use self::{
 pub trait Run {
     type Output;
 
-    fn run(self, args: ArgVals) -> Self::Output;
+    fn run(self, args: NamedArgs) -> Self::Output;
 }
 
 impl<T, Collected> Run for T
@@ -29,7 +29,7 @@ where
 {
     type Output = Collected::Unwrapped;
 
-    fn run(self, args: ArgVals) -> Self::Output {
+    fn run(self, args: NamedArgs) -> Self::Output {
         self.run_core(args).collect().unwrap()
     }
 }
@@ -171,7 +171,7 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{arg, argvals, val, val1};
+    use crate::{arg, named_args, val, val1};
 
     use super::*;
 
@@ -184,16 +184,16 @@ mod tests {
         prop_assume!((y - z) != 0);
         prop_assume!(z != 0);
         prop_assert_eq!(
-            (val!(x) / (val!(y) - val!(z)) + -(val!(z) * val!(y))).run(argvals![]),
+            (val!(x) / (val!(y) - val!(z)) + -(val!(z) * val!(y))).run(named_args![]),
             x / (y - z) + -(z * y)
         );
         prop_assert_eq!(
-            (-(((val!(x) + val!(y) - val!(z)) / val!(z)) * val!(y))).run(argvals![]),
+            (-(((val!(x) + val!(y) - val!(z)) / val!(z)) * val!(y))).run(named_args![]),
             -(((x + y - z) / z) * y)
         );
-        prop_assert_eq!(-(-val!(x)).run(argvals![]), -(-x));
+        prop_assert_eq!(-(-val!(x)).run(named_args![]), -(-x));
         prop_assert_eq!(
-            (val1!([x, y]) / (val!(y) - val!(z)) + -(val!(z) * val!(y))).run(argvals![]),
+            (val1!([x, y]) / (val!(y) - val!(z)) + -(val!(z) * val!(y))).run(named_args![]),
             [x / (y - z) + -(z * y), y / (y - z) + -(z * y)]
         );
     }
@@ -212,15 +212,15 @@ mod tests {
         prop_assert_eq!(
             (arg!("foo", i32) / (val!(x) - arg!("bar", i32))
                 + -(val!(z) * val!(y) + arg!("baz", i32)))
-            .run(argvals![("foo", in_x), ("bar", in_y), ("baz", in_z)]),
+            .run(named_args![("foo", in_x), ("bar", in_y), ("baz", in_z)]),
             in_x / (x - in_y) + -(z * y + in_z)
         );
         prop_assert_eq!(
             (arg!("foo", i32)
                 + (((val!(x) + val!(y) - arg!("bar", i32)) / -val!(z)) * arg!("baz", i32)))
-            .run(argvals![("foo", in_x), ("bar", in_y), ("baz", in_z)]),
+            .run(named_args![("foo", in_x), ("bar", in_y), ("baz", in_z)]),
             in_x + (((x + y - in_y) / -z) * in_z)
         );
-        prop_assert_eq!(-(-arg!("foo", i32)).run(argvals![("foo", x)]), -(-x));
+        prop_assert_eq!(-(-arg!("foo", i32)).run(named_args![("foo", x)]), -(-x));
     }
 }

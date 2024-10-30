@@ -103,7 +103,7 @@ mod sampleable {
 #[cfg(test)]
 mod tests {
     use num_traits::bounds::{LowerBounded, UpperBounded};
-    use optimal_compute_core::{argvals, val, val1, Computation, Run};
+    use optimal_compute_core::{named_args, val, val1, Computation, Run};
     use proptest::prelude::*;
     use rand::{rngs::SmallRng, SeedableRng};
     use test_strategy::proptest;
@@ -118,7 +118,7 @@ mod tests {
     ) {
         let (sample, probabilities) = args;
         prop_assert!(are_valid(
-            Adjust::new(val!(adjust_rate), val1!(probabilities), val1!(sample)).run(argvals![])
+            Adjust::new(val!(adjust_rate), val1!(probabilities), val1!(sample)).run(named_args![])
         ));
     }
 
@@ -137,7 +137,7 @@ mod tests {
                 val!(SmallRng::seed_from_u64(seed)),
             )
             .snd()
-            .run(argvals![])
+            .run(named_args![])
         ));
     }
 

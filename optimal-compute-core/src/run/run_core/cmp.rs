@@ -2,7 +2,7 @@ use paste::paste;
 
 use crate::{
     cmp::*,
-    run::{ArgVals, DistributeArgs, RunCore, Unwrap, Value},
+    run::{DistributeArgs, NamedArgs, RunCore, Unwrap, Value},
     Computation,
 };
 
@@ -17,7 +17,7 @@ macro_rules! impl_run_core_for_comparison {
             {
                 type Output = Value<bool>;
 
-                fn run_core(self, args: ArgVals) -> Self::Output {
+                fn run_core(self, args: NamedArgs) -> Self::Output {
                     let (x, y) = (self.0, self.1).distribute(args);
                     Value(x.unwrap().[<$op:lower>](&y.unwrap()))
                 }
@@ -42,7 +42,7 @@ where
 {
     type Output = Value<Out::Item>;
 
-    fn run_core(self, args: ArgVals) -> Self::Output {
+    fn run_core(self, args: NamedArgs) -> Self::Output {
         Value(
             self.0
                 .run_core(args)
@@ -61,7 +61,7 @@ where
 {
     type Output = Value<bool>;
 
-    fn run_core(self, args: ArgVals) -> Self::Output {
+    fn run_core(self, args: NamedArgs) -> Self::Output {
         Value(!self.0.run_core(args).unwrap())
     }
 }
@@ -71,7 +71,7 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{argvals, val, val1, Run};
+    use crate::{named_args, val, val1, Run};
 
     use super::*;
 
@@ -80,7 +80,7 @@ mod tests {
             paste! {
                 #[proptest]
                 fn [<$op _should_ $op>](#[strategy(-10..10)] x: i32, #[strategy(-10..10)] y: i32) {
-                    prop_assert_eq!(val!(x).$op(val!(y)).run(argvals![]), x $inline y);
+                    prop_assert_eq!(val!(x).$op(val!(y)).run(named_args![]), x $inline y);
                 }
             }
         };
@@ -95,13 +95,13 @@ mod tests {
 
     #[proptest]
     fn max_should_max(x: i32, y: i32, z: i32) {
-        prop_assert_eq!(val1!([x, y, z]).max().run(argvals![]), x.max(y).max(z));
+        prop_assert_eq!(val1!([x, y, z]).max().run(named_args![]), x.max(y).max(z));
     }
 
     #[proptest]
     fn max_should_return_a_scalar(x: i32, y: i32, z: i32) {
         prop_assert_eq!(
-            (val1!([x, y, z]).max() + val!(1)).run(argvals![]),
+            (val1!([x, y, z]).max() + val!(1)).run(named_args![]),
             x.max(y).max(z) + 1
         );
     }
@@ -109,6 +109,6 @@ mod tests {
     #[proptest]
     fn not_should_not(x: i32, y: i32) {
         let inp = val!(x).lt(val!(y));
-        prop_assert_eq!(inp.not().run(argvals![]), x >= y);
+        prop_assert_eq!(inp.not().run(named_args![]), x >= y);
     }
 }

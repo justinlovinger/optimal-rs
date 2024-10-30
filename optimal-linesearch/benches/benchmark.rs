@@ -2,7 +2,7 @@ use std::{hint::black_box, vec::Vec};
 
 use fixed_step_size::FixedStepSize;
 use optimal_compute_core::{
-    arg1, argvals,
+    arg1, named_args,
     enumerate::Enumerate,
     math::{Add, Div, Mul, Pow},
     peano::{One, Zero},
@@ -76,7 +76,7 @@ where
     FD: Clone + ComputationFn<Dim = One, Item = f64>,
     FixedStepSize<FD>: Run<Output = Vec<f64>>,
 {
-    fixed_step_size::fixed_step_size(obj_func_d, initial_point).run(argvals![])
+    fixed_step_size::fixed_step_size(obj_func_d, initial_point).run(named_args![])
 }
 
 pub fn run_backtracking_line_search<F, FD>(

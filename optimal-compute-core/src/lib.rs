@@ -14,11 +14,11 @@
 //! # Examples
 //!
 //! ```
-//! use optimal_compute_core::{argvals, val, Run};
+//! use optimal_compute_core::{named_args, val, Run};
 //!
 //! let one_plus_one = val!(1) + val!(1);
 //! assert_eq!(one_plus_one.to_string(), "(1 + 1)");
-//! assert_eq!(one_plus_one.run(argvals![]), 2);
+//! assert_eq!(one_plus_one.run(named_args![]), 2);
 //! ```
 
 pub mod macros;

@@ -10,19 +10,19 @@ use paste::paste;
 
 use crate::{Name, Names};
 
-pub trait ArgVal: Downcast + fmt::Debug {
-    fn boxed_clone(&self) -> Box<dyn ArgVal>;
+pub trait AnyArg: Downcast + fmt::Debug {
+    fn boxed_clone(&self) -> Box<dyn AnyArg>;
 }
-impl_downcast!(ArgVal);
-impl<T> ArgVal for T
+impl_downcast!(AnyArg);
+impl<T> AnyArg for T
 where
     T: 'static + Clone + fmt::Debug,
 {
-    fn boxed_clone(&self) -> Box<dyn ArgVal> {
+    fn boxed_clone(&self) -> Box<dyn AnyArg> {
         Box::new(self.clone())
     }
 }
-impl Clone for Box<dyn ArgVal> {
+impl Clone for Box<dyn AnyArg> {
     fn clone(&self) -> Self {
         // Calling `boxed_clone` without `as_ref`
         // will result in a stack overflow.
@@ -31,38 +31,38 @@ impl Clone for Box<dyn ArgVal> {
 }
 
 #[derive(Clone, Debug)]
-pub struct ArgVals(BTreeMap<Name, Box<dyn ArgVal>>);
+pub struct NamedArgs(BTreeMap<Name, Box<dyn AnyArg>>);
 
-impl Default for ArgVals {
+impl Default for NamedArgs {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[macro_export]
-macro_rules! argvals {
+macro_rules! named_args {
 ( ) => {
-    $crate::run::ArgVals::new()
+    $crate::run::NamedArgs::new()
 };
-( ($name:expr, $val:expr) ) => {
-    $crate::run::ArgVals::singleton($name, $val)
+( ($name:expr, $arg:expr) ) => {
+    $crate::run::NamedArgs::singleton($name, $arg)
 };
-( ($name:expr, $val:expr), $( $rest:tt ),* ) => {
-    $crate::run::ArgVals::singleton($name, $val).union(argvals![$( $rest ),*])
+( ($name:expr, $arg:expr), $( $rest:tt ),* ) => {
+    $crate::run::NamedArgs::singleton($name, $arg).union(named_args![$( $rest ),*])
 };
 }
 
-impl ArgVals {
+impl NamedArgs {
     pub fn new() -> Self {
-        ArgVals(BTreeMap::new())
+        Self(BTreeMap::new())
     }
 
-    pub fn singleton<T>(name: Name, value: T) -> Self
+    pub fn singleton<T>(name: Name, arg: T) -> Self
     where
-        T: ArgVal,
+        T: AnyArg,
     {
-        let value = Box::new(value) as Box<dyn ArgVal>;
-        ArgVals(std::iter::once((name, value)).collect())
+        let arg = Box::new(arg) as Box<dyn AnyArg>;
+        Self(std::iter::once((name, arg)).collect())
     }
 
     pub fn union(mut self, mut other: Self) -> Self {
@@ -74,32 +74,32 @@ impl ArgVals {
         args.iter().all(|arg| self.0.contains_key(arg))
     }
 
-    /// Return a (map with `fst_args`, map with `snd_args`) tuple if all arguments are present.
+    /// Return a (map with `fst_names`, map with `snd_names`) tuple if all arguments are present.
     pub fn partition(
         self,
-        fst_args: &Names,
-        snd_args: &Names,
+        fst_names: &Names,
+        snd_names: &Names,
     ) -> Result<(Self, Self), PartitionErr> {
         // We want to avoid making a new map
         // if we can simply return this map
         // as the partition with all arguments.
-        if snd_args.is_empty() && fst_args.len() == self.0.len() {
-            if self.contains_args(fst_args) {
+        if snd_names.is_empty() && fst_names.len() == self.0.len() {
+            if self.contains_args(fst_names) {
                 Ok((self, Self::new()))
             } else {
                 Err(PartitionErr::Missing(
-                    fst_args
+                    fst_names
                         .iter()
                         .find(|arg| !self.0.contains_key(arg))
                         .unwrap(),
                 ))
             }
-        } else if fst_args.is_empty() && snd_args.len() == self.0.len() {
-            if self.contains_args(snd_args) {
+        } else if fst_names.is_empty() && snd_names.len() == self.0.len() {
+            if self.contains_args(snd_names) {
                 Ok((Self::new(), self))
             } else {
                 Err(PartitionErr::Missing(
-                    snd_args
+                    snd_names
                         .iter()
                         .find(|arg| !self.0.contains_key(arg))
                         .unwrap(),
@@ -109,31 +109,31 @@ impl ArgVals {
             let mut fst_map = Self::new();
             let mut snd_map = Self::new();
 
-            for (arg, val) in self.0.into_iter() {
-                match (fst_args.contains(arg), snd_args.contains(arg)) {
+            for (name, arg) in self.0.into_iter() {
+                match (fst_names.contains(name), snd_names.contains(name)) {
                     (true, true) => {
-                        fst_map.0.insert(arg, val.clone());
-                        snd_map.0.insert(arg, val);
+                        fst_map.0.insert(name, arg.clone());
+                        snd_map.0.insert(name, arg);
                     }
                     (true, false) => {
-                        fst_map.0.insert(arg, val);
+                        fst_map.0.insert(name, arg);
                     }
                     (false, true) => {
-                        snd_map.0.insert(arg, val);
+                        snd_map.0.insert(name, arg);
                     }
                     (false, false) => {}
                 }
             }
 
-            if fst_map.contains_args(fst_args) && snd_map.contains_args(snd_args) {
+            if fst_map.contains_args(fst_names) && snd_map.contains_args(snd_names) {
                 Ok((fst_map, snd_map))
             } else {
                 Err(PartitionErr::Missing(
-                    fst_args
+                    fst_names
                         .iter()
                         .find(|arg| !fst_map.0.contains_key(arg))
                         .unwrap_or_else(|| {
-                            snd_args
+                            snd_names
                                 .iter()
                                 .find(|arg| !snd_map.0.contains_key(arg))
                                 .unwrap()
@@ -153,7 +153,7 @@ impl ArgVals {
     /// it will still be removed.
     pub fn pop<T>(&mut self, name: Name) -> Result<T, PopErr>
     where
-        T: 'static + ArgVal,
+        T: 'static + AnyArg,
     {
         self.0
             .remove(name)
@@ -162,7 +162,7 @@ impl ArgVals {
                 |x| {
                     x.downcast().map_err(|x| PopErr::WrongType {
                         name,
-                        value: x,
+                        arg: x,
                         ty: type_name::<T>(),
                     })
                 },
@@ -173,14 +173,14 @@ impl ArgVals {
     /// This function is unstable and likely to change.
     ///
     /// Use at your own risk.
-    pub fn insert_raw(&mut self, name: Name, value: Box<dyn ArgVal>) {
-        self.0.insert(name, value);
+    pub fn insert_raw(&mut self, name: Name, arg: Box<dyn AnyArg>) {
+        self.0.insert(name, arg);
     }
 
     #[cfg(test)]
     fn into_map<T>(self) -> BTreeMap<Name, T>
     where
-        T: 'static + ArgVal,
+        T: 'static + AnyArg,
     {
         self.0
             .into_iter()
@@ -192,16 +192,16 @@ impl ArgVals {
 macro_rules! impl_partition_n {
     ( $n:expr, $( $i:expr ),* ) => {
         paste! {
-            impl ArgVals {
+            impl NamedArgs {
                 /// Return a tuple with each requested set of arguments
                 /// if all arguments are present.
                 #[allow(clippy::too_many_arguments)]
-                pub fn [<partition $n>](mut self, $( [<args_ $i>]: &Names ),* ) -> Result<( $( impl_partition_n!(@as_self $i) ),* ), PartitionErr> {
-                    let all_args = [ $( [<args_ $i>] ),* ];
+                pub fn [<partition $n>](mut self, $( [<names_ $i>]: &Names ),* ) -> Result<( $( impl_partition_n!(@as_self $i) ),* ), PartitionErr> {
+                    let all_names = [ $( [<names_ $i>] ),* ];
 
                     let mut partitions = Vec::new();
                     for i in 0..($n - 1) {
-                        let (next, rest) = self.partition(all_args[i], &Names::union_many(all_args.into_iter().skip(i + 1)))?;
+                        let (next, rest) = self.partition(all_names[i], &Names::union_many(all_names.into_iter().skip(i + 1)))?;
                         partitions.push(next);
                         self = rest;
                     }
@@ -270,48 +270,48 @@ impl<T> DerefMut for Value<T> {
     }
 }
 
-pub trait FromArgsVals<Args, Vals> {
-    fn from_args_vals(args: Args, vals: Vals) -> Self;
+pub trait FromNamesArgs<Names, Args> {
+    fn from_names_args(names: Names, args: Args) -> Self;
 }
 
-impl<Names0, T0> FromArgsVals<(Names0,), (T0,)> for ArgVals
+impl<Names0, T0> FromNamesArgs<(Names0,), (T0,)> for NamedArgs
 where
-    ArgVals: FromArgsVals<Names0, T0>,
+    NamedArgs: FromNamesArgs<Names0, T0>,
 {
-    fn from_args_vals(args: (Names0,), vals: (T0,)) -> Self {
-        Self::from_args_vals(args.0, vals.0)
+    fn from_names_args(names: (Names0,), args: (T0,)) -> Self {
+        Self::from_names_args(names.0, args.0)
     }
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum PartitionErr {
-    #[error("`ArgVals` is missing `{0}`.")]
+    #[error("`NamedArgs` is missing `{0}`.")]
     Missing(&'static str),
 }
 
 #[derive(Clone, Debug, thiserror::Error)]
 pub enum PopErr {
-    #[error("`ArgVals` is missing `{0}`.")]
+    #[error("`NamedArgs` is missing `{0}`.")]
     Missing(&'static str),
-    #[error("Expected type `{ty}` for `{name}`, found value `{value:?}`.")]
+    #[error("Expected type `{ty}` for `{name}`, found arg `{arg:?}`.")]
     WrongType {
         name: &'static str,
-        value: Box<dyn ArgVal>,
+        arg: Box<dyn AnyArg>,
         ty: &'static str,
     },
 }
 
-macro_rules! impl_from_args_vals {
+macro_rules! impl_from_names_args {
     ( $( $i:expr ),* ) => {
         paste! {
-            impl< $( [<Names $i>] ),* , $( [<T $i>] ),* > FromArgsVals<( $( [<Names $i>] ),* ), ( $( [<T $i>] ),* )> for ArgVals
+            impl< $( [<Names $i>] ),* , $( [<T $i>] ),* > FromNamesArgs<( $( [<Names $i>] ),* ), ( $( [<T $i>] ),* )> for NamedArgs
             where
-                $( ArgVals: FromArgsVals<[<Names $i>], [<T $i>]> ),*
+                $( NamedArgs: FromNamesArgs<[<Names $i>], [<T $i>]> ),*
             {
-                fn from_args_vals(args: ( $( [<Names $i>] ),* ), vals: ( $( [<T $i>] ),* )) -> Self {
-                    let mut out = ArgVals::new();
+                fn from_names_args(names: ( $( [<Names $i>] ),* ), args: ( $( [<T $i>] ),* )) -> Self {
+                    let mut out = NamedArgs::new();
                     $(
-                        out = out.union(Self::from_args_vals(args.$i, vals.$i));
+                        out = out.union(Self::from_names_args(names.$i, args.$i));
                     )*
                     out
                 }
@@ -323,28 +323,28 @@ macro_rules! impl_from_args_vals {
     };
 }
 
-impl_from_args_vals!(0, 1);
-impl_from_args_vals!(0, 1, 2);
-impl_from_args_vals!(0, 1, 2, 3);
-impl_from_args_vals!(0, 1, 2, 3, 4);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5, 6);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5, 6, 7);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5, 6, 7, 8);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
-impl_from_args_vals!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
+impl_from_names_args!(0, 1);
+impl_from_names_args!(0, 1, 2);
+impl_from_names_args!(0, 1, 2, 3);
+impl_from_names_args!(0, 1, 2, 3, 4);
+impl_from_names_args!(0, 1, 2, 3, 4, 5);
+impl_from_names_args!(0, 1, 2, 3, 4, 5, 6);
+impl_from_names_args!(0, 1, 2, 3, 4, 5, 6, 7);
+impl_from_names_args!(0, 1, 2, 3, 4, 5, 6, 7, 8);
+impl_from_names_args!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+impl_from_names_args!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+impl_from_names_args!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+impl_from_names_args!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+impl_from_names_args!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
+impl_from_names_args!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
+impl_from_names_args!(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
-impl<T> FromArgsVals<Name, Value<T>> for ArgVals
+impl<T> FromNamesArgs<Name, Value<T>> for NamedArgs
 where
-    T: ArgVal,
+    T: AnyArg,
 {
-    fn from_args_vals(args: Name, vals: Value<T>) -> Self {
-        Self::singleton(args, vals.0)
+    fn from_names_args(names: Name, args: Value<T>) -> Self {
+        Self::singleton(names, args.0)
     }
 }
 
@@ -354,125 +354,127 @@ mod tests {
 
     #[test]
     fn partition_should_return_full_map_for_fst_when_all_args() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2)];
+        let named_args = named_args![("foo", 1), ("bar", 2)];
         assert_eq!(
-            arg_vals
+            named_args
                 .clone()
                 .partition(&names!["foo", "bar"], &names![])
                 .unwrap()
                 .0
                 .into_map::<i32>(),
-            arg_vals.into_map()
+            named_args.into_map()
         );
     }
 
     #[test]
     fn partition_should_return_full_map_for_snd_when_all_args() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2)];
+        let named_args = named_args![("foo", 1), ("bar", 2)];
         assert_eq!(
-            arg_vals
+            named_args
                 .clone()
                 .partition(&names![], &names!["foo", "bar"])
                 .unwrap()
                 .1
                 .into_map::<i32>(),
-            arg_vals.into_map()
+            named_args.into_map()
         );
     }
 
     #[test]
     fn partition_should_return_maps_with_given_args_when_some_args() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2), ("baz", 3)];
-        let (left, right) = arg_vals.partition(&names!["baz"], &names!["foo"]).unwrap();
-        assert_eq!(left.into_map::<i32>(), argvals![("baz", 3)].into_map(),);
-        assert_eq!(right.into_map::<i32>(), argvals![("foo", 1)].into_map(),);
+        let named_args = named_args![("foo", 1), ("bar", 2), ("baz", 3)];
+        let (left, right) = named_args
+            .partition(&names!["baz"], &names!["foo"])
+            .unwrap();
+        assert_eq!(left.into_map::<i32>(), named_args![("baz", 3)].into_map(),);
+        assert_eq!(right.into_map::<i32>(), named_args![("foo", 1)].into_map(),);
     }
 
     #[test]
     fn partition_should_duplicate_args_required_by_both() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2), ("baz", 3), ("biz", 4)];
-        let (left, right) = arg_vals
+        let named_args = named_args![("foo", 1), ("bar", 2), ("baz", 3), ("biz", 4)];
+        let (left, right) = named_args
             .partition(&names!["foo", "bar", "baz"], &names!["foo", "bar", "biz"])
             .unwrap();
         assert_eq!(
             left.into_map::<i32>(),
-            argvals![("foo", 1), ("bar", 2), ("baz", 3)].into_map(),
+            named_args![("foo", 1), ("bar", 2), ("baz", 3)].into_map(),
         );
         assert_eq!(
             right.into_map::<i32>(),
-            argvals![("foo", 1), ("bar", 2), ("biz", 4)].into_map(),
+            named_args![("foo", 1), ("bar", 2), ("biz", 4)].into_map(),
         );
     }
 
     #[test]
     fn partition_should_return_none_if_arg_missing() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2)];
-        assert!(arg_vals
+        let named_args = named_args![("foo", 1), ("bar", 2)];
+        assert!(named_args
             .clone()
             .partition(&names![], &names!["foo", "baz"])
             .is_err());
-        assert!(arg_vals
+        assert!(named_args
             .partition(&names!["foo", "baz"], &names![])
             .is_err());
     }
 
     #[test]
     fn partition3_should_return_full_map_for_fst_when_all_args() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2)];
+        let named_args = named_args![("foo", 1), ("bar", 2)];
         assert_eq!(
-            arg_vals
+            named_args
                 .clone()
                 .partition3(&names!["foo", "bar"], &names![], &names![])
                 .unwrap()
                 .0
                 .into_map::<i32>(),
-            arg_vals.into_map()
+            named_args.into_map()
         );
     }
 
     #[test]
     fn partition3_should_return_full_map_for_snd_when_all_args() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2)];
+        let named_args = named_args![("foo", 1), ("bar", 2)];
         assert_eq!(
-            arg_vals
+            named_args
                 .clone()
                 .partition3(&names![], &names!["foo", "bar"], &names![])
                 .unwrap()
                 .1
                 .into_map::<i32>(),
-            arg_vals.into_map()
+            named_args.into_map()
         );
     }
 
     #[test]
     fn partition3_should_return_full_map_for_third_when_all_args() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2)];
+        let named_args = named_args![("foo", 1), ("bar", 2)];
         assert_eq!(
-            arg_vals
+            named_args
                 .clone()
                 .partition3(&names![], &names![], &names!["foo", "bar"])
                 .unwrap()
                 .2
                 .into_map::<i32>(),
-            arg_vals.into_map()
+            named_args.into_map()
         );
     }
 
     #[test]
     fn partition3_should_return_maps_with_given_args_when_some_args() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2), ("baz", 3), ("bin", 4)];
-        let (fst, snd, third) = arg_vals
+        let named_args = named_args![("foo", 1), ("bar", 2), ("baz", 3), ("bin", 4)];
+        let (fst, snd, third) = named_args
             .partition3(&names!["baz"], &names!["foo"], &names!["bar"])
             .unwrap();
-        assert_eq!(fst.into_map::<i32>(), argvals![("baz", 3)].into_map(),);
-        assert_eq!(snd.into_map::<i32>(), argvals![("foo", 1)].into_map(),);
-        assert_eq!(third.into_map::<i32>(), argvals![("bar", 2)].into_map(),);
+        assert_eq!(fst.into_map::<i32>(), named_args![("baz", 3)].into_map(),);
+        assert_eq!(snd.into_map::<i32>(), named_args![("foo", 1)].into_map(),);
+        assert_eq!(third.into_map::<i32>(), named_args![("bar", 2)].into_map(),);
     }
 
     #[test]
     fn partition3_should_duplicate_args_required_by_more_than_one() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2), ("baz", 3), ("biz", 4), ("bop", 5)];
-        let (fst, snd, third) = arg_vals
+        let named_args = named_args![("foo", 1), ("bar", 2), ("baz", 3), ("biz", 4), ("bop", 5)];
+        let (fst, snd, third) = named_args
             .partition3(
                 &names!["foo", "bar", "baz"],
                 &names!["foo", "bar", "biz"],
@@ -481,50 +483,50 @@ mod tests {
             .unwrap();
         assert_eq!(
             fst.into_map::<i32>(),
-            argvals![("foo", 1), ("bar", 2), ("baz", 3)].into_map(),
+            named_args![("foo", 1), ("bar", 2), ("baz", 3)].into_map(),
         );
         assert_eq!(
             snd.into_map::<i32>(),
-            argvals![("foo", 1), ("bar", 2), ("biz", 4)].into_map(),
+            named_args![("foo", 1), ("bar", 2), ("biz", 4)].into_map(),
         );
         assert_eq!(
             third.into_map::<i32>(),
-            argvals![("bar", 2), ("biz", 4), ("bop", 5)].into_map(),
+            named_args![("bar", 2), ("biz", 4), ("bop", 5)].into_map(),
         );
     }
 
     #[test]
     fn partition3_should_return_none_if_arg_missing() {
-        let arg_vals = argvals![("foo", 1), ("bar", 2)];
-        assert!(arg_vals
+        let named_args = named_args![("foo", 1), ("bar", 2)];
+        assert!(named_args
             .clone()
             .partition3(&names!["foo", "baz"], &names![], &names![])
             .is_err());
-        assert!(arg_vals
+        assert!(named_args
             .clone()
             .partition3(&names![], &names!["foo", "baz"], &names![])
             .is_err());
-        assert!(arg_vals
+        assert!(named_args
             .partition3(&names![], &names![], &names!["foo", "baz"])
             .is_err());
     }
 
     #[test]
-    fn pop_should_return_value_if_available_and_correct_type() {
-        let mut arg_vals = argvals![("foo", 1), ("bar", 2.0)];
-        assert_eq!(arg_vals.pop::<i32>("foo").ok(), Some(1));
-        assert_eq!(arg_vals.pop::<f64>("bar").ok(), Some(2.0));
+    fn pop_should_return_arg_if_available_and_correct_type() {
+        let mut named_args = named_args![("foo", 1), ("bar", 2.0)];
+        assert_eq!(named_args.pop::<i32>("foo").ok(), Some(1));
+        assert_eq!(named_args.pop::<f64>("bar").ok(), Some(2.0));
     }
 
     #[test]
     fn pop_should_return_none_if_not_available() {
-        let mut arg_vals = argvals![("foo", 1), ("bar", 2.0)];
-        assert_eq!(arg_vals.pop::<i32>("baz").ok(), None);
+        let mut named_args = named_args![("foo", 1), ("bar", 2.0)];
+        assert_eq!(named_args.pop::<i32>("baz").ok(), None);
     }
 
     #[test]
     fn pop_should_return_none_if_wrong_type() {
-        let mut arg_vals = argvals![("foo", 1), ("bar", 2.0)];
-        assert_eq!(arg_vals.pop::<f64>("foo").ok(), None);
+        let mut named_args = named_args![("foo", 1), ("bar", 2.0)];
+        assert_eq!(named_args.pop::<f64>("foo").ok(), None);
     }
 }

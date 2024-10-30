@@ -3,15 +3,16 @@ use core::fmt;
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
 use optimal_compute_core::{
-    arg, arg1, argvals,
+    arg, arg1,
     cmp::{Lt, Not},
     control_flow::{LoopWhile, Then},
     math::Add,
+    named_args,
     peano::{One, Zero},
-    run::ArgVals,
+    run::NamedArgs,
     val, val1,
     zip::Zip,
-    Arg, Names, Computation, ComputationFn, Run, Val,
+    Arg, Computation, ComputationFn, Names, Run, Val,
 };
 use rand::prelude::*;
 
@@ -154,7 +155,7 @@ where
     where
         PbilComputation<F, R>: Run<Output = Vec<bool>>,
     {
-        self.computation().run(argvals![])
+        self.computation().run(named_args![])
     }
 
     /// Return a computation representing this algorithm.
@@ -322,7 +323,7 @@ where
 {
     type Output = Vec<bool>;
 
-    fn run(self, args: ArgVals) -> Self::Output {
+    fn run(self, args: NamedArgs) -> Self::Output {
         match self {
             PbilComputation::Iteration(x) => x.run(args),
             PbilComputation::Threshold(x) => x.run(args),

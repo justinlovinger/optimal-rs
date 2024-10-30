@@ -24,7 +24,7 @@
 //!             arg!("i", usize).lt(val!(10)),
 //!         )
 //!         .snd()
-//!         .run(argvals![])
+//!         .run(named_args![])
 //! )
 //! ```
 //!
