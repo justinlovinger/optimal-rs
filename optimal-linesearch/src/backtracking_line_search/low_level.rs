@@ -10,7 +10,7 @@ use computation_types::{
     math::{Add, Mul},
     peano::{One, Zero},
     zip::{Zip, Zip7, Zip8},
-    Arg, Computation, ComputationFn,
+    Arg, Computation, ComputationFn, Function,
 };
 
 use crate::{descend, Descend, StepSize};
@@ -114,7 +114,7 @@ where
         derivatives,
         direction,
     )
-    .then(
+    .then(Function::anonymous(
         (
             "c_1",
             "backtracking_rate",
@@ -142,7 +142,7 @@ where
             ),
             arg!("backtracking_rate", BacktrackingRate<A>) * arg!("initial_step_size", StepSize<A>),
         ),
-    )
+    ))
     .loop_while(
         (
             "c1tddd",
@@ -176,7 +176,7 @@ where
         )
         .not(),
     )
-    .then(
+    .then(Function::anonymous(
         (
             "c1tddd",
             "backtracking_rate",
@@ -188,7 +188,7 @@ where
             "next_step_size",
         ),
         arg!("step_size", StepSize<A>).zip(arg1!("point", A)),
-    )
+    ))
 }
 
 /// See [`c_1_times_derivatives_dot_direction`].

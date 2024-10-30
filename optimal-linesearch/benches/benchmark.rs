@@ -9,7 +9,7 @@ use computation_types::{
     sum::Sum,
     val,
     zip::Zip,
-    Arg, Computation, ComputationFn, Run, Val,
+    Arg, Computation, ComputationFn, Function, Run, Val,
 };
 use fixed_step_size::FixedStepSize;
 use optimal_linesearch::backtracking_line_search::{
@@ -101,7 +101,10 @@ where
 
 fn skewed_sphere() -> SkewedSphere {
     arg1!("point", f64)
-        .enumerate(arg1!("x", f64).pow(val!(1.0) + (arg1!("i", f64) + val!(1.0)) / val!(100.0)))
+        .enumerate(Function::anonymous(
+            ("x", "i"),
+            arg1!("x", f64).pow(val!(1.0) + (arg1!("i", f64) + val!(1.0)) / val!(100.0)),
+        ))
         .sum()
 }
 
@@ -116,8 +119,10 @@ type SkewedSphere = Sum<
 >;
 
 fn skewed_sphere_d() -> SkewedSphereD {
-    arg1!("point", f64)
-        .enumerate((val!(1.0) + (arg1!("i", f64) + val!(1.0)) / val!(100.0)) * arg1!("x", f64))
+    arg1!("point", f64).enumerate(Function::anonymous(
+        ("x", "i"),
+        (val!(1.0) + (arg1!("i", f64) + val!(1.0)) / val!(100.0)) * arg1!("x", f64),
+    ))
 }
 
 type SkewedSphereD = Enumerate<

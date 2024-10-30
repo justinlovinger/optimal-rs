@@ -10,7 +10,7 @@ use computation_types::{
     run::NamedArgs,
     val, val1,
     zip::Zip,
-    Arg, Computation, ComputationFn, Names, Run, Val,
+    Arg, Computation, ComputationFn, Function, Names, Run, Val,
 };
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
@@ -185,7 +185,7 @@ where
                                 arg1!("probabilities", Probability),
                                 arg!("rng", R),
                             ))
-                            .then(
+                            .then(Function::anonymous(
                                 ("probabilities", ("rng", "sample")),
                                 Mutate::new(
                                     val!(self.problem.agnostic.mutation_chance),
@@ -197,14 +197,14 @@ where
                                     ),
                                     arg!("rng"),
                                 ),
-                            ),
+                            )),
                     ),
                     arg!("i", usize).lt(val!(i)),
                 )
-                .then(
+                .then(Function::anonymous(
                     ("i", ("rng", "probabilities")),
                     arg1!("probabilities", Probability),
-                ),
+                )),
         )
     }
 
@@ -222,7 +222,7 @@ where
                             arg1!("probabilities", Probability),
                             arg!("rng", R),
                         ))
-                        .then(
+                        .then(Function::anonymous(
                             ("probabilities", ("rng", "sample")),
                             Mutate::new(
                                 val!(self.problem.agnostic.mutation_chance),
@@ -234,13 +234,13 @@ where
                                 ),
                                 arg!("rng", R),
                             ),
-                        ),
+                        )),
                     Converged::new(val!(threshold), arg1!("probabilities", Probability)).not(),
                 )
-                .then(
+                .then(Function::anonymous(
                     ("rng", "probabilities"),
                     arg1!("probabilities", Probability),
-                ),
+                )),
         )
     }
 

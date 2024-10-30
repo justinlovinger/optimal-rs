@@ -12,7 +12,7 @@ use computation_types::{
     run::NamedArgs,
     val, val1,
     zip::{Zip, Zip3, Zip4, Zip5, Zip6, Zip7, Zip8},
-    Arg, Computation, ComputationFn, Len, Names, Run, Val,
+    Arg, Computation, ComputationFn, Function, Len, Names, Run, Val,
 };
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
@@ -332,7 +332,7 @@ macro_rules! bfgs_loop {
                 arg1!("derivatives", A),
             ),
         )
-        .then(
+        .then(Function::anonymous(
             (
                 "prev_derivatives",
                 "prev_step",
@@ -363,8 +363,8 @@ macro_rules! bfgs_loop {
                     ),
                 ),
             ),
-        )
-        .then(
+        ))
+        .then(Function::anonymous(
             (
                 "prev_point",
                 "prev_derivatives",
@@ -377,7 +377,7 @@ macro_rules! bfgs_loop {
                 arg2!("prev_approx_inv_snd_derivatives", A),
                 (val!($incr_rate) * arg!("step_size", StepSize<A>)).zip(arg1!("point", A)),
             ),
-        )
+        ))
     };
 }
 
@@ -473,7 +473,7 @@ where
                     arg1!("point", A),
                     self.problem.obj_func_and_d,
                 )
-                .then(
+                .then(Function::anonymous(
                     ("step_size", "point", ("value", "derivatives")),
                     search(
                         c_1,
@@ -485,15 +485,18 @@ where
                         arg1!("derivatives", A),
                         steepest_descent(arg1!("derivatives", A)),
                     ),
-                )
-                .then(
+                ))
+                .then(Function::anonymous(
                     ("step_size", "point"),
                     (val!(incr_rate) * arg!("step_size", StepSize<A>)).zip(arg1!("point", A)),
-                ),
+                )),
             ),
             arg!("i", usize).lt(val!(i)),
         )
-        .then(("i", ("step_size", "point")), arg1!("point", A))
+        .then(Function::anonymous(
+            ("i", ("step_size", "point")),
+            arg1!("point", A),
+        ))
     }
 
     fn steepest_incr_prev_near_minima(
@@ -505,14 +508,14 @@ where
         let initial_step_size = val!(self.problem.agnostic.initial_step_size);
         initial_step_size
             .zip(val1!(self.initial_point))
-            .then(
+            .then(Function::anonymous(
                 ("step_size", "point"),
                 Zip3(
                     arg!("step_size", StepSize<A>),
                     arg1!("point", A),
                     self.problem.obj_func_and_d.clone(),
                 ),
-            )
+            ))
             .loop_while(
                 ("step_size", "point", ("value", "derivatives")),
                 search(
@@ -525,20 +528,20 @@ where
                     arg1!("derivatives", A),
                     steepest_descent(arg1!("derivatives", A)),
                 )
-                .then(
+                .then(Function::anonymous(
                     ("step_size", "point"),
                     Zip3(
                         val!(incr_rate) * arg!("step_size", StepSize<A>),
                         arg1!("point", A),
                         self.problem.obj_func_and_d,
                     ),
-                ),
+                )),
                 is_near_minima(arg!("value", A), arg1!("derivatives", A)).not(),
             )
-            .then(
+            .then(Function::anonymous(
                 ("step_size", "point", ("value", "derivatives")),
                 arg1!("point", A),
-            )
+            ))
     }
 
     fn bfgs_id_incr_prev_iteration(
@@ -557,11 +560,11 @@ where
             Zip(
                 arg!("i", usize) + val!(1_usize),
                 arg1!("point", A)
-                    .then(
+                    .then(Function::anonymous(
                         "point",
                         arg1!("point", A).zip(self.problem.obj_func_and_d.clone()),
-                    )
-                    .then(
+                    ))
+                    .then(Function::anonymous(
                         ("point", ("value", "derivatives")),
                         Zip3(
                             arg1!("point", A),
@@ -580,7 +583,7 @@ where
                                 ),
                             ),
                         )
-                        .then(
+                        .then(Function::anonymous(
                             ("prev_point", "prev_derivatives", ("step_size", "point")),
                             Zip4(
                                 arg1!("prev_point", A),
@@ -589,8 +592,8 @@ where
                                 (val!(incr_rate) * arg!("step_size", StepSize<A>))
                                     .zip(arg1!("point", A)),
                             ),
-                        ),
-                    ),
+                        )),
+                    )),
             )
             .loop_while(
                 (
@@ -612,7 +615,7 @@ where
                         arg1!("point", A),
                         self.problem.obj_func_and_d,
                     )
-                    .then(
+                    .then(Function::anonymous(
                         (
                             "prev_derivatives",
                             "prev_approx_inv_snd_derivatives",
@@ -622,11 +625,11 @@ where
                             ("value", "derivatives"),
                         ),
                         bfgs_loop!(c_1, backtracking_rate, self.problem.obj_func, incr_rate),
-                    ),
+                    )),
                 ),
                 arg!("i", usize).lt(val!(i)),
             )
-            .then(
+            .then(Function::anonymous(
                 (
                     "i",
                     (
@@ -637,7 +640,7 @@ where
                     ),
                 ),
                 arg1!("point", A),
-            ),
+            )),
         )
     }
 
@@ -657,11 +660,11 @@ where
             Zip(
                 arg!("i", usize) + val!(1_usize),
                 arg1!("point", A)
-                    .then(
+                    .then(Function::anonymous(
                         "point",
                         arg1!("point", A).zip(self.problem.obj_func_and_d.clone()),
-                    )
-                    .then(
+                    ))
+                    .then(Function::anonymous(
                         ("point", ("value", "derivatives")),
                         Zip3(
                             arg1!("point", A),
@@ -680,7 +683,7 @@ where
                                 ),
                             ),
                         )
-                        .then(
+                        .then(Function::anonymous(
                             ("prev_point", "prev_derivatives", ("step_size", "point")),
                             Zip3(
                                 arg1!("prev_point", A),
@@ -688,8 +691,8 @@ where
                                 (val!(incr_rate) * arg!("step_size", StepSize<A>))
                                     .zip(arg1!("point", A)),
                             ),
-                        ),
-                    ),
+                        )),
+                    )),
             )
             .if_(
                 (
@@ -707,7 +710,7 @@ where
                         arg1!("point", A),
                         self.problem.obj_func_and_d.clone(),
                     )
-                    .then(
+                    .then(Function::anonymous(
                         (
                             "prev_derivatives",
                             "prev_step",
@@ -728,8 +731,8 @@ where
                                 arg1!("derivatives", A),
                             ),
                         ),
-                    )
-                    .then(
+                    ))
+                    .then(Function::anonymous(
                         (
                             "prev_derivatives",
                             "prev_step",
@@ -757,7 +760,7 @@ where
                                 ),
                             ),
                         )
-                        .then(
+                        .then(Function::anonymous(
                             (
                                 "prev_point",
                                 "prev_derivatives",
@@ -771,8 +774,8 @@ where
                                 (val!(incr_rate) * arg!("step_size", StepSize<A>))
                                     .zip(arg1!("point", A)),
                             ),
-                        ),
-                    ),
+                        )),
+                    )),
                 )
                 .loop_while(
                     (
@@ -794,7 +797,7 @@ where
                             arg1!("point", A),
                             self.problem.obj_func_and_d,
                         )
-                        .then(
+                        .then(Function::anonymous(
                             (
                                 "prev_derivatives",
                                 "prev_approx_inv_snd_derivatives",
@@ -804,11 +807,11 @@ where
                                 ("value", "derivatives"),
                             ),
                             bfgs_loop!(c_1, backtracking_rate, self.problem.obj_func, incr_rate),
-                        ),
+                        )),
                     ),
                     arg!("i", usize).lt(val!(i)),
                 )
-                .then(
+                .then(Function::anonymous(
                     (
                         "i",
                         (
@@ -819,7 +822,7 @@ where
                         ),
                     ),
                     arg1!("point", A),
-                ),
+                )),
             ),
         )
     }
@@ -833,10 +836,10 @@ where
         let initial_step_size = val!(self.problem.agnostic.initial_step_size);
         let len = self.initial_point.len();
         val1!(self.initial_point)
-            .then(
+            .then(Function::anonymous(
                 "point",
                 arg1!("point", A).zip(self.problem.obj_func_and_d.clone()),
-            )
+            ))
             .if_(
                 ("point", ("value", "derivatives")),
                 is_near_minima(arg!("value", A), arg1!("derivatives", A)),
@@ -847,7 +850,7 @@ where
                     arg1!("derivatives", A),
                     initial_approx_inv_snd_derivatives_identity::<_, A>(val!(len)),
                 )
-                .then(
+                .then(Function::anonymous(
                     (
                         "point",
                         "value",
@@ -872,8 +875,8 @@ where
                             ),
                         ),
                     ),
-                )
-                .then(
+                ))
+                .then(Function::anonymous(
                     (
                         "prev_point",
                         "prev_derivatives",
@@ -888,7 +891,7 @@ where
                         arg1!("point", A),
                         self.problem.obj_func_and_d.clone(),
                     ),
-                )
+                ))
                 .loop_while(
                     (
                         "prev_point",
@@ -907,7 +910,7 @@ where
                         arg!("value", A),
                         arg1!("derivatives", A),
                     )
-                    .then(
+                    .then(Function::anonymous(
                         (
                             "prev_derivatives",
                             "prev_approx_inv_snd_derivatives",
@@ -918,8 +921,8 @@ where
                             "derivatives",
                         ),
                         bfgs_loop!(c_1, backtracking_rate, self.problem.obj_func, incr_rate),
-                    )
-                    .then(
+                    ))
+                    .then(Function::anonymous(
                         (
                             "prev_point",
                             "prev_derivatives",
@@ -934,10 +937,10 @@ where
                             arg1!("point", A),
                             self.problem.obj_func_and_d,
                         ),
-                    ),
+                    )),
                     is_near_minima(arg!("value", A), arg1!("derivatives", A)).not(),
                 )
-                .then(
+                .then(Function::anonymous(
                     (
                         "prev_point",
                         "prev_derivatives",
@@ -947,7 +950,7 @@ where
                         ("value", "derivatives"),
                     ),
                     arg1!("point", A),
-                ),
+                )),
             )
     }
 
@@ -960,10 +963,10 @@ where
         let initial_step_size = val!(self.problem.agnostic.initial_step_size);
         let len = self.initial_point.len();
         val1!(self.initial_point)
-            .then(
+            .then(Function::anonymous(
                 "point",
                 arg1!("point", A).zip(self.problem.obj_func_and_d.clone()),
-            )
+            ))
             .if_(
                 ("point", ("value", "derivatives")),
                 is_near_minima(arg!("value", A), arg1!("derivatives", A)),
@@ -985,7 +988,7 @@ where
                         ),
                     ),
                 )
-                .then(
+                .then(Function::anonymous(
                     ("prev_point", "prev_derivatives", ("step_size", "point")),
                     Zip5(
                         arg1!("prev_point", A),
@@ -994,7 +997,7 @@ where
                         arg1!("point", A),
                         self.problem.obj_func_and_d.clone(),
                     ),
-                )
+                ))
                 .if_(
                     (
                         "prev_point",
@@ -1013,7 +1016,7 @@ where
                         arg!("value", A),
                         arg1!("derivatives", A),
                     )
-                    .then(
+                    .then(Function::anonymous(
                         (
                             "prev_derivatives",
                             "prev_step",
@@ -1035,8 +1038,8 @@ where
                                 arg1!("derivatives", A),
                             ),
                         ),
-                    )
-                    .then(
+                    ))
+                    .then(Function::anonymous(
                         (
                             "prev_derivatives",
                             "prev_step",
@@ -1064,8 +1067,8 @@ where
                                 ),
                             ),
                         ),
-                    )
-                    .then(
+                    ))
+                    .then(Function::anonymous(
                         (
                             "prev_point",
                             "prev_derivatives",
@@ -1080,7 +1083,7 @@ where
                             arg1!("point", A),
                             self.problem.obj_func_and_d.clone(),
                         ),
-                    )
+                    ))
                     .loop_while(
                         (
                             "prev_point",
@@ -1099,7 +1102,7 @@ where
                             arg!("value", A),
                             arg1!("derivatives", A),
                         )
-                        .then(
+                        .then(Function::anonymous(
                             (
                                 "prev_derivatives",
                                 "prev_approx_inv_snd_derivatives",
@@ -1110,8 +1113,8 @@ where
                                 "derivatives",
                             ),
                             bfgs_loop!(c_1, backtracking_rate, self.problem.obj_func, incr_rate),
-                        )
-                        .then(
+                        ))
+                        .then(Function::anonymous(
                             (
                                 "prev_point",
                                 "prev_derivatives",
@@ -1126,10 +1129,10 @@ where
                                 arg1!("point", A),
                                 self.problem.obj_func_and_d,
                             ),
-                        ),
+                        )),
                         is_near_minima(arg!("value", A), arg1!("derivatives", A)).not(),
                     )
-                    .then(
+                    .then(Function::anonymous(
                         (
                             "prev_point",
                             "prev_derivatives",
@@ -1139,7 +1142,7 @@ where
                             ("value", "derivatives"),
                         ),
                         arg1!("point", A),
-                    ),
+                    )),
                 ),
             )
     }

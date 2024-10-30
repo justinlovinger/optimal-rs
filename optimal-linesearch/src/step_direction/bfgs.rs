@@ -26,15 +26,15 @@
 //!     let bfgs = val!(1)
 //!         .zip(
 //!             val1!(initial_point)
-//!                 .then(
+//!                 .then(Function::anonymous(
 //!                     "point",
 //!                     Zip3(
 //!                         arg1!("point", f64),
 //!                         obj_func_d,
 //!                         initial_approx_inv_snd_derivatives_identity::<_, f64>(val!(len)),
 //!                     ),
-//!                 )
-//!                 .then(
+//!                 ))
+//!                 .then(Function::anonymous(
 //!                     ("point", "derivatives", "approx_inv_snd_derivatives"),
 //!                     Zip4(
 //!                         arg1!("point", f64),
@@ -46,8 +46,8 @@
 //!                                 arg1!("derivatives", f64),
 //!                             ),
 //!                     ),
-//!                 )
-//!                 .then(
+//!                 ))
+//!                 .then(Function::anonymous(
 //!                     ("point", "derivatives", "approx_inv_snd_derivatives", "step"),
 //!                     Zip4(
 //!                         arg1!("derivatives", f64),
@@ -55,7 +55,7 @@
 //!                         arg1!("step", f64),
 //!                         arg1!("point", f64) + arg1!("step", f64),
 //!                     ),
-//!                 ),
+//!                 )),
 //!         )
 //!         .loop_while(
 //!             (
@@ -75,7 +75,7 @@
 //!                     arg1!("point", f64),
 //!                     obj_func_d,
 //!                 )
-//!                 .then(
+//!                 .then(Function::anonymous(
 //!                     (
 //!                         "prev_derivatives",
 //!                         "prev_approx_inv_snd_derivatives",
@@ -93,8 +93,8 @@
 //!                             arg1!("derivatives", f64),
 //!                         ),
 //!                     ),
-//!                 )
-//!                 .then(
+//!                 ))
+//!                 .then(Function::anonymous(
 //!                     ("point", "derivatives", "approx_inv_snd_derivatives"),
 //!                     Zip4(
 //!                         arg1!("point", f64),
@@ -106,8 +106,8 @@
 //!                                 arg1!("derivatives", f64),
 //!                             ),
 //!                     ),
-//!                 )
-//!                 .then(
+//!                 ))
+//!                 .then(Function::anonymous(
 //!                     ("point", "derivatives", "approx_inv_snd_derivatives", "step"),
 //!                     Zip4(
 //!                         arg1!("derivatives", f64),
@@ -115,11 +115,11 @@
 //!                         arg1!("step", f64),
 //!                         arg1!("point", f64) + arg1!("step", f64),
 //!                     ),
-//!                 ),
+//!                 )),
 //!             ),
 //!             arg!("i", usize).lt(val!(10)),
 //!         )
-//!         .then(
+//!         .then(Function::anonymous(
 //!             (
 //!                 "i",
 //!                 (
@@ -130,7 +130,7 @@
 //!                 ),
 //!             ),
 //!             arg1!("point", f64),
-//!         );
+//!         ));
 //!
 //!     println!("{:?}", bfgs.run(named_args![]));
 //! }
@@ -151,7 +151,7 @@ use computation_types::{
     peano::{One, Two, Zero},
     val,
     zip::{Zip, Zip3, Zip4, Zip5, Zip7},
-    Arg, Computation, ComputationFn, Len, Val,
+    Arg, Computation, ComputationFn, Function, Len, Val,
 };
 use ndarray::{LinalgScalar, ScalarOperand};
 
@@ -211,14 +211,14 @@ where
 {
     prev_step
         .zip(derivatives.sub(prev_derivatives))
-        .then(
+        .then(Function::anonymous(
             ("prev_step", "derivatives_diff"),
             Zip3(
                 arg1!("prev_step", A),
                 arg1!("derivatives_diff", A),
                 arg1!("derivatives_diff", A).scalar_product(arg1!("derivatives_diff", A)),
             ),
-        )
+        ))
         // Default to identity if we cannot get gamma.
         .if_(
             ("prev_step", "derivatives_diff", "derivatives_diff_dotted"),
@@ -343,7 +343,7 @@ where
         prev_step,
         derivatives.sub(prev_derivatives),
     )
-    .then(
+    .then(Function::anonymous(
         ("prev_inv_snd_derivatives", "prev_step", "derivatives_diff"),
         Zip4(
             arg2!("prev_inv_snd_derivatives", A),
@@ -351,7 +351,7 @@ where
             arg1!("derivatives_diff", A),
             arg1!("derivatives_diff", A).scalar_product(arg1!("prev_step", A)),
         ),
-    )
+    ))
     // Default to reusing the previous approximate inverse-second-derivatives
     // if we cannot apply an update.
     .if_(
@@ -370,7 +370,7 @@ where
             arg!("derivatives_diff_dot_prev_step", A),
             val!(A::one()) / arg!("derivatives_diff_dot_prev_step"),
         )
-        .then(
+        .then(Function::anonymous(
             (
                 "prev_inv_snd_derivatives",
                 "prev_step",
@@ -387,8 +387,8 @@ where
                 arg1!("prev_step", A) * arg!("p"),
                 arg1!("prev_step", A).len().identity_matrix::<A>(),
             ),
-        )
-        .then(
+        ))
+        .then(Function::anonymous(
             (
                 "prev_inv_snd_derivatives",
                 "prev_step",
@@ -405,7 +405,7 @@ where
                 arg2!("identity", A)
                     - (arg1!("derivatives_diff", A) * arg!("p", A)).mul_out(arg1!("prev_step", A)),
             ) + arg1!("p_times_prev_step", A).mul_out(arg1!("prev_step", A)),
-        ),
+        )),
     )
 }
 

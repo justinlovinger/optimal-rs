@@ -10,7 +10,7 @@ use computation_types::{
     sum::Sum,
     val,
     zip::{Zip3, Zip4},
-    Arg, Computation, ComputationFn, Val,
+    Arg, Computation, ComputationFn, Function, Val,
 };
 use num_traits::{pow, AsPrimitive};
 use std::ops;
@@ -203,14 +203,14 @@ where
         SameOrZero<Num::Dim, Max = Num::Dim>,
     Num::Dim: SameOrZero<ToMin::Dim, Max = Num::Dim>,
 {
-    Zip4(from_max, to_min, to_max, num).then(
+    Zip4(from_max, to_min, to_max, num).then(Function::anonymous(
         ("from_max", "to_min", "to_max", "num"),
         (((Arg::<ToMax::Dim, ToMax::Item>::new("to_max")
             .sub(Arg::<ToMin::Dim, ToMin::Item>::new("to_min")))
         .div(Arg::<FromMax::Dim, FromMax::Item>::new("from_max")))
         .mul(Arg::<Num::Dim, Num::Item>::new("num")))
         .add(Arg::<ToMin::Dim, ToMin::Item>::new("to_min")),
-    )
+    ))
 }
 
 /// Return the largest integer `to_int_...` can return.
@@ -266,7 +266,10 @@ where
 {
     let two = 2_usize.as_();
     FromBit::<_, T>::new(bits)
-        .enumerate(arg1!("x", T) * val!(two).pow(arg1!("i", T)))
+        .enumerate(Function::anonymous(
+            ("x", "i"),
+            arg1!("x", T) * val!(two).pow(arg1!("i", T)),
+        ))
         .sum()
 }
 

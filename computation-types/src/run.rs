@@ -34,6 +34,32 @@ where
     }
 }
 
+mod function {
+    use crate::function::Function;
+
+    use super::{FromNamesArgs, NamedArgs, Run, RunCore};
+
+    impl<ArgNames, Body> Function<ArgNames, Body> {
+        pub fn call<Args>(self, args: Args) -> Body::Output
+        where
+            NamedArgs: FromNamesArgs<ArgNames, Args>,
+            Body: Run,
+        {
+            self.body
+                .run(NamedArgs::from_names_args(self.arg_names, args))
+        }
+
+        pub fn call_core<Args>(self, args: Args) -> Body::Output
+        where
+            NamedArgs: FromNamesArgs<ArgNames, Args>,
+            Body: RunCore,
+        {
+            self.body
+                .run_core(NamedArgs::from_names_args(self.arg_names, args))
+        }
+    }
+}
+
 mod collect {
     use paste::paste;
 

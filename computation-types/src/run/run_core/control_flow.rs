@@ -80,10 +80,7 @@ where
     type Output = F::Output;
 
     fn run_core(self, args: NamedArgs) -> Self::Output {
-        self.f.run_core(NamedArgs::from_names_args(
-            self.arg_names,
-            self.child.run_core(args).collect(),
-        ))
+        self.f.call_core(self.child.run_core(args).collect())
     }
 }
 
@@ -92,7 +89,10 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{arg, arg1, arg2, named_args, run::Matrix, val, val1, val2, Computation, Run};
+    use crate::{
+        arg, arg1, arg2, function::Function, named_args, run::Matrix, val, val1, val2, Computation,
+        Run,
+    };
 
     #[test]
     fn if_should_run_f_true_if_predicate_is_true() {
@@ -193,7 +193,7 @@ mod tests {
     fn then_should_chain_the_first_into_the_second(#[strategy(-1000..1000)] x: i32) {
         prop_assert_eq!(
             (val!(x) + val!(1))
-                .then("x", arg!("x", i32) + val!(1))
+                .then(Function::anonymous("x", arg!("x", i32) + val!(1)))
                 .run(named_args![]),
             x + 2
         );
@@ -207,14 +207,14 @@ mod tests {
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y))
-                .then(("x", "y"), arg!("x", i32))
+                .then(Function::anonymous(("x", "y"), arg!("x", i32)))
                 .run(named_args![]),
             x
         );
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y))
-                .then(("x", "y"), arg!("y", i32))
+                .then(Function::anonymous(("x", "y"), arg!("y", i32)))
                 .run(named_args![]),
             y
         );
@@ -228,7 +228,10 @@ mod tests {
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y))
-                .then(("x", "y"), arg!("y", i32).zip(arg!("x", i32)))
+                .then(Function::anonymous(
+                    ("x", "y"),
+                    arg!("y", i32).zip(arg!("x", i32))
+                ))
                 .run(named_args![]),
             (y, x)
         );
@@ -243,21 +246,21 @@ mod tests {
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y).zip(val!(z)))
-                .then(("x", ("y", "z")), arg!("x", i32))
+                .then(Function::anonymous(("x", ("y", "z")), arg!("x", i32)))
                 .run(named_args![]),
             x
         );
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y).zip(val!(z)))
-                .then(("x", ("y", "z")), arg!("y", i32))
+                .then(Function::anonymous(("x", ("y", "z")), arg!("y", i32)))
                 .run(named_args![]),
             y
         );
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y).zip(val!(z)))
-                .then(("x", ("y", "z")), arg!("z", i32))
+                .then(Function::anonymous(("x", ("y", "z")), arg!("z", i32)))
                 .run(named_args![]),
             z
         );

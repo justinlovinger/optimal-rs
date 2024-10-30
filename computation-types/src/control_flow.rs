@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::{impl_core_ops, peano::Zero, Computation, ComputationFn};
+use crate::{function::Function, impl_core_ops, peano::Zero, Computation, ComputationFn};
 
 #[derive(Clone, Copy, Debug)]
 pub struct If<A, ArgNames, P, FTrue, FFalse>
@@ -111,8 +111,7 @@ where
     Self: Computation,
 {
     pub child: A,
-    pub arg_names: ArgNames,
-    pub f: F,
+    pub f: Function<ArgNames, F>,
 }
 
 impl<A, ArgNames, F> Computation for Then<A, ArgNames, F>
@@ -144,7 +143,11 @@ where
     F: fmt::Display,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "let {:?} = {}; {}", self.arg_names, self.child, self.f)
+        write!(
+            f,
+            "let {:?} = {}; {}",
+            self.f.arg_names, self.child, self.f.body
+        )
     }
 }
 
@@ -153,7 +156,7 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{arg, val, Computation};
+    use crate::{arg, function::Function, val, Computation};
 
     #[proptest]
     fn if_should_display(x: i32) {
@@ -192,7 +195,7 @@ mod tests {
         let arg_names = ("x",);
         let f = arg!("x", i32) + val!(1);
         prop_assert_eq!(
-            inp.then(arg_names, f).to_string(),
+            inp.then(Function::anonymous(arg_names, f)).to_string(),
             format!("let {:?} = {}; {}", arg_names, inp, f)
         );
     }

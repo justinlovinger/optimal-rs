@@ -9,7 +9,7 @@ use computation_types::{
     run::Value,
     val,
     zip::{Zip, Zip3, Zip4},
-    Arg, Computation, ComputationFn, Val,
+    Arg, Computation, ComputationFn, Function, Val,
 };
 use rand::{distributions::Bernoulli, Rng};
 
@@ -112,7 +112,7 @@ where
             ),
             rng,
         )
-        .then(
+        .then(Function::anonymous(
             ("distributions", "rng"),
             Zip(
                 arg1!("distributions", Bernoulli),
@@ -120,15 +120,15 @@ where
                     arg!("rng", R::Item),
                     arg1!("distributions", Bernoulli),
                 )
-                .then(
+                .then(Function::anonymous(
                     ("rng", "sample"),
                     Zip(
                         arg!("rng", R::Item),
                         Zip(arg1!("sample", bool), obj_func.clone()),
                     ),
-                ),
+                )),
             ),
-        ),
+        )),
     )
     .loop_while(
         (
@@ -150,7 +150,7 @@ where
                         arg1!("distributions", Bernoulli),
                     ),
                 )
-                .then(
+                .then(Function::anonymous(
                     ("best_sample", "best_value", ("rng", "sample")),
                     Zip(
                         arg!("rng", R::Item),
@@ -160,7 +160,7 @@ where
                             arg1!("sample", bool),
                             obj_func,
                         )
-                        .then(
+                        .then(Function::anonymous(
                             ("best_sample", "best_value", "sample", "value"),
                             Zip4(
                                 arg1!("best_sample", bool),
@@ -174,20 +174,20 @@ where
                                 Zip(arg1!("sample", bool), arg!("value", F::Item)),
                                 Zip(arg1!("best_sample", bool), arg!("best_value", F::Item)),
                             ),
-                        ),
+                        )),
                     ),
-                ),
+                )),
             ),
         ),
         arg!("i", usize).lt(arg!("num_samples", NumSamples)),
     )
-    .then(
+    .then(Function::anonymous(
         (
             ("i", "num_samples"),
             ("distributions", ("rng", ("best_sample", "best_value"))),
         ),
         Zip(arg!("rng", R::Item), arg1!("best_sample", bool)),
-    )
+    ))
 }
 
 fn bernoullis_from_probabilities(probabilities: Vec<Probability>) -> Value<Vec<Bernoulli>> {

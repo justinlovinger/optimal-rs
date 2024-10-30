@@ -21,6 +21,7 @@
 //! assert_eq!(one_plus_one.run(named_args![]), 2);
 //! ```
 
+mod function;
 pub mod macros;
 mod names;
 pub mod peano;
@@ -43,7 +44,7 @@ use blanket::blanket;
 
 use crate::peano::{One, Suc, Two, Zero};
 
-pub use crate::{names::*, run::Run};
+pub use crate::{function::*, names::*, run::Run};
 
 /// A type representing a computation.
 ///
@@ -233,7 +234,7 @@ pub trait Computation {
 
     // `enumerate`
 
-    fn enumerate<F>(self, f: F) -> enumerate::Enumerate<Self, F>
+    fn enumerate<F>(self, f: Function<(Name, Name), F>) -> enumerate::Enumerate<Self, F>
     where
         Self: Sized,
         enumerate::Enumerate<Self, F>: Computation,
@@ -336,16 +337,15 @@ pub trait Computation {
         }
     }
 
-    fn then<ArgNames, F>(self, arg_names: ArgNames, f: F) -> control_flow::Then<Self, ArgNames, F>
+    fn then<ArgNames, F>(
+        self,
+        f: function::Function<ArgNames, F>,
+    ) -> control_flow::Then<Self, ArgNames, F>
     where
         Self: Sized,
         control_flow::Then<Self, ArgNames, F>: Computation,
     {
-        control_flow::Then {
-            child: self,
-            arg_names,
-            f,
-        }
+        control_flow::Then { child: self, f }
     }
 
     // `linalg`
