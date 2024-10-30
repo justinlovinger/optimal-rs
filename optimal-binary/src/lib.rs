@@ -311,8 +311,8 @@ mod chunks_to_int_le {
         Self: Computation,
         A: ComputationFn,
     {
-        fn args(&self) -> optimal_compute_core::Args {
-            self.child.args()
+        fn arg_names(&self) -> optimal_compute_core::Names {
+            self.child.arg_names()
         }
     }
 
@@ -381,7 +381,7 @@ mod from_bit {
     use std::marker::PhantomData;
 
     use num_traits::AsPrimitive;
-    use optimal_compute_core::{impl_core_ops, Args, Computation, ComputationFn};
+    use optimal_compute_core::{impl_core_ops, Computation, ComputationFn, Names};
 
     #[derive(Clone, Copy, Debug)]
     pub struct FromBit<A, T>
@@ -419,8 +419,8 @@ mod from_bit {
         Self: Computation,
         A: ComputationFn,
     {
-        fn args(&self) -> Args {
-            self.child.args()
+        fn arg_names(&self) -> Names {
+            self.child.arg_names()
         }
     }
 

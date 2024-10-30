@@ -3,7 +3,7 @@ use core::fmt;
 use optimal_compute_core::{
     impl_core_ops,
     peano::{One, Zero},
-    Args, Computation, ComputationFn,
+    Names, Computation, ComputationFn,
 };
 use rand::Rng;
 
@@ -62,12 +62,12 @@ where
     P: ComputationFn,
     R: ComputationFn,
 {
-    fn args(&self) -> Args {
+    fn arg_names(&self) -> Names {
         self.chance
-            .args()
-            .union(self.adjust_rate.args())
-            .union(self.probabilities.args())
-            .union(self.rng.args())
+            .arg_names()
+            .union(self.adjust_rate.arg_names())
+            .union(self.probabilities.arg_names())
+            .union(self.rng.arg_names())
     }
 }
 

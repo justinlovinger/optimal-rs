@@ -3,42 +3,42 @@ use std::collections::BTreeSet;
 pub type Name = &'static str;
 
 #[derive(Clone, Debug)]
-pub struct Args(BTreeSet<Name>);
+pub struct Names(BTreeSet<Name>);
 
-impl Default for Args {
+impl Default for Names {
     fn default() -> Self {
         Self::new()
     }
 }
 
 #[macro_export]
-macro_rules! args {
+macro_rules! names {
     ( ) => {
-        $crate::Args::new()
+        $crate::Names::new()
     };
     ( $name:literal ) => {
-        $crate::Args::singleton($name)
+        $crate::Names::singleton($name)
     };
     ( $name:literal, $( $rest:tt ),* ) => {
-        $crate::Args::singleton($name).union(args![$( $rest ),*])
+        $crate::Names::singleton($name).union(names![$( $rest ),*])
     };
 }
 
-impl Args {
+impl Names {
     pub fn new() -> Self {
-        Args(BTreeSet::new())
+        Names(BTreeSet::new())
     }
 
     pub fn singleton(name: Name) -> Self {
-        Args(std::iter::once(name).collect())
+        Names(std::iter::once(name).collect())
     }
 
-    pub fn from_args<'a>(args: impl IntoIterator<Item = &'a Args>) -> Self {
+    pub fn union_many<'a>(names: impl IntoIterator<Item = &'a Names>) -> Self {
         let mut set = BTreeSet::new();
-        for arg in args.into_iter().flat_map(|args| args.iter()) {
-            set.insert(arg);
+        for name in names.into_iter().flat_map(|names| names.iter()) {
+            set.insert(name);
         }
-        Args(set)
+        Names(set)
     }
 
     pub fn union(mut self, mut other: Self) -> Self {

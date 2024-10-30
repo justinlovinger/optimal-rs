@@ -8,7 +8,7 @@ use std::{
 use downcast_rs::{impl_downcast, Downcast};
 use paste::paste;
 
-use crate::{Args, Name};
+use crate::{Name, Names};
 
 pub trait ArgVal: Downcast + fmt::Debug {
     fn boxed_clone(&self) -> Box<dyn ArgVal>;
@@ -70,12 +70,16 @@ impl ArgVals {
         self
     }
 
-    pub fn contains_args(&self, args: &Args) -> bool {
+    pub fn contains_args(&self, args: &Names) -> bool {
         args.iter().all(|arg| self.0.contains_key(arg))
     }
 
     /// Return a (map with `fst_args`, map with `snd_args`) tuple if all arguments are present.
-    pub fn partition(self, fst_args: &Args, snd_args: &Args) -> Result<(Self, Self), PartitionErr> {
+    pub fn partition(
+        self,
+        fst_args: &Names,
+        snd_args: &Names,
+    ) -> Result<(Self, Self), PartitionErr> {
         // We want to avoid making a new map
         // if we can simply return this map
         // as the partition with all arguments.
@@ -192,12 +196,12 @@ macro_rules! impl_partition_n {
                 /// Return a tuple with each requested set of arguments
                 /// if all arguments are present.
                 #[allow(clippy::too_many_arguments)]
-                pub fn [<partition $n>](mut self, $( [<args_ $i>]: &Args ),* ) -> Result<( $( impl_partition_n!(@as_self $i) ),* ), PartitionErr> {
+                pub fn [<partition $n>](mut self, $( [<args_ $i>]: &Names ),* ) -> Result<( $( impl_partition_n!(@as_self $i) ),* ), PartitionErr> {
                     let all_args = [ $( [<args_ $i>] ),* ];
 
                     let mut partitions = Vec::new();
                     for i in 0..($n - 1) {
-                        let (next, rest) = self.partition(all_args[i], &Args::from_args(all_args.into_iter().skip(i + 1)))?;
+                        let (next, rest) = self.partition(all_args[i], &Names::union_many(all_args.into_iter().skip(i + 1)))?;
                         partitions.push(next);
                         self = rest;
                     }
@@ -346,7 +350,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use crate::args;
+    use crate::names;
 
     #[test]
     fn partition_should_return_full_map_for_fst_when_all_args() {
@@ -354,7 +358,7 @@ mod tests {
         assert_eq!(
             arg_vals
                 .clone()
-                .partition(&args!["foo", "bar"], &args![])
+                .partition(&names!["foo", "bar"], &names![])
                 .unwrap()
                 .0
                 .into_map::<i32>(),
@@ -368,7 +372,7 @@ mod tests {
         assert_eq!(
             arg_vals
                 .clone()
-                .partition(&args![], &args!["foo", "bar"])
+                .partition(&names![], &names!["foo", "bar"])
                 .unwrap()
                 .1
                 .into_map::<i32>(),
@@ -379,7 +383,7 @@ mod tests {
     #[test]
     fn partition_should_return_maps_with_given_args_when_some_args() {
         let arg_vals = argvals![("foo", 1), ("bar", 2), ("baz", 3)];
-        let (left, right) = arg_vals.partition(&args!["baz"], &args!["foo"]).unwrap();
+        let (left, right) = arg_vals.partition(&names!["baz"], &names!["foo"]).unwrap();
         assert_eq!(left.into_map::<i32>(), argvals![("baz", 3)].into_map(),);
         assert_eq!(right.into_map::<i32>(), argvals![("foo", 1)].into_map(),);
     }
@@ -388,7 +392,7 @@ mod tests {
     fn partition_should_duplicate_args_required_by_both() {
         let arg_vals = argvals![("foo", 1), ("bar", 2), ("baz", 3), ("biz", 4)];
         let (left, right) = arg_vals
-            .partition(&args!["foo", "bar", "baz"], &args!["foo", "bar", "biz"])
+            .partition(&names!["foo", "bar", "baz"], &names!["foo", "bar", "biz"])
             .unwrap();
         assert_eq!(
             left.into_map::<i32>(),
@@ -405,9 +409,11 @@ mod tests {
         let arg_vals = argvals![("foo", 1), ("bar", 2)];
         assert!(arg_vals
             .clone()
-            .partition(&args![], &args!["foo", "baz"])
+            .partition(&names![], &names!["foo", "baz"])
             .is_err());
-        assert!(arg_vals.partition(&args!["foo", "baz"], &args![]).is_err());
+        assert!(arg_vals
+            .partition(&names!["foo", "baz"], &names![])
+            .is_err());
     }
 
     #[test]
@@ -416,7 +422,7 @@ mod tests {
         assert_eq!(
             arg_vals
                 .clone()
-                .partition3(&args!["foo", "bar"], &args![], &args![])
+                .partition3(&names!["foo", "bar"], &names![], &names![])
                 .unwrap()
                 .0
                 .into_map::<i32>(),
@@ -430,7 +436,7 @@ mod tests {
         assert_eq!(
             arg_vals
                 .clone()
-                .partition3(&args![], &args!["foo", "bar"], &args![])
+                .partition3(&names![], &names!["foo", "bar"], &names![])
                 .unwrap()
                 .1
                 .into_map::<i32>(),
@@ -444,7 +450,7 @@ mod tests {
         assert_eq!(
             arg_vals
                 .clone()
-                .partition3(&args![], &args![], &args!["foo", "bar"])
+                .partition3(&names![], &names![], &names!["foo", "bar"])
                 .unwrap()
                 .2
                 .into_map::<i32>(),
@@ -456,7 +462,7 @@ mod tests {
     fn partition3_should_return_maps_with_given_args_when_some_args() {
         let arg_vals = argvals![("foo", 1), ("bar", 2), ("baz", 3), ("bin", 4)];
         let (fst, snd, third) = arg_vals
-            .partition3(&args!["baz"], &args!["foo"], &args!["bar"])
+            .partition3(&names!["baz"], &names!["foo"], &names!["bar"])
             .unwrap();
         assert_eq!(fst.into_map::<i32>(), argvals![("baz", 3)].into_map(),);
         assert_eq!(snd.into_map::<i32>(), argvals![("foo", 1)].into_map(),);
@@ -468,9 +474,9 @@ mod tests {
         let arg_vals = argvals![("foo", 1), ("bar", 2), ("baz", 3), ("biz", 4), ("bop", 5)];
         let (fst, snd, third) = arg_vals
             .partition3(
-                &args!["foo", "bar", "baz"],
-                &args!["foo", "bar", "biz"],
-                &args!["bar", "biz", "bop"],
+                &names!["foo", "bar", "baz"],
+                &names!["foo", "bar", "biz"],
+                &names!["bar", "biz", "bop"],
             )
             .unwrap();
         assert_eq!(
@@ -492,14 +498,14 @@ mod tests {
         let arg_vals = argvals![("foo", 1), ("bar", 2)];
         assert!(arg_vals
             .clone()
-            .partition3(&args!["foo", "baz"], &args![], &args![])
+            .partition3(&names!["foo", "baz"], &names![], &names![])
             .is_err());
         assert!(arg_vals
             .clone()
-            .partition3(&args![], &args!["foo", "baz"], &args![])
+            .partition3(&names![], &names!["foo", "baz"], &names![])
             .is_err());
         assert!(arg_vals
-            .partition3(&args![], &args![], &args!["foo", "baz"])
+            .partition3(&names![], &names![], &names!["foo", "baz"])
             .is_err());
     }
 

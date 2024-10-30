@@ -2,7 +2,7 @@ use core::fmt;
 
 use paste::paste;
 
-use crate::{impl_core_ops, Args, Computation, ComputationFn};
+use crate::{impl_core_ops, Computation, ComputationFn, Names};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Zip<A, B>(pub A, pub B)
@@ -34,8 +34,8 @@ where
     A: ComputationFn,
     B: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.0.args().union(self.1.args())
+    fn arg_names(&self) -> crate::Names {
+        self.0.arg_names().union(self.1.arg_names())
     }
 }
 
@@ -52,8 +52,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.0.args()
+    fn arg_names(&self) -> crate::Names {
+        self.0.arg_names()
     }
 }
 
@@ -70,8 +70,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.0.args()
+    fn arg_names(&self) -> crate::Names {
+        self.0.arg_names()
     }
 }
 
@@ -134,8 +134,8 @@ macro_rules! zip_n {
                 Self: Computation,
                 $( [<T $i>]: ComputationFn ),*
             {
-                fn args(&self) -> crate::Args {
-                    Args::from_args([ $( &self.$i.args() ),* ])
+                fn arg_names(&self) -> crate::Names {
+                    Names::union_many([ $( &self.$i.arg_names() ),* ])
                 }
             }
 

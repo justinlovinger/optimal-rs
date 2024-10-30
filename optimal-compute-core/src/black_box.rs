@@ -1,7 +1,7 @@
 use core::fmt;
 use std::marker::PhantomData;
 
-use crate::{impl_core_ops, Args, Computation, ComputationFn};
+use crate::{impl_core_ops, Names, Computation, ComputationFn};
 
 /// See [`Computation::black_box`].
 #[derive(Clone, Copy, Debug)]
@@ -28,8 +28,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> Args {
-        self.child.args()
+    fn arg_names(&self) -> Names {
+        self.child.arg_names()
     }
 }
 

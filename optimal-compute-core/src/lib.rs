@@ -21,8 +21,8 @@
 //! assert_eq!(one_plus_one.run(argvals![]), 2);
 //! ```
 
-mod args;
 pub mod macros;
+mod names;
 pub mod peano;
 pub mod run;
 
@@ -43,7 +43,7 @@ use blanket::blanket;
 
 use crate::peano::{One, Suc, Two, Zero};
 
-pub use crate::{args::*, run::Run};
+pub use crate::{names::*, run::Run};
 
 /// A type representing a computation.
 ///
@@ -477,7 +477,7 @@ where
 /// even if they represent a function with zero arguments.
 #[blanket(derive(Ref, Mut, Box, Rc, Arc, Cow))]
 pub trait ComputationFn: Computation {
-    fn args(&self) -> Args;
+    fn arg_names(&self) -> Names;
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -596,8 +596,8 @@ impl<D, A> ComputationFn for Val<D, A>
 where
     Val<D, A>: Computation,
 {
-    fn args(&self) -> Args {
-        Args::new()
+    fn arg_names(&self) -> Names {
+        Names::new()
     }
 }
 
@@ -607,8 +607,8 @@ impl<D, A> Computation for Arg<D, A> {
 }
 
 impl<D, A> ComputationFn for Arg<D, A> {
-    fn args(&self) -> Args {
-        Args::singleton(self.name)
+    fn arg_names(&self) -> Names {
+        Names::singleton(self.name)
     }
 }
 
@@ -661,8 +661,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> Args {
-        self.0.args()
+    fn arg_names(&self) -> Names {
+        self.0.arg_names()
     }
 }
 

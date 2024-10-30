@@ -5,7 +5,7 @@ use paste::paste;
 use crate::{
     impl_core_ops, impl_display_for_inline_binary,
     peano::{Suc, Zero},
-    Args, Computation, ComputationFn,
+    Computation, ComputationFn, Names,
 };
 
 macro_rules! impl_cmp_op {
@@ -31,8 +31,8 @@ macro_rules! impl_cmp_op {
                 A: ComputationFn,
                 B: ComputationFn,
             {
-                fn args(&self) -> Args {
-                    self.0.args().union(self.1.args())
+                fn arg_names(&self) -> Names {
+                    self.0.arg_names().union(self.1.arg_names())
                 }
             }
 
@@ -74,8 +74,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> Args {
-        self.0.args()
+    fn arg_names(&self) -> Names {
+        self.0.arg_names()
     }
 }
 
@@ -109,8 +109,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> Args {
-        self.0.args()
+    fn arg_names(&self) -> Names {
+        self.0.arg_names()
     }
 }
 

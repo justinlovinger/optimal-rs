@@ -3,7 +3,7 @@ use core::fmt;
 use optimal_compute_core::{
     impl_core_ops,
     peano::{One, Zero},
-    Args, Computation, ComputationFn,
+    Names, Computation, ComputationFn,
 };
 
 use super::{Probability, ProbabilityThreshold};
@@ -49,8 +49,8 @@ where
     T: ComputationFn,
     P: ComputationFn,
 {
-    fn args(&self) -> Args {
-        self.threshold.args().union(self.probabilities.args())
+    fn arg_names(&self) -> Names {
+        self.threshold.arg_names().union(self.probabilities.arg_names())
     }
 }
 

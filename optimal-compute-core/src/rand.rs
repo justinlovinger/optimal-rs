@@ -5,7 +5,7 @@ mod rand {
     use core::fmt;
     use std::marker::PhantomData;
 
-    use crate::{impl_core_ops, Args, Computation, ComputationFn};
+    use crate::{impl_core_ops, Names, Computation, ComputationFn};
 
     #[derive(Clone, Copy, Debug)]
     pub struct Rand<Dist, T>
@@ -41,8 +41,8 @@ mod rand {
         Self: Computation,
         Dist: ComputationFn,
     {
-        fn args(&self) -> Args {
-            self.distribution.args()
+        fn arg_names(&self) -> Names {
+            self.distribution.arg_names()
         }
     }
 
@@ -63,7 +63,7 @@ mod seeded_rand {
     use core::fmt;
     use std::marker::PhantomData;
 
-    use crate::{impl_core_ops, peano::Zero, Args, Computation, ComputationFn};
+    use crate::{impl_core_ops, peano::Zero, Names, Computation, ComputationFn};
 
     #[derive(Clone, Copy, Debug)]
     pub struct SeededRand<R, Dist, T>
@@ -103,8 +103,8 @@ mod seeded_rand {
         R: ComputationFn,
         Dist: ComputationFn,
     {
-        fn args(&self) -> Args {
-            self.rng.args().union(self.distribution.args())
+        fn arg_names(&self) -> Names {
+            self.rng.arg_names().union(self.distribution.arg_names())
         }
     }
 

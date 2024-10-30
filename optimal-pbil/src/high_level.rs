@@ -11,7 +11,7 @@ use optimal_compute_core::{
     run::ArgVals,
     val, val1,
     zip::Zip,
-    Arg, Args, Computation, ComputationFn, Run, Val,
+    Arg, Names, Computation, ComputationFn, Run, Val,
 };
 use rand::prelude::*;
 
@@ -286,10 +286,10 @@ where
     PbilIteration<F, R>: ComputationFn,
     PbilThreshold<F, R>: ComputationFn,
 {
-    fn args(&self) -> Args {
+    fn arg_names(&self) -> Names {
         match self {
-            PbilComputation::Iteration(x) => x.args(),
-            PbilComputation::Threshold(x) => x.args(),
+            PbilComputation::Iteration(x) => x.arg_names(),
+            PbilComputation::Threshold(x) => x.arg_names(),
         }
     }
 }

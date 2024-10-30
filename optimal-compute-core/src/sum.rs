@@ -3,7 +3,7 @@ use core::{fmt, ops};
 use crate::{
     impl_core_ops,
     peano::{Suc, Zero},
-    Args, Computation, ComputationFn,
+    Computation, ComputationFn, Names,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -25,8 +25,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> Args {
-        self.0.args()
+    fn arg_names(&self) -> Names {
+        self.0.arg_names()
     }
 }
 

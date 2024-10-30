@@ -30,8 +30,8 @@ where
     Self: Computation,
     Len: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.len.args()
+    fn arg_names(&self) -> crate::Names {
+        self.len.arg_names()
     }
 }
 
@@ -83,8 +83,8 @@ where
     Len: ComputationFn,
     Elem: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.len.args().union(self.elem.args())
+    fn arg_names(&self) -> crate::Names {
+        self.len.arg_names().union(self.elem.arg_names())
     }
 }
 
@@ -124,8 +124,8 @@ where
     A: ComputationFn,
     B: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.0.args().union(self.1.args())
+    fn arg_names(&self) -> crate::Names {
+        self.0.arg_names().union(self.1.arg_names())
     }
 }
 
@@ -154,8 +154,8 @@ where
     A: ComputationFn,
     B: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.0.args().union(self.1.args())
+    fn arg_names(&self) -> crate::Names {
+        self.0.arg_names().union(self.1.arg_names())
     }
 }
 
@@ -183,8 +183,8 @@ where
     A: ComputationFn,
     B: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.0.args().union(self.1.args())
+    fn arg_names(&self) -> crate::Names {
+        self.0.arg_names().union(self.1.arg_names())
     }
 }
 
@@ -213,8 +213,8 @@ where
     A: ComputationFn,
     B: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.0.args().union(self.1.args())
+    fn arg_names(&self) -> crate::Names {
+        self.0.arg_names().union(self.1.arg_names())
     }
 }
 

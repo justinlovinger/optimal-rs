@@ -19,7 +19,7 @@ where
 
     fn distribute(self, args: ArgVals) -> Self::Output {
         let (lhs_args, rhs_args) = args
-            .partition(&self.0.args(), &self.1.args())
+            .partition(&self.0.arg_names(), &self.1.arg_names())
             .unwrap_or_else(|e| panic!("{}", e,));
         (self.0.run_core(lhs_args), self.1.run_core(rhs_args))
     }
@@ -36,7 +36,7 @@ macro_rules! impl_distribute_args_for_n_tuple {
 
                 fn distribute(self, args: ArgVals) -> Self::Output {
                     let ( $( [<args_ $i>] ),* ) = args
-                        .[<partition $n>]( $( &self.$i.args() ),* )
+                        .[<partition $n>]( $( &self.$i.arg_names() ),* )
                         .unwrap_or_else(|e| panic!("{}", e,));
                     ( $( self.$i.run_core([<args_ $i>]) ),* )
                 }

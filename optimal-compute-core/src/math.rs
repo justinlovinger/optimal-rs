@@ -61,8 +61,8 @@ macro_rules! impl_binary_op {
                 A: ComputationFn,
                 B: ComputationFn,
             {
-                fn args(&self) -> crate::Args {
-                    self.0.args().union(self.1.args())
+                fn arg_names(&self) -> crate::Names {
+                    self.0.arg_names().union(self.1.arg_names())
                 }
             }
 
@@ -103,8 +103,8 @@ macro_rules! impl_unary_op {
                 Self: Computation,
                 A: ComputationFn,
             {
-                fn args(&self) -> crate::Args {
-                    self.0.args()
+                fn arg_names(&self) -> crate::Names {
+                    self.0.arg_names()
                 }
             }
 

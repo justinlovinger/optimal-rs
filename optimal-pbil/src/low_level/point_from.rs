@@ -1,6 +1,6 @@
 use core::fmt;
 
-use optimal_compute_core::{impl_core_ops, peano::One, Args, Computation, ComputationFn};
+use optimal_compute_core::{impl_core_ops, peano::One, Names, Computation, ComputationFn};
 
 use super::Probability;
 
@@ -38,8 +38,8 @@ where
     Self: Computation,
     P: ComputationFn,
 {
-    fn args(&self) -> Args {
-        self.probabilities.args()
+    fn arg_names(&self) -> Names {
+        self.probabilities.arg_names()
     }
 }
 

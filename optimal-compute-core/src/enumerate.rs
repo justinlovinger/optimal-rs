@@ -1,6 +1,6 @@
 use core::fmt;
 
-use crate::{impl_core_ops, peano::One, Args, Computation, ComputationFn};
+use crate::{impl_core_ops, peano::One, Names, Computation, ComputationFn};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Enumerate<A, F>
@@ -25,8 +25,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> Args {
-        self.child.args()
+    fn arg_names(&self) -> Names {
+        self.child.arg_names()
     }
 }
 

@@ -1,6 +1,6 @@
 use core::fmt;
 
-use optimal_compute_core::{impl_core_ops, peano::Zero, Args, Computation, ComputationFn};
+use optimal_compute_core::{impl_core_ops, peano::Zero, Names, Computation, ComputationFn};
 
 use super::{AdjustRate, Probability};
 
@@ -50,11 +50,11 @@ where
     P: ComputationFn,
     B: ComputationFn,
 {
-    fn args(&self) -> Args {
+    fn arg_names(&self) -> Names {
         self.rate
-            .args()
-            .union(self.probability.args())
-            .union(self.sample.args())
+            .arg_names()
+            .union(self.probability.arg_names())
+            .union(self.sample.arg_names())
     }
 }
 

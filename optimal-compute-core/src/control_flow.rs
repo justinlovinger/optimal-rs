@@ -30,8 +30,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.child.args()
+    fn arg_names(&self) -> crate::Names {
+        self.child.arg_names()
     }
 }
 
@@ -81,8 +81,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.child.args()
+    fn arg_names(&self) -> crate::Names {
+        self.child.arg_names()
     }
 }
 
@@ -129,8 +129,8 @@ where
     Self: Computation,
     A: ComputationFn,
 {
-    fn args(&self) -> crate::Args {
-        self.child.args()
+    fn arg_names(&self) -> crate::Names {
+        self.child.arg_names()
     }
 }
 

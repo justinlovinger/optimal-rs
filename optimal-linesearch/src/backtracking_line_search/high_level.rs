@@ -15,7 +15,7 @@ use optimal_compute_core::{
     run::ArgVals,
     val, val1,
     zip::{Zip, Zip3, Zip4, Zip5, Zip6, Zip7, Zip8},
-    Arg, Args, Computation, ComputationFn, Len, Run, Val,
+    Arg, Names, Computation, ComputationFn, Len, Run, Val,
 };
 use rand::{
     distributions::{uniform::SampleUniform, Uniform},
@@ -1198,14 +1198,14 @@ where
     BacktrackingLineSearchBfgsIdIncrPrevNearMinima<A, F, FFD>: ComputationFn,
     BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD>: ComputationFn,
 {
-    fn args(&self) -> Args {
+    fn arg_names(&self) -> Names {
         match self {
-            BacktrackingLineSearchComputation::SteepestIncrPrevIteration(x) => x.args(),
-            BacktrackingLineSearchComputation::SteepestIncrPrevNearMinima(x) => x.args(),
-            BacktrackingLineSearchComputation::BfgsIdIncrPrevIteration(x) => x.args(),
-            BacktrackingLineSearchComputation::BfgsGammaIncrPrevIteration(x) => x.args(),
-            BacktrackingLineSearchComputation::BfgsIdIncrPrevNearMinima(x) => x.args(),
-            BacktrackingLineSearchComputation::BfgsGammaIncrPrevNearMinima(x) => x.args(),
+            BacktrackingLineSearchComputation::SteepestIncrPrevIteration(x) => x.arg_names(),
+            BacktrackingLineSearchComputation::SteepestIncrPrevNearMinima(x) => x.arg_names(),
+            BacktrackingLineSearchComputation::BfgsIdIncrPrevIteration(x) => x.arg_names(),
+            BacktrackingLineSearchComputation::BfgsGammaIncrPrevIteration(x) => x.arg_names(),
+            BacktrackingLineSearchComputation::BfgsIdIncrPrevNearMinima(x) => x.arg_names(),
+            BacktrackingLineSearchComputation::BfgsGammaIncrPrevNearMinima(x) => x.arg_names(),
         }
     }
 }
