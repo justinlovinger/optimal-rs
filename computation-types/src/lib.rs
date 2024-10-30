@@ -298,52 +298,52 @@ pub trait Computation {
 
     // `control_flow`
 
-    fn if_<Args, P, FTrue, FFalse>(
+    fn if_<ArgNames, P, FTrue, FFalse>(
         self,
-        args: Args,
+        arg_names: ArgNames,
         predicate: P,
         f_true: FTrue,
         f_false: FFalse,
-    ) -> control_flow::If<Self, Args, P, FTrue, FFalse>
+    ) -> control_flow::If<Self, ArgNames, P, FTrue, FFalse>
     where
         Self: Sized,
-        control_flow::If<Self, Args, P, FTrue, FFalse>: Computation,
+        control_flow::If<Self, ArgNames, P, FTrue, FFalse>: Computation,
     {
         control_flow::If {
             child: self,
-            args,
+            arg_names,
             predicate,
             f_true,
             f_false,
         }
     }
 
-    fn loop_while<Args, F, P>(
+    fn loop_while<ArgNames, F, P>(
         self,
-        args: Args,
+        arg_names: ArgNames,
         f: F,
         predicate: P,
-    ) -> control_flow::LoopWhile<Self, Args, F, P>
+    ) -> control_flow::LoopWhile<Self, ArgNames, F, P>
     where
         Self: Sized,
-        control_flow::LoopWhile<Self, Args, F, P>: Computation,
+        control_flow::LoopWhile<Self, ArgNames, F, P>: Computation,
     {
         control_flow::LoopWhile {
             child: self,
-            args,
+            arg_names,
             f,
             predicate,
         }
     }
 
-    fn then<Args, F>(self, args: Args, f: F) -> control_flow::Then<Self, Args, F>
+    fn then<ArgNames, F>(self, arg_names: ArgNames, f: F) -> control_flow::Then<Self, ArgNames, F>
     where
         Self: Sized,
-        control_flow::Then<Self, Args, F>: Computation,
+        control_flow::Then<Self, ArgNames, F>: Computation,
     {
         control_flow::Then {
             child: self,
-            args,
+            arg_names,
             f,
         }
     }

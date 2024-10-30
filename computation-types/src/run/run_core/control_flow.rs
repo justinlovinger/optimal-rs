@@ -4,14 +4,14 @@ use crate::{
     Computation, Run,
 };
 
-impl<A, Args, P, FTrue, FFalse, Collected, Out> RunCore for If<A, Args, P, FTrue, FFalse>
+impl<A, ArgNames, P, FTrue, FFalse, Collected, Out> RunCore for If<A, ArgNames, P, FTrue, FFalse>
 where
     Self: Computation,
     A: Computation + RunCore,
     A::Output: Collect<A::Dim, Collected = Collected>,
     Collected: Clone,
-    Args: Clone,
-    NamedArgs: FromNamesArgs<Args, Collected>,
+    ArgNames: Clone,
+    NamedArgs: FromNamesArgs<ArgNames, Collected>,
     P: Run<Output = bool>,
     FTrue: Computation + RunCore,
     FTrue::Output: Collect<FTrue::Dim, Collected = Out>,
@@ -22,29 +22,29 @@ where
 
     fn run_core(self, args: NamedArgs) -> Self::Output {
         let vals = self.child.run_core(args).collect();
-        if self
-            .predicate
-            .run(NamedArgs::from_names_args(self.args.clone(), vals.clone()))
-        {
+        if self.predicate.run(NamedArgs::from_names_args(
+            self.arg_names.clone(),
+            vals.clone(),
+        )) {
             self.f_true
-                .run_core(NamedArgs::from_names_args(self.args, vals))
+                .run_core(NamedArgs::from_names_args(self.arg_names, vals))
                 .collect()
         } else {
             self.f_false
-                .run_core(NamedArgs::from_names_args(self.args, vals))
+                .run_core(NamedArgs::from_names_args(self.arg_names, vals))
                 .collect()
         }
     }
 }
 
-impl<A, Args, F, P, Collected> RunCore for LoopWhile<A, Args, F, P>
+impl<A, ArgNames, F, P, Collected> RunCore for LoopWhile<A, ArgNames, F, P>
 where
     Self: Computation,
     A: Computation + RunCore,
     A::Output: Collect<A::Dim, Collected = Collected>,
     Collected: Clone,
-    Args: Clone,
-    NamedArgs: FromNamesArgs<Args, Collected>,
+    ArgNames: Clone,
+    NamedArgs: FromNamesArgs<ArgNames, Collected>,
     F: Clone + Computation + RunCore,
     F::Output: Collect<F::Dim, Collected = Collected>,
     P: Clone + Run<Output = bool>,
@@ -54,35 +54,34 @@ where
     fn run_core(self, args: NamedArgs) -> Self::Output {
         let mut out = self.child.run_core(args).collect();
         loop {
-            if !self
-                .predicate
-                .clone()
-                .run(NamedArgs::from_names_args(self.args.clone(), out.clone()))
-            {
+            if !self.predicate.clone().run(NamedArgs::from_names_args(
+                self.arg_names.clone(),
+                out.clone(),
+            )) {
                 return out;
             }
             out = self
                 .f
                 .clone()
-                .run_core(NamedArgs::from_names_args(self.args.clone(), out))
+                .run_core(NamedArgs::from_names_args(self.arg_names.clone(), out))
                 .collect();
         }
     }
 }
 
-impl<A, Args, F, Collected> RunCore for Then<A, Args, F>
+impl<A, ArgNames, F, Collected> RunCore for Then<A, ArgNames, F>
 where
     Self: Computation,
     A: Computation + RunCore,
     A::Output: Collect<A::Dim, Collected = Collected>,
-    NamedArgs: FromNamesArgs<Args, Collected>,
+    NamedArgs: FromNamesArgs<ArgNames, Collected>,
     F: RunCore,
 {
     type Output = F::Output;
 
     fn run_core(self, args: NamedArgs) -> Self::Output {
         self.f.run_core(NamedArgs::from_names_args(
-            self.args,
+            self.arg_names,
             self.child.run_core(args).collect(),
         ))
     }
