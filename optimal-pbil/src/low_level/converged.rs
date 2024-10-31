@@ -3,7 +3,7 @@ use core::fmt;
 use computation_types::{
     impl_core_ops,
     peano::{One, Zero},
-    Computation, ComputationFn, Names,
+    Computation, ComputationFn, NamedArgs, Names,
 };
 
 use super::{Probability, ProbabilityThreshold};
@@ -48,7 +48,20 @@ where
     Self: Computation,
     T: ComputationFn,
     P: ComputationFn,
+    Converged<T::Filled, P::Filled>: Computation,
 {
+    type Filled = Converged<T::Filled, P::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        let (args_0, args_1) = named_args
+            .partition(&self.threshold.arg_names(), &self.probabilities.arg_names())
+            .unwrap_or_else(|e| panic!("{}", e,));
+        Converged {
+            threshold: self.threshold.fill(args_0),
+            probabilities: self.probabilities.fill(args_1),
+        }
+    }
+
     fn arg_names(&self) -> Names {
         self.threshold
             .arg_names()
@@ -71,8 +84,8 @@ where
 
 mod run {
     use computation_types::{
-        run::{DistributeArgs, NamedArgs, RunCore, Unwrap, Value},
-        Computation,
+        run::{DistributeArgs, RunCore},
+        Computation, NamedArgs, Unwrap, Value,
     };
 
     use crate::low_level::{Probability, ProbabilityThreshold};

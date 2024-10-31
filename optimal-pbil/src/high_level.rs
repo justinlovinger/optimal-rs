@@ -7,10 +7,9 @@ use computation_types::{
     math::Add,
     named_args,
     peano::{One, Zero},
-    run::NamedArgs,
     val, val1,
     zip::Zip,
-    Arg, Computation, ComputationFn, Function, Names, Run, Val,
+    AnyArg, Arg, Computation, ComputationFn, Function, NamedArgs, Run, Val,
 };
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
@@ -118,7 +117,8 @@ impl<F> PbilFor<F> {
     where
         PbilComputation<F, SmallRng>: Run<Output = Vec<bool>>,
         F: Clone + ComputationFn<Dim = Zero>,
-        F::Item: Clone + fmt::Debug + PartialOrd,
+        F::Item: Clone + fmt::Debug + PartialOrd + AnyArg,
+        F::Filled: Computation<Dim = Zero, Item = F::Item>,
     {
         self.with(SmallRng::from_entropy()).argmin()
     }
@@ -127,7 +127,8 @@ impl<F> PbilFor<F> {
     pub fn computation(self) -> PbilComputation<F, SmallRng>
     where
         F: Clone + ComputationFn<Dim = Zero>,
-        F::Item: Clone + fmt::Debug + PartialOrd,
+        F::Item: Clone + fmt::Debug + PartialOrd + AnyArg,
+        F::Filled: Computation<Dim = Zero, Item = F::Item>,
     {
         self.with(SmallRng::from_entropy()).computation()
     }
@@ -147,8 +148,9 @@ pub struct PbilWith<F, R> {
 impl<F, R> PbilWith<F, R>
 where
     F: Clone + ComputationFn<Dim = Zero>,
-    F::Item: Clone + fmt::Debug + PartialOrd,
-    R: Rng,
+    F::Item: Clone + fmt::Debug + PartialOrd + AnyArg,
+    F::Filled: Computation<Dim = Zero, Item = F::Item>,
+    R: Rng + AnyArg,
 {
     /// Return a point that attempts to minimize the given objective function.
     pub fn argmin(self) -> Vec<bool>
@@ -257,8 +259,9 @@ pub enum PbilComputation<F, R>
 where
     Self: Computation,
     F: ComputationFn<Dim = Zero>,
-    F::Item: Clone + fmt::Debug + PartialOrd,
-    R: Rng,
+    F::Item: Clone + fmt::Debug + PartialOrd + AnyArg,
+    F::Filled: Computation<Dim = Zero, Item = F::Item>,
+    R: Rng + AnyArg,
 {
     /// See [`PbilIteration`].
     Iteration(PbilIteration<F, R>),
@@ -268,9 +271,10 @@ where
 
 impl<F, R> Computation for PbilComputation<F, R>
 where
-    R: Rng,
     F: ComputationFn<Dim = Zero>,
-    F::Item: Clone + fmt::Debug + PartialOrd,
+    F::Item: Clone + fmt::Debug + PartialOrd + AnyArg,
+    F::Filled: Computation<Dim = Zero, Item = F::Item>,
+    R: Rng + AnyArg,
     PbilIteration<F, R>: Computation<Dim = One, Item = bool>,
     PbilThreshold<F, R>: Computation<Dim = One, Item = bool>,
 {
@@ -278,29 +282,13 @@ where
     type Item = bool;
 }
 
-impl<F, R> ComputationFn for PbilComputation<F, R>
-where
-    Self: Computation,
-    F: ComputationFn<Dim = Zero>,
-    F::Item: Clone + fmt::Debug + PartialOrd,
-    R: Rng,
-    PbilIteration<F, R>: ComputationFn,
-    PbilThreshold<F, R>: ComputationFn,
-{
-    fn arg_names(&self) -> Names {
-        match self {
-            PbilComputation::Iteration(x) => x.arg_names(),
-            PbilComputation::Threshold(x) => x.arg_names(),
-        }
-    }
-}
-
 impl<F, R> fmt::Display for PbilComputation<F, R>
 where
     Self: Computation,
     F: ComputationFn<Dim = Zero>,
-    F::Item: Clone + fmt::Debug + PartialOrd,
-    R: Rng,
+    F::Item: Clone + fmt::Debug + PartialOrd + AnyArg,
+    F::Filled: Computation<Dim = Zero, Item = F::Item>,
+    R: Rng + AnyArg,
     PbilIteration<F, R>: fmt::Display,
     PbilThreshold<F, R>: fmt::Display,
 {
@@ -316,8 +304,9 @@ impl<F, R> Run for PbilComputation<F, R>
 where
     Self: Computation,
     F: ComputationFn<Dim = Zero>,
-    F::Item: Clone + fmt::Debug + PartialOrd,
-    R: Rng,
+    F::Item: Clone + fmt::Debug + PartialOrd + AnyArg,
+    F::Filled: Computation<Dim = Zero, Item = F::Item>,
+    R: Rng + AnyArg,
     PbilIteration<F, R>: Run<Output = Vec<bool>>,
     PbilThreshold<F, R>: Run<Output = Vec<bool>>,
 {

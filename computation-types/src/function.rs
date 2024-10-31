@@ -1,3 +1,5 @@
+use crate::{ComputationFn, FromNamesArgs, NamedArgs};
+
 #[derive(Clone, Copy, Debug)]
 pub struct Function<ArgNames, Body> {
     pub name: Option<&'static str>,
@@ -20,5 +22,14 @@ impl<ArgNames, Body> Function<ArgNames, Body> {
             arg_names,
             body,
         }
+    }
+
+    pub fn fill<Args>(self, args: Args) -> Body::Filled
+    where
+        NamedArgs: FromNamesArgs<ArgNames, Args>,
+        Body: ComputationFn,
+    {
+        self.body
+            .fill(NamedArgs::from_names_args(self.arg_names, args))
     }
 }

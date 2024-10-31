@@ -5,8 +5,8 @@ use paste::paste;
 use crate::{
     math::*,
     peano::{One, Two, Zero},
-    run::{DistributeArgs, Matrix, NamedArgs, RunCore, Unwrap, Value},
-    Computation,
+    run::{DistributeArgs, Matrix, RunCore},
+    Computation, NamedArgs, Unwrap, Value,
 };
 
 macro_rules! impl_run_core_for_binary_op {

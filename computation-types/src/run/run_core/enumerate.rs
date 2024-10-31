@@ -1,10 +1,6 @@
 use num_traits::AsPrimitive;
 
-use crate::{
-    enumerate::Enumerate,
-    run::{NamedArgs, RunCore, Value},
-    Computation, Run,
-};
+use crate::{enumerate::Enumerate, run::RunCore, Computation, NamedArgs, Run, Value};
 
 impl<A, F, Item> RunCore for Enumerate<A, F>
 where

@@ -1,6 +1,8 @@
 use core::fmt;
 
-use crate::{function::Function, impl_core_ops, peano::Zero, Computation, ComputationFn};
+use crate::{
+    function::Function, impl_core_ops, peano::Zero, Computation, ComputationFn, NamedArgs,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct If<A, ArgNames, P, FTrue, FFalse>
@@ -29,7 +31,20 @@ impl<A, ArgNames, P, FTrue, FFalse> ComputationFn for If<A, ArgNames, P, FTrue, 
 where
     Self: Computation,
     A: ComputationFn,
+    If<A::Filled, ArgNames, P, FTrue, FFalse>: Computation,
 {
+    type Filled = If<A::Filled, ArgNames, P, FTrue, FFalse>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        If {
+            child: self.child.fill(named_args),
+            arg_names: self.arg_names,
+            predicate: self.predicate,
+            f_true: self.f_true,
+            f_false: self.f_false,
+        }
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.child.arg_names()
     }
@@ -80,7 +95,19 @@ impl<A, ArgNames, F, P> ComputationFn for LoopWhile<A, ArgNames, F, P>
 where
     Self: Computation,
     A: ComputationFn,
+    LoopWhile<A::Filled, ArgNames, F, P>: Computation,
 {
+    type Filled = LoopWhile<A::Filled, ArgNames, F, P>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        LoopWhile {
+            child: self.child.fill(named_args),
+            arg_names: self.arg_names,
+            f: self.f,
+            predicate: self.predicate,
+        }
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.child.arg_names()
     }
@@ -127,7 +154,17 @@ impl<A, ArgNames, F> ComputationFn for Then<A, ArgNames, F>
 where
     Self: Computation,
     A: ComputationFn,
+    Then<A::Filled, ArgNames, F>: Computation,
 {
+    type Filled = Then<A::Filled, ArgNames, F>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        Then {
+            child: self.child.fill(named_args),
+            f: self.f,
+        }
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.child.arg_names()
     }

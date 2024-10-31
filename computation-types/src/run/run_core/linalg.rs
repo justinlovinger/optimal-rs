@@ -2,9 +2,9 @@ use crate::{
     linalg::{FromDiagElem, IdentityMatrix, MatMul, MulCol, MulOut, ScalarProduct},
     math::Mul,
     peano::{One, Two},
-    run::{NamedArgs, Collect, DistributeArgs, Matrix, Unwrap, Value},
+    run::{Collect, DistributeArgs, Matrix},
     sum::Sum,
-    Computation,
+    Computation, NamedArgs, Unwrap, Value,
 };
 
 use super::RunCore;
@@ -129,7 +129,7 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{named_args, linalg::FromDiagElem, run::Matrix, val, val1, val2, Computation, Run};
+    use crate::{linalg::FromDiagElem, named_args, run::Matrix, val, val1, val2, Computation, Run};
 
     #[proptest]
     fn identity_matrix_should_return_identity_matrix(#[strategy(1_usize..=10)] len: usize) {
@@ -200,7 +200,9 @@ mod tests {
         #[strategy(-1000..1000)] y2: i32,
         #[strategy(-1000..1000)] y3: i32,
     ) {
-        let out = val1!([x1, x2]).mul_out(val1!([y1, y2, y3])).run(named_args![]);
+        let out = val1!([x1, x2])
+            .mul_out(val1!([y1, y2, y3]))
+            .run(named_args![]);
         prop_assert_eq!(out.shape(), (2, 3));
         prop_assert_eq!(
             out,

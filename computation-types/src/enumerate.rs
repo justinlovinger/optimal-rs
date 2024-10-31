@@ -1,6 +1,8 @@
 use core::fmt;
 
-use crate::{impl_core_ops, peano::One, Computation, ComputationFn, Function, Name, Names};
+use crate::{
+    impl_core_ops, peano::One, Computation, ComputationFn, Function, Name, NamedArgs, Names,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Enumerate<A, F>
@@ -24,7 +26,17 @@ impl<A, F> ComputationFn for Enumerate<A, F>
 where
     Self: Computation,
     A: ComputationFn,
+    Enumerate<A::Filled, F>: Computation,
 {
+    type Filled = Enumerate<A::Filled, F>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        Enumerate {
+            child: self.child.fill(named_args),
+            f: self.f,
+        }
+    }
+
     fn arg_names(&self) -> Names {
         self.child.arg_names()
     }

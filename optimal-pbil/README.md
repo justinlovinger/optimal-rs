@@ -12,7 +12,7 @@ Population-based incremental learning (PBIL).
 ## Examples
 
 ```rust
-use computation_types::{arg1, named_args, peano::Zero, run::Value, Computation, Run};
+use computation_types::{arg1, named_args, peano::Zero, Computation, Run, Value};
 use optimal_pbil::PbilBuilder;
 
 let pbil = PbilBuilder::default()

@@ -5,7 +5,7 @@ use paste::paste;
 use crate::{
     impl_core_ops, impl_display_for_inline_binary,
     peano::{Suc, Zero},
-    Computation, ComputationFn, Names,
+    Computation, ComputationFn, NamedArgs, Names,
 };
 
 macro_rules! impl_cmp_op {
@@ -30,7 +30,17 @@ macro_rules! impl_cmp_op {
                 Self: Computation,
                 A: ComputationFn,
                 B: ComputationFn,
+                $op<A::Filled, B::Filled>: Computation,
             {
+                type Filled = $op<A::Filled, B::Filled>;
+
+                fn fill(self, named_args: NamedArgs) -> Self::Filled {
+                    let (args_0, args_1) = named_args
+                        .partition(&self.0.arg_names(), &self.1.arg_names())
+                        .unwrap_or_else(|e| panic!("{}", e,));
+                    $op(self.0.fill(args_0), self.1.fill(args_1))
+                }
+
                 fn arg_names(&self) -> Names {
                     self.0.arg_names().union(self.1.arg_names())
                 }
@@ -73,7 +83,14 @@ impl<A> ComputationFn for Max<A>
 where
     Self: Computation,
     A: ComputationFn,
+    Max<A::Filled>: Computation,
 {
+    type Filled = Max<A::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        Max(self.0.fill(named_args))
+    }
+
     fn arg_names(&self) -> Names {
         self.0.arg_names()
     }
@@ -108,7 +125,14 @@ impl<A> ComputationFn for Not<A>
 where
     Self: Computation,
     A: ComputationFn,
+    Not<A::Filled>: Computation,
 {
+    type Filled = Not<A::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        Not(self.0.fill(named_args))
+    }
+
     fn arg_names(&self) -> Names {
         self.0.arg_names()
     }

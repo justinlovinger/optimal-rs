@@ -1,9 +1,9 @@
 use core::ops;
 
 use crate::{
-    run::{NamedArgs, RunCore, Unwrap, Value},
+    run::{NamedArgs, RunCore},
     sum::Sum,
-    Computation,
+    Computation, Unwrap, Value,
 };
 
 impl<A, Out> RunCore for Sum<A>

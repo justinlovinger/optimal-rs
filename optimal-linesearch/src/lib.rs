@@ -144,8 +144,7 @@ mod tests {
     use computation_types::{
         arg1,
         peano::{One, Zero},
-        run::Value,
-        Computation,
+        Computation, Value,
     };
     use rand::{rngs::SmallRng, SeedableRng};
 

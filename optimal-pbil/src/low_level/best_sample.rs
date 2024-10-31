@@ -6,10 +6,9 @@ use computation_types::{
     math::Add,
     peano::{One, Zero},
     rand::SeededRand,
-    run::Value,
     val,
     zip::{Zip, Zip3, Zip4},
-    Arg, Computation, ComputationFn, Function, Val,
+    AnyArg, Arg, Computation, ComputationFn, Function, Val, Value,
 };
 use rand::{distributions::Bernoulli, Rng};
 
@@ -99,10 +98,11 @@ pub fn best_sample<N, F, P, R>(
 where
     N: Computation<Dim = Zero, Item = NumSamples>,
     F: Clone + ComputationFn<Dim = Zero>,
-    F::Item: PartialOrd,
+    F::Item: PartialOrd + AnyArg,
+    F::Filled: Computation<Dim = Zero, Item = F::Item>,
     P: Computation<Dim = One, Item = Probability>,
     R: Computation<Dim = Zero>,
-    R::Item: Rng,
+    R::Item: Rng + AnyArg,
 {
     Zip(
         Zip(val!(1_usize), num_samples),

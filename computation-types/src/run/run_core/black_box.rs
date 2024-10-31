@@ -21,7 +21,7 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{arg, named_args, peano::Zero, run::Value, val, Computation, Run};
+    use crate::{arg, named_args, peano::Zero, val, Computation, Run, Value};
 
     #[proptest]
     fn black_box_should_run_its_function_and_pass_the_result_to_next(

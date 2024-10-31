@@ -1,14 +1,11 @@
 mod distribute_args;
 mod into_vec;
 mod matrix;
-mod named_args;
 mod run_core;
 
-use crate::ComputationFn;
+use crate::{ComputationFn, NamedArgs, Unwrap};
 
-pub use self::{
-    collect::*, distribute_args::*, into_vec::*, matrix::*, named_args::*, run_core::*, unwrap::*,
-};
+pub use self::{collect::*, distribute_args::*, into_vec::*, matrix::*, run_core::*};
 
 /// A computation that can be run
 /// without additional compilation.
@@ -35,9 +32,9 @@ where
 }
 
 mod function {
-    use crate::function::Function;
+    use crate::{function::Function, FromNamesArgs};
 
-    use super::{FromNamesArgs, NamedArgs, Run, RunCore};
+    use super::{NamedArgs, Run, RunCore};
 
     impl<ArgNames, Body> Function<ArgNames, Body> {
         pub fn call<Args>(self, args: Args) -> Body::Output
@@ -63,9 +60,12 @@ mod function {
 mod collect {
     use paste::paste;
 
-    use crate::peano::{One, Two, Zero};
+    use crate::{
+        peano::{One, Two, Zero},
+        Value,
+    };
 
-    use super::{IntoVec, Matrix, Value};
+    use super::{IntoVec, Matrix};
 
     pub trait Collect<OutDims> {
         type Collected;
@@ -137,59 +137,6 @@ mod collect {
     impl_collect_for_n_tuple!(14, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
     impl_collect_for_n_tuple!(15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
     impl_collect_for_n_tuple!(16, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
-}
-
-mod unwrap {
-    use paste::paste;
-
-    use super::Value;
-
-    pub trait Unwrap {
-        type Unwrapped;
-
-        fn unwrap(self) -> Self::Unwrapped;
-    }
-
-    impl<T> Unwrap for Value<T> {
-        type Unwrapped = T;
-
-        fn unwrap(self) -> Self::Unwrapped {
-            self.0
-        }
-    }
-
-    macro_rules! impl_unwrap_for_n_tuple {
-        ( $n:expr, $( $i:expr ),* ) => {
-            paste! {
-                impl< $( [<T $i>] ),* > Unwrap for ( $( [<T $i>] ),* )
-                where
-                    $( [<T $i>]: Unwrap ),*
-                {
-                    type Unwrapped = ( $( [<T $i>]::Unwrapped ),* );
-
-                    fn unwrap(self) -> Self::Unwrapped {
-                        ( $( self.$i.unwrap() ),* )
-                    }
-                }
-            }
-        };
-    }
-
-    impl_unwrap_for_n_tuple!(2, 0, 1);
-    impl_unwrap_for_n_tuple!(3, 0, 1, 2);
-    impl_unwrap_for_n_tuple!(4, 0, 1, 2, 3);
-    impl_unwrap_for_n_tuple!(5, 0, 1, 2, 3, 4);
-    impl_unwrap_for_n_tuple!(6, 0, 1, 2, 3, 4, 5);
-    impl_unwrap_for_n_tuple!(7, 0, 1, 2, 3, 4, 5, 6);
-    impl_unwrap_for_n_tuple!(8, 0, 1, 2, 3, 4, 5, 6, 7);
-    impl_unwrap_for_n_tuple!(9, 0, 1, 2, 3, 4, 5, 6, 7, 8);
-    impl_unwrap_for_n_tuple!(10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
-    impl_unwrap_for_n_tuple!(11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-    impl_unwrap_for_n_tuple!(12, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
-    impl_unwrap_for_n_tuple!(13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
-    impl_unwrap_for_n_tuple!(14, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
-    impl_unwrap_for_n_tuple!(15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
-    impl_unwrap_for_n_tuple!(16, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 }
 
 #[cfg(test)]

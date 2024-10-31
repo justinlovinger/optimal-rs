@@ -2,8 +2,8 @@ use paste::paste;
 
 use crate::{
     cmp::*,
-    run::{DistributeArgs, NamedArgs, RunCore, Unwrap, Value},
-    Computation,
+    run::{DistributeArgs, RunCore, Unwrap},
+    Computation, NamedArgs, Value,
 };
 
 macro_rules! impl_run_core_for_comparison {

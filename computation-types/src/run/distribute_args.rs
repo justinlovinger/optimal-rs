@@ -1,8 +1,8 @@
 use paste::paste;
 
-use crate::ComputationFn;
+use crate::{ComputationFn, NamedArgs};
 
-use super::{NamedArgs, RunCore};
+use super::RunCore;
 
 pub trait DistributeArgs {
     type Output;
@@ -65,7 +65,7 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{arg, named_args, run::Value, val};
+    use crate::{arg, named_args, val, Value};
 
     use super::*;
 

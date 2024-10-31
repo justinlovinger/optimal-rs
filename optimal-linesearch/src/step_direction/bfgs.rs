@@ -13,7 +13,7 @@
 //! # Examples
 //!
 //! ```
-//! use computation_types::{peano::*, run::Value, zip::*, *};
+//! use computation_types::{peano::*, zip::*, *};
 //! use optimal_linesearch::{step_direction::bfgs::*, StepSize};
 //!
 //! fn main() {
@@ -151,7 +151,7 @@ use computation_types::{
     peano::{One, Two, Zero},
     val,
     zip::{Zip, Zip3, Zip4, Zip5, Zip7},
-    Arg, Computation, ComputationFn, Function, Len, Val,
+    AnyArg, Arg, Computation, Function, Len, Val,
 };
 use ndarray::{LinalgScalar, ScalarOperand};
 
@@ -205,9 +205,9 @@ pub fn initial_approx_inv_snd_derivatives_gamma<PD, PS, D, A>(
 ) -> InitialApproxInvSndDerivativesGamma<PD, PS, D, A>
 where
     PD: Computation<Dim = One, Item = A>,
-    PS: ComputationFn<Dim = One, Item = A>,
+    PS: Computation<Dim = One, Item = A>,
     D: Computation<Dim = One, Item = A>,
-    A: LinalgScalar,
+    A: AnyArg + LinalgScalar,
 {
     prev_step
         .zip(derivatives.sub(prev_derivatives))
@@ -332,11 +332,11 @@ pub fn approx_inv_snd_derivatives<PISD, PD, PS, D, A>(
     derivatives: D,
 ) -> ApproxInvSndDerivatives<PISD, PD, PS, D, A>
 where
-    PISD: ComputationFn<Dim = Two, Item = A>,
+    PISD: Computation<Dim = Two, Item = A>,
     PD: Computation<Dim = One, Item = A>,
     PS: Computation<Dim = One, Item = A>,
     D: Computation<Dim = One, Item = A>,
-    A: ScalarOperand + LinalgScalar,
+    A: AnyArg + ScalarOperand + LinalgScalar,
 {
     Zip3(
         prev_inv_snd_derivatives,

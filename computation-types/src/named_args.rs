@@ -1,14 +1,12 @@
 use core::fmt;
-use std::{
-    any::type_name,
-    collections::BTreeMap,
-    ops::{Deref, DerefMut},
-};
+use std::{any::type_name, collections::BTreeMap};
 
 use downcast_rs::{impl_downcast, Downcast};
 use paste::paste;
 
 use crate::{Name, Names};
+
+pub use self::{unwrap::*, value::*};
 
 pub trait AnyArg: Downcast + fmt::Debug {
     fn boxed_clone(&self) -> Box<dyn AnyArg>;
@@ -42,13 +40,13 @@ impl Default for NamedArgs {
 #[macro_export]
 macro_rules! named_args {
 ( ) => {
-    $crate::run::NamedArgs::new()
+    $crate::NamedArgs::new()
 };
 ( ($name:expr, $arg:expr) ) => {
-    $crate::run::NamedArgs::singleton($name, $arg)
+    $crate::NamedArgs::singleton($name, $arg)
 };
 ( ($name:expr, $arg:expr), $( $rest:tt ),* ) => {
-    $crate::run::NamedArgs::singleton($name, $arg).union(named_args![$( $rest ),*])
+    $crate::NamedArgs::singleton($name, $arg).union(named_args![$( $rest ),*])
 };
 }
 
@@ -235,41 +233,6 @@ impl_partition_n!(14, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
 impl_partition_n!(15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
 impl_partition_n!(16, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub struct Value<T>(pub T);
-
-impl<T> PartialEq<T> for Value<T>
-where
-    T: PartialEq,
-{
-    fn eq(&self, other: &T) -> bool {
-        self.0.eq(other)
-    }
-}
-
-impl<T> PartialOrd<T> for Value<T>
-where
-    T: PartialOrd,
-{
-    fn partial_cmp(&self, other: &T) -> Option<std::cmp::Ordering> {
-        self.0.partial_cmp(other)
-    }
-}
-
-impl<T> Deref for Value<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<T> DerefMut for Value<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 pub trait FromNamesArgs<Names, Args> {
     fn from_names_args(names: Names, args: Args) -> Self;
 }
@@ -346,6 +309,98 @@ where
     fn from_names_args(names: Name, args: Value<T>) -> Self {
         Self::singleton(names, args.0)
     }
+}
+
+mod value {
+    use std::ops::{Deref, DerefMut};
+
+    #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct Value<T>(pub T);
+
+    impl<T> PartialEq<T> for Value<T>
+    where
+        T: PartialEq,
+    {
+        fn eq(&self, other: &T) -> bool {
+            self.0.eq(other)
+        }
+    }
+
+    impl<T> PartialOrd<T> for Value<T>
+    where
+        T: PartialOrd,
+    {
+        fn partial_cmp(&self, other: &T) -> Option<std::cmp::Ordering> {
+            self.0.partial_cmp(other)
+        }
+    }
+
+    impl<T> Deref for Value<T> {
+        type Target = T;
+
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
+    }
+
+    impl<T> DerefMut for Value<T> {
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
+    }
+}
+
+mod unwrap {
+    use paste::paste;
+
+    use crate::Value;
+
+    pub trait Unwrap {
+        type Unwrapped;
+
+        fn unwrap(self) -> Self::Unwrapped;
+    }
+
+    impl<T> Unwrap for Value<T> {
+        type Unwrapped = T;
+
+        fn unwrap(self) -> Self::Unwrapped {
+            self.0
+        }
+    }
+
+    macro_rules! impl_unwrap_for_n_tuple {
+        ( $n:expr, $( $i:expr ),* ) => {
+            paste! {
+                impl< $( [<T $i>] ),* > Unwrap for ( $( [<T $i>] ),* )
+                where
+                    $( [<T $i>]: Unwrap ),*
+                {
+                    type Unwrapped = ( $( [<T $i>]::Unwrapped ),* );
+
+                    fn unwrap(self) -> Self::Unwrapped {
+                        ( $( self.$i.unwrap() ),* )
+                    }
+                }
+            }
+        };
+    }
+
+    impl_unwrap_for_n_tuple!(2, 0, 1);
+    impl_unwrap_for_n_tuple!(3, 0, 1, 2);
+    impl_unwrap_for_n_tuple!(4, 0, 1, 2, 3);
+    impl_unwrap_for_n_tuple!(5, 0, 1, 2, 3, 4);
+    impl_unwrap_for_n_tuple!(6, 0, 1, 2, 3, 4, 5);
+    impl_unwrap_for_n_tuple!(7, 0, 1, 2, 3, 4, 5, 6);
+    impl_unwrap_for_n_tuple!(8, 0, 1, 2, 3, 4, 5, 6, 7);
+    impl_unwrap_for_n_tuple!(9, 0, 1, 2, 3, 4, 5, 6, 7, 8);
+    impl_unwrap_for_n_tuple!(10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9);
+    impl_unwrap_for_n_tuple!(11, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+    impl_unwrap_for_n_tuple!(12, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11);
+    impl_unwrap_for_n_tuple!(13, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12);
+    impl_unwrap_for_n_tuple!(14, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13);
+    impl_unwrap_for_n_tuple!(15, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14);
+    impl_unwrap_for_n_tuple!(16, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 }
 
 #[cfg(test)]

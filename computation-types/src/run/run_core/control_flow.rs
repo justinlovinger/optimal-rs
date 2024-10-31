@@ -1,7 +1,7 @@
 use crate::{
     control_flow::{If, LoopWhile, Then},
-    run::{Collect, FromNamesArgs, NamedArgs, RunCore},
-    Computation, Run,
+    run::{Collect, RunCore},
+    Computation, FromNamesArgs, NamedArgs, Run,
 };
 
 impl<A, ArgNames, P, FTrue, FFalse, Collected, Out> RunCore for If<A, ArgNames, P, FTrue, FFalse>

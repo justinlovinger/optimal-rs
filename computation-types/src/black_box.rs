@@ -1,7 +1,7 @@
 use core::fmt;
 use std::marker::PhantomData;
 
-use crate::{impl_core_ops, Names, Computation, ComputationFn};
+use crate::{impl_core_ops, Computation, ComputationFn, NamedArgs, Names};
 
 /// See [`Computation::black_box`].
 #[derive(Clone, Copy, Debug)]
@@ -27,7 +27,19 @@ impl<A, F, FDim, FItem> ComputationFn for BlackBox<A, F, FDim, FItem>
 where
     Self: Computation,
     A: ComputationFn,
+    BlackBox<A::Filled, F, FDim, FItem>: Computation,
 {
+    type Filled = BlackBox<A::Filled, F, FDim, FItem>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        BlackBox {
+            child: self.child.fill(named_args),
+            f: self.f,
+            f_dim: self.f_dim,
+            f_item: self.f_item,
+        }
+    }
+
     fn arg_names(&self) -> Names {
         self.child.arg_names()
     }

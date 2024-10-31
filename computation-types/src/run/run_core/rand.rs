@@ -4,8 +4,8 @@ mod rands {
     use crate::{
         peano::{One, Two, Zero},
         rand::Rand,
-        run::{NamedArgs, Matrix, RunCore, Value},
-        Computation,
+        run::{Matrix, NamedArgs, RunCore},
+        Computation, Value,
     };
 
     impl<DistComp, T, Dist, Out> RunCore for Rand<DistComp, T>
@@ -80,8 +80,8 @@ mod seeded_rands {
     use crate::{
         peano::{One, Two, Zero},
         rand::SeededRand,
-        run::{NamedArgs, DistributeArgs, Matrix, RunCore, Value},
-        Computation,
+        run::{DistributeArgs, Matrix, NamedArgs, RunCore},
+        Computation, Value,
     };
 
     impl<RComp, DistComp, T, R, Dist, Out> RunCore for SeededRand<RComp, DistComp, T>

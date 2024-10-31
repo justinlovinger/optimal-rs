@@ -3,7 +3,7 @@ use core::fmt;
 use computation_types::{
     impl_core_ops,
     peano::{One, Zero},
-    Computation, ComputationFn, Names,
+    Computation, ComputationFn, NamedArgs, Names,
 };
 use rand::Rng;
 
@@ -61,7 +61,27 @@ where
     A: ComputationFn,
     P: ComputationFn,
     R: ComputationFn,
+    Mutate<C::Filled, A::Filled, P::Filled, R::Filled>: Computation,
 {
+    type Filled = Mutate<C::Filled, A::Filled, P::Filled, R::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        let (args_0, args_1, args_2, args_3) = named_args
+            .partition4(
+                &self.chance.arg_names(),
+                &self.adjust_rate.arg_names(),
+                &self.probabilities.arg_names(),
+                &self.rng.arg_names(),
+            )
+            .unwrap_or_else(|e| panic!("{}", e,));
+        Mutate {
+            chance: self.chance.fill(args_0),
+            adjust_rate: self.adjust_rate.fill(args_1),
+            probabilities: self.probabilities.fill(args_2),
+            rng: self.rng.fill(args_3),
+        }
+    }
+
     fn arg_names(&self) -> Names {
         self.chance
             .arg_names()
@@ -92,8 +112,8 @@ where
 
 mod run {
     use computation_types::{
-        run::{DistributeArgs, NamedArgs, RunCore, Unwrap, Value},
-        Computation,
+        run::{DistributeArgs, RunCore},
+        Computation, NamedArgs, Unwrap, Value,
     };
     use rand::{distributions::Standard, Rng};
 

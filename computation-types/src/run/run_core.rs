@@ -10,11 +10,10 @@ mod zip;
 
 use crate::{
     peano::{One, Two, Zero},
-    run::{AnyArg, NamedArgs},
-    Arg, Computation, Len, Val,
+    AnyArg, Arg, Computation, Len, NamedArgs, Unwrap, Val, Value,
 };
 
-use super::{Matrix, Unwrap, Value};
+use super::Matrix;
 
 /// See [`super::Run`].
 ///
@@ -120,8 +119,7 @@ where
 
 impl<A> RunCore for Arg<One, A>
 where
-    Vec<A>: AnyArg,
-    A: 'static,
+    A: 'static + Clone + AnyArg,
 {
     type Output = Value<Vec<A>>;
 
@@ -132,8 +130,7 @@ where
 
 impl<A> RunCore for Arg<Two, A>
 where
-    Matrix<Vec<A>>: AnyArg,
-    A: 'static,
+    A: 'static + Clone + AnyArg,
 {
     type Output = Value<Matrix<Vec<A>>>;
 

@@ -9,10 +9,9 @@ use computation_types::{
     math::{Abs, Add, Div, Mul, Neg, Sub},
     named_args,
     peano::{One, Two, Zero},
-    run::NamedArgs,
     val, val1,
     zip::{Zip, Zip3, Zip4, Zip5, Zip6, Zip7, Zip8},
-    Arg, Computation, ComputationFn, Function, Len, Names, Run, Val,
+    AnyArg, Arg, Computation, ComputationFn, Function, Len, NamedArgs, Run, Val,
 };
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
@@ -129,7 +128,9 @@ impl<A> BacktrackingLineSearch<A> {
     ) -> BacktrackingLineSearchFor<A, F, Zip<F, FD>>
     where
         F: Clone + ComputationFn<Dim = Zero, Item = A>,
+        F::Filled: Computation<Dim = Zero, Item = A>,
         FD: Clone + ComputationFn<Dim = One, Item = A>,
+        FD::Filled: Computation<Dim = One, Item = A>,
     {
         self.for_combined(obj_func.clone(), obj_func.zip(obj_func_d))
     }
@@ -150,7 +151,9 @@ impl<A> BacktrackingLineSearch<A> {
     ) -> BacktrackingLineSearchFor<A, F, FFD>
     where
         F: Clone + ComputationFn<Dim = Zero, Item = A>,
+        F::Filled: Computation<Dim = Zero, Item = A>,
         FFD: Clone + ComputationFn<Dim = (Zero, One), Item = (A, A)>,
+        FFD::Filled: Computation<Dim = (Zero, One), Item = (A, A)>,
     {
         BacktrackingLineSearchFor {
             agnostic: self,
@@ -179,7 +182,9 @@ impl<A> BacktrackingLineSearchBuilder<A> {
         A: 'static + Copy + std::fmt::Debug + Float,
         f64: AsPrimitive<A>,
         F: Clone + ComputationFn<Dim = Zero, Item = A>,
+        F::Filled: Computation<Dim = Zero, Item = A>,
         FD: Clone + ComputationFn<Dim = One, Item = A>,
+        FD::Filled: Computation<Dim = One, Item = A>,
     {
         self.build(len).for_(obj_func, obj_func_d)
     }
@@ -203,7 +208,9 @@ impl<A> BacktrackingLineSearchBuilder<A> {
         A: 'static + Copy + std::fmt::Debug + Float,
         f64: AsPrimitive<A>,
         F: Clone + ComputationFn<Dim = Zero, Item = A>,
+        F::Filled: Computation<Dim = Zero, Item = A>,
         FFD: Clone + ComputationFn<Dim = (Zero, One), Item = (A, A)>,
+        FFD::Filled: Computation<Dim = (Zero, One), Item = (A, A)>,
     {
         self.build(len).for_combined(obj_func, obj_func_and_d)
     }
@@ -383,10 +390,12 @@ macro_rules! bfgs_loop {
 
 impl<A, F, FFD> BacktrackingLineSearchWith<A, F, FFD>
 where
-    A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
+    A: Sum + Signed + Float + ScalarOperand + LinalgScalar + AnyArg,
     f64: AsPrimitive<A>,
     F: Clone + ComputationFn<Dim = Zero, Item = A>,
+    F::Filled: Computation<Dim = Zero, Item = A>,
     FFD: Clone + ComputationFn<Dim = (Zero, One), Item = (A, A)>,
+    FFD::Filled: Computation<Dim = (Zero, One), Item = (A, A)>,
 {
     /// Return a point that attempts to minimize the given objective function.
     pub fn argmin(self) -> Vec<A>
@@ -1152,10 +1161,12 @@ where
 #[derive(Clone, Debug)]
 pub enum BacktrackingLineSearchComputation<A, F, FFD>
 where
-    A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
+    A: Sum + Signed + Float + ScalarOperand + LinalgScalar + AnyArg,
     f64: AsPrimitive<A>,
     F: ComputationFn<Dim = Zero, Item = A>,
+    F::Filled: Computation<Dim = Zero, Item = A>,
     FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
+    FFD::Filled: Computation<Dim = (Zero, One), Item = (A, A)>,
 {
     /// See [`BacktrackingLineSearchSteepestIncrPrevIteration`].
     SteepestIncrPrevIteration(BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>),
@@ -1173,10 +1184,12 @@ where
 
 impl<A, F, FFD> Computation for BacktrackingLineSearchComputation<A, F, FFD>
 where
-    A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
+    A: Sum + Signed + Float + ScalarOperand + LinalgScalar + AnyArg,
     f64: AsPrimitive<A>,
     F: ComputationFn<Dim = Zero, Item = A>,
+    F::Filled: Computation<Dim = Zero, Item = A>,
     FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
+    FFD::Filled: Computation<Dim = (Zero, One), Item = (A, A)>,
     BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>: Computation<Dim = One, Item = A>,
     BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD>: Computation<Dim = One, Item = A>,
     BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD>: Computation<Dim = One, Item = A>,
@@ -1188,39 +1201,15 @@ where
     type Item = bool;
 }
 
-impl<A, F, FFD> ComputationFn for BacktrackingLineSearchComputation<A, F, FFD>
-where
-    Self: Computation,
-    A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
-    f64: AsPrimitive<A>,
-    F: ComputationFn<Dim = Zero, Item = A>,
-    FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
-    BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>: ComputationFn,
-    BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD>: ComputationFn,
-    BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD>: ComputationFn,
-    BacktrackingLineSearchBfgsGammaIncrPrevIteration<A, F, FFD>: ComputationFn,
-    BacktrackingLineSearchBfgsIdIncrPrevNearMinima<A, F, FFD>: ComputationFn,
-    BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD>: ComputationFn,
-{
-    fn arg_names(&self) -> Names {
-        match self {
-            BacktrackingLineSearchComputation::SteepestIncrPrevIteration(x) => x.arg_names(),
-            BacktrackingLineSearchComputation::SteepestIncrPrevNearMinima(x) => x.arg_names(),
-            BacktrackingLineSearchComputation::BfgsIdIncrPrevIteration(x) => x.arg_names(),
-            BacktrackingLineSearchComputation::BfgsGammaIncrPrevIteration(x) => x.arg_names(),
-            BacktrackingLineSearchComputation::BfgsIdIncrPrevNearMinima(x) => x.arg_names(),
-            BacktrackingLineSearchComputation::BfgsGammaIncrPrevNearMinima(x) => x.arg_names(),
-        }
-    }
-}
-
 impl<A, F, FFD> fmt::Display for BacktrackingLineSearchComputation<A, F, FFD>
 where
     Self: Computation,
-    A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
+    A: Sum + Signed + Float + ScalarOperand + LinalgScalar + AnyArg,
     f64: AsPrimitive<A>,
     F: ComputationFn<Dim = Zero, Item = A>,
+    F::Filled: Computation<Dim = Zero, Item = A>,
     FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
+    FFD::Filled: Computation<Dim = (Zero, One), Item = (A, A)>,
     BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>: fmt::Display,
     BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD>: fmt::Display,
     BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD>: fmt::Display,
@@ -1243,10 +1232,12 @@ where
 impl<A, F, FFD> Run for BacktrackingLineSearchComputation<A, F, FFD>
 where
     Self: Computation,
-    A: Sum + Signed + Float + ScalarOperand + LinalgScalar,
+    A: Sum + Signed + Float + ScalarOperand + LinalgScalar + AnyArg,
     f64: AsPrimitive<A>,
     F: ComputationFn<Dim = Zero, Item = A>,
+    F::Filled: Computation<Dim = Zero, Item = A>,
     FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
+    FFD::Filled: Computation<Dim = (Zero, One), Item = (A, A)>,
     BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>: Run<Output = Vec<A>>,
     BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD>: Run<Output = Vec<A>>,
     BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD>: Run<Output = Vec<A>>,

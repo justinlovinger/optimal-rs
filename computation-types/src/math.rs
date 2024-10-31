@@ -2,7 +2,7 @@ use core::{fmt, ops};
 
 use paste::paste;
 
-use crate::{impl_core_ops, impl_display_for_inline_binary, Computation, ComputationFn};
+use crate::{impl_core_ops, impl_display_for_inline_binary, Computation, ComputationFn, NamedArgs};
 
 pub use self::{same_or_zero::*, trig::*};
 
@@ -60,7 +60,17 @@ macro_rules! impl_binary_op {
                 Self: Computation,
                 A: ComputationFn,
                 B: ComputationFn,
+                $op<A::Filled, B::Filled>: Computation,
             {
+                type Filled = $op<A::Filled, B::Filled>;
+
+                fn fill(self, named_args: NamedArgs) -> Self::Filled {
+                    let (args_0, args_1) = named_args
+                        .partition(&self.0.arg_names(), &self.1.arg_names())
+                        .unwrap_or_else(|e| panic!("{}", e,));
+                    $op(self.0.fill(args_0), self.1.fill(args_1))
+                }
+
                 fn arg_names(&self) -> crate::Names {
                     self.0.arg_names().union(self.1.arg_names())
                 }
@@ -102,7 +112,14 @@ macro_rules! impl_unary_op {
             where
                 Self: Computation,
                 A: ComputationFn,
+                $op<A::Filled>: Computation,
             {
+                type Filled = $op<A::Filled>;
+
+                fn fill(self, named_args: NamedArgs) -> Self::Filled {
+                    $op(self.0.fill(named_args))
+                }
+
                 fn arg_names(&self) -> crate::Names {
                     self.0.arg_names()
                 }

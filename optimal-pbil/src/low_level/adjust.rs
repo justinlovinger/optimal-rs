@@ -1,6 +1,6 @@
 use core::fmt;
 
-use computation_types::{impl_core_ops, peano::Zero, Computation, ComputationFn, Names};
+use computation_types::{impl_core_ops, peano::Zero, Computation, ComputationFn, NamedArgs, Names};
 
 use super::{AdjustRate, Probability};
 
@@ -49,7 +49,25 @@ where
     R: ComputationFn,
     P: ComputationFn,
     B: ComputationFn,
+    Adjust<R::Filled, P::Filled, B::Filled>: Computation,
 {
+    type Filled = Adjust<R::Filled, P::Filled, B::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        let (args_0, args_1, args_2) = named_args
+            .partition3(
+                &self.rate.arg_names(),
+                &self.probability.arg_names(),
+                &self.sample.arg_names(),
+            )
+            .unwrap_or_else(|e| panic!("{}", e,));
+        Adjust {
+            rate: self.rate.fill(args_0),
+            probability: self.probability.fill(args_1),
+            sample: self.sample.fill(args_2),
+        }
+    }
+
     fn arg_names(&self) -> Names {
         self.rate
             .arg_names()
@@ -79,8 +97,8 @@ where
 mod run {
     use computation_types::{
         peano::{One, Two, Zero},
-        run::{DistributeArgs, Matrix, NamedArgs, RunCore, Unwrap, Value},
-        Computation,
+        run::{DistributeArgs, Matrix, RunCore},
+        Computation, NamedArgs, Unwrap, Value,
     };
 
     use crate::low_level::{adjust, AdjustRate, Probability};

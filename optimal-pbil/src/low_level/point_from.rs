@@ -1,6 +1,6 @@
 use core::fmt;
 
-use computation_types::{impl_core_ops, peano::One, Computation, ComputationFn, Names};
+use computation_types::{impl_core_ops, peano::One, Computation, ComputationFn, NamedArgs, Names};
 
 use super::Probability;
 
@@ -37,7 +37,16 @@ impl<P> ComputationFn for PointFrom<P>
 where
     Self: Computation,
     P: ComputationFn,
+    PointFrom<P::Filled>: Computation,
 {
+    type Filled = PointFrom<P::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        PointFrom {
+            probabilities: self.probabilities.fill(named_args),
+        }
+    }
+
     fn arg_names(&self) -> Names {
         self.probabilities.arg_names()
     }
@@ -56,10 +65,7 @@ where
 }
 
 mod run {
-    use computation_types::{
-        run::{NamedArgs, RunCore, Unwrap, Value},
-        Computation,
-    };
+    use computation_types::{run::RunCore, Computation, NamedArgs, Unwrap, Value};
 
     use crate::low_level::Probability;
 

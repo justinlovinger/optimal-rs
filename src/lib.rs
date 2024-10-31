@@ -66,8 +66,7 @@ use std::ops::{Add, Mul, RangeInclusive, Sub};
 use computation_types::{
     arg1,
     peano::{One, Zero},
-    run::Value,
-    Computation,
+    Computation, Value,
 };
 use optimal_linesearch::backtracking_line_search::BacktrackingLineSearchBuilder;
 use optimal_pbil::{types::*, Pbil, PbilStoppingCriteria};

@@ -5,7 +5,7 @@ mod rand {
     use core::fmt;
     use std::marker::PhantomData;
 
-    use crate::{impl_core_ops, Names, Computation, ComputationFn};
+    use crate::{impl_core_ops, Computation, ComputationFn, NamedArgs, Names};
 
     #[derive(Clone, Copy, Debug)]
     pub struct Rand<Dist, T>
@@ -40,7 +40,17 @@ mod rand {
     where
         Self: Computation,
         Dist: ComputationFn,
+        Rand<Dist::Filled, T>: Computation,
     {
+        type Filled = Rand<Dist::Filled, T>;
+
+        fn fill(self, named_args: NamedArgs) -> Self::Filled {
+            Rand {
+                distribution: self.distribution.fill(named_args),
+                ty: self.ty,
+            }
+        }
+
         fn arg_names(&self) -> Names {
             self.distribution.arg_names()
         }
@@ -63,7 +73,7 @@ mod seeded_rand {
     use core::fmt;
     use std::marker::PhantomData;
 
-    use crate::{impl_core_ops, peano::Zero, Names, Computation, ComputationFn};
+    use crate::{impl_core_ops, peano::Zero, Computation, ComputationFn, NamedArgs, Names};
 
     #[derive(Clone, Copy, Debug)]
     pub struct SeededRand<R, Dist, T>
@@ -102,7 +112,21 @@ mod seeded_rand {
         Self: Computation,
         R: ComputationFn,
         Dist: ComputationFn,
+        SeededRand<R::Filled, Dist::Filled, T>: Computation,
     {
+        type Filled = SeededRand<R::Filled, Dist::Filled, T>;
+
+        fn fill(self, named_args: NamedArgs) -> Self::Filled {
+            let (args_0, args_1) = named_args
+                .partition(&self.rng.arg_names(), &self.distribution.arg_names())
+                .unwrap_or_else(|e| panic!("{}", e,));
+            SeededRand {
+                rng: self.rng.fill(args_0),
+                distribution: self.distribution.fill(args_1),
+                ty: self.ty,
+            }
+        }
+
         fn arg_names(&self) -> Names {
             self.rng.arg_names().union(self.distribution.arg_names())
         }

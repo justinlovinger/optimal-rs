@@ -2,7 +2,7 @@ use core::fmt;
 
 use paste::paste;
 
-use crate::{impl_core_ops, Computation, ComputationFn, Names};
+use crate::{impl_core_ops, Computation, ComputationFn, NamedArgs, Names};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Zip<A, B>(pub A, pub B)
@@ -33,7 +33,17 @@ where
     Self: Computation,
     A: ComputationFn,
     B: ComputationFn,
+    Zip<A::Filled, B::Filled>: Computation,
 {
+    type Filled = Zip<A::Filled, B::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        let (args_0, args_1) = named_args
+            .partition(&self.0.arg_names(), &self.1.arg_names())
+            .unwrap_or_else(|e| panic!("{}", e,));
+        Zip(self.0.fill(args_0), self.1.fill(args_1))
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.0.arg_names().union(self.1.arg_names())
     }
@@ -51,7 +61,14 @@ impl<A> ComputationFn for Fst<A>
 where
     Self: Computation,
     A: ComputationFn,
+    Fst<A::Filled>: Computation,
 {
+    type Filled = Fst<A::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        Fst(self.0.fill(named_args))
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.0.arg_names()
     }
@@ -69,7 +86,14 @@ impl<A> ComputationFn for Snd<A>
 where
     Self: Computation,
     A: ComputationFn,
+    Snd<A::Filled>: Computation,
 {
+    type Filled = Snd<A::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        Snd(self.0.fill(named_args))
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.0.arg_names()
     }
@@ -132,9 +156,19 @@ macro_rules! zip_n {
             impl< $( [<T $i>] ),* > ComputationFn for [<Zip $n>]< $( [<T $i>] ),* >
             where
                 Self: Computation,
-                $( [<T $i>]: ComputationFn ),*
+                $( [<T $i>]: ComputationFn ),*,
+                [<Zip $n>]< $( [<T $i>]::Filled ),* >: Computation
             {
-                fn arg_names(&self) -> crate::Names {
+                type Filled = [<Zip $n>]< $( [<T $i>]::Filled ),* >;
+
+                fn fill(self, named_args: NamedArgs) -> Self::Filled {
+                    let ( $( [<args_ $i>] ),* ) = named_args
+                        .[<partition $n>]( $( &self.$i.arg_names() ),* )
+                        .unwrap_or_else(|e| panic!("{}", e,));
+                    [<Zip $n>]( $( self.$i.fill([<args_ $i>]) ),* )
+                }
+
+                fn arg_names(&self) -> Names {
                     Names::union_many([ $( &self.$i.arg_names() ),* ])
                 }
             }

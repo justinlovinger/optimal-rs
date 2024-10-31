@@ -10,7 +10,7 @@ use computation_types::{
     math::{Add, Mul},
     peano::{One, Zero},
     zip::{Zip, Zip7, Zip8},
-    Arg, Computation, ComputationFn, Function,
+    AnyArg, Arg, Computation, ComputationFn, Function,
 };
 
 use crate::{descend, Descend, StepSize};
@@ -98,12 +98,13 @@ where
     C1: Computation<Dim = Zero, Item = SufficientDecreaseParameter<A>>,
     B: Computation<Dim = Zero, Item = BacktrackingRate<A>>,
     F: ComputationFn<Dim = Zero, Item = A>,
+    F::Filled: Computation<Dim = Zero, Item = A>,
     S: Computation<Dim = Zero, Item = StepSize<A>>,
     P: Computation<Dim = One, Item = A>,
     V: Computation<Dim = Zero, Item = A>,
     DE: Computation<Dim = One, Item = A>,
     DI: Computation<Dim = One, Item = A>,
-    A: Clone + PartialOrd + ops::Add<Output = A> + ops::Mul<Output = A>,
+    A: Clone + AnyArg + PartialOrd + ops::Add<Output = A> + ops::Mul<Output = A>,
 {
     Zip7(
         c_1,

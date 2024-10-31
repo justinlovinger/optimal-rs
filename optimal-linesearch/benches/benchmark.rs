@@ -75,6 +75,7 @@ fn skewed_sphere_initial_point(len: usize) -> Vec<f64> {
 pub fn run_fixed_step_size<FD>(obj_func_d: FD, initial_point: Vec<f64>) -> Vec<f64>
 where
     FD: Clone + ComputationFn<Dim = One, Item = f64>,
+    FD::Filled: Computation<Dim = One, Item = f64>,
     FixedStepSize<FD>: Run<Output = Vec<f64>>,
 {
     fixed_step_size::fixed_step_size(obj_func_d, initial_point).run(named_args![])
@@ -88,7 +89,9 @@ pub fn run_backtracking_line_search<F, FD>(
 ) -> Vec<f64>
 where
     F: Clone + ComputationFn<Dim = Zero, Item = f64>,
+    F::Filled: Computation<Dim = Zero, Item = f64>,
     FD: Clone + ComputationFn<Dim = One, Item = f64>,
+    FD::Filled: Computation<Dim = One, Item = f64>,
     BacktrackingLineSearchComputation<f64, F, Zip<F, FD>>: Run<Output = Vec<f64>>,
 {
     BacktrackingLineSearchBuilder::default()
@@ -152,6 +155,7 @@ mod fixed_step_size {
     pub fn fixed_step_size<FD>(obj_func_d: FD, initial_point: Vec<f64>) -> FixedStepSize<FD>
     where
         FD: Clone + ComputationFn<Dim = One, Item = f64>,
+        FD::Filled: Computation<Dim = One, Item = f64>,
     {
         val!(0)
             .zip(val1!(initial_point))

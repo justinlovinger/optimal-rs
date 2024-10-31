@@ -23,6 +23,7 @@
 
 mod function;
 pub mod macros;
+mod named_args;
 mod names;
 pub mod peano;
 pub mod run;
@@ -44,7 +45,7 @@ use blanket::blanket;
 
 use crate::peano::{One, Suc, Two, Zero};
 
-pub use crate::{function::*, names::*, run::Run};
+pub use crate::{function::*, named_args::*, names::*, run::Run};
 
 /// A type representing a computation.
 ///
@@ -475,8 +476,14 @@ where
 ///
 /// Most computations should implement this,
 /// even if they represent a function with zero arguments.
-#[blanket(derive(Ref, Mut, Box, Rc, Arc, Cow))]
+#[blanket(derive(Box))]
 pub trait ComputationFn: Computation {
+    type Filled;
+
+    /// Fill arguments will values,
+    /// replacing `Arg`s with `Val`s.
+    fn fill(self, named_args: NamedArgs) -> Self::Filled;
+
     fn arg_names(&self) -> Names;
 }
 
@@ -596,6 +603,12 @@ impl<D, A> ComputationFn for Val<D, A>
 where
     Val<D, A>: Computation,
 {
+    type Filled = Self;
+
+    fn fill(self, _named_args: NamedArgs) -> Self::Filled {
+        self
+    }
+
     fn arg_names(&self) -> Names {
         Names::new()
     }
@@ -606,7 +619,64 @@ impl<D, A> Computation for Arg<D, A> {
     type Item = A;
 }
 
-impl<D, A> ComputationFn for Arg<D, A> {
+impl<A> ComputationFn for Arg<Zero, A>
+where
+    Self: Computation,
+    A: 'static + AnyArg,
+{
+    type Filled = Val<Zero, A>;
+
+    fn fill(self, mut named_args: NamedArgs) -> Self::Filled {
+        Val {
+            dim: self.dim,
+            inner: named_args
+                .pop(self.name)
+                .unwrap_or_else(|e| panic!("{}", e)),
+        }
+    }
+
+    fn arg_names(&self) -> Names {
+        Names::singleton(self.name)
+    }
+}
+
+impl<A> ComputationFn for Arg<One, A>
+where
+    Self: Computation,
+    A: 'static + Clone + AnyArg,
+{
+    type Filled = Val<One, Vec<A>>;
+
+    fn fill(self, mut named_args: NamedArgs) -> Self::Filled {
+        Val {
+            dim: self.dim,
+            inner: named_args
+                .pop(self.name)
+                .unwrap_or_else(|e| panic!("{}", e)),
+        }
+    }
+
+    fn arg_names(&self) -> Names {
+        Names::singleton(self.name)
+    }
+}
+
+impl<A> ComputationFn for Arg<Two, A>
+where
+    Self: Computation,
+    A: 'static + Clone + AnyArg,
+{
+    type Filled = Val<Two, crate::run::Matrix<Vec<A>>>;
+
+    fn fill(self, mut named_args: NamedArgs) -> Self::Filled {
+        Val {
+            dim: self.dim,
+            inner: named_args
+                .pop(self.name)
+                .unwrap_or_else(|e| panic!("{}", e)),
+        }
+    }
+
     fn arg_names(&self) -> Names {
         Names::singleton(self.name)
     }
@@ -660,7 +730,14 @@ impl<A> ComputationFn for Len<A>
 where
     Self: Computation,
     A: ComputationFn,
+    Len<A::Filled>: Computation,
 {
+    type Filled = Len<A::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        Len(self.0.fill(named_args))
+    }
+
     fn arg_names(&self) -> Names {
         self.0.arg_names()
     }

@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 use crate::{
     impl_core_ops,
     peano::{One, Two, Zero},
-    Computation, ComputationFn,
+    Computation, ComputationFn, NamedArgs,
 };
 
 /// See [`Computation::identity_matrix`].
@@ -29,7 +29,17 @@ impl<Len, T> ComputationFn for IdentityMatrix<Len, T>
 where
     Self: Computation,
     Len: ComputationFn,
+    IdentityMatrix<Len::Filled, T>: Computation,
 {
+    type Filled = IdentityMatrix<Len::Filled, T>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        IdentityMatrix {
+            len: self.len.fill(named_args),
+            ty: self.ty,
+        }
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.len.arg_names()
     }
@@ -82,7 +92,20 @@ where
     Self: Computation,
     Len: ComputationFn,
     Elem: ComputationFn,
+    FromDiagElem<Len::Filled, Elem::Filled>: Computation,
 {
+    type Filled = FromDiagElem<Len::Filled, Elem::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        let (args_0, args_1) = named_args
+            .partition(&self.len.arg_names(), &self.elem.arg_names())
+            .unwrap_or_else(|e| panic!("{}", e,));
+        FromDiagElem {
+            len: self.len.fill(args_0),
+            elem: self.elem.fill(args_1),
+        }
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.len.arg_names().union(self.elem.arg_names())
     }
@@ -123,7 +146,17 @@ where
     Self: Computation,
     A: ComputationFn,
     B: ComputationFn,
+    ScalarProduct<A::Filled, B::Filled>: Computation,
 {
+    type Filled = ScalarProduct<A::Filled, B::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        let (args_0, args_1) = named_args
+            .partition(&self.0.arg_names(), &self.1.arg_names())
+            .unwrap_or_else(|e| panic!("{}", e,));
+        ScalarProduct(self.0.fill(args_0), self.1.fill(args_1))
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.0.arg_names().union(self.1.arg_names())
     }
@@ -153,7 +186,17 @@ where
     Self: Computation,
     A: ComputationFn,
     B: ComputationFn,
+    MatMul<A::Filled, B::Filled>: Computation,
 {
+    type Filled = MatMul<A::Filled, B::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        let (args_0, args_1) = named_args
+            .partition(&self.0.arg_names(), &self.1.arg_names())
+            .unwrap_or_else(|e| panic!("{}", e,));
+        MatMul(self.0.fill(args_0), self.1.fill(args_1))
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.0.arg_names().union(self.1.arg_names())
     }
@@ -182,7 +225,17 @@ where
     Self: Computation,
     A: ComputationFn,
     B: ComputationFn,
+    MulOut<A::Filled, B::Filled>: Computation,
 {
+    type Filled = MulOut<A::Filled, B::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        let (args_0, args_1) = named_args
+            .partition(&self.0.arg_names(), &self.1.arg_names())
+            .unwrap_or_else(|e| panic!("{}", e,));
+        MulOut(self.0.fill(args_0), self.1.fill(args_1))
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.0.arg_names().union(self.1.arg_names())
     }
@@ -212,7 +265,17 @@ where
     Self: Computation,
     A: ComputationFn,
     B: ComputationFn,
+    MulCol<A::Filled, B::Filled>: Computation,
 {
+    type Filled = MulCol<A::Filled, B::Filled>;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        let (args_0, args_1) = named_args
+            .partition(&self.0.arg_names(), &self.1.arg_names())
+            .unwrap_or_else(|e| panic!("{}", e,));
+        MulCol(self.0.fill(args_0), self.1.fill(args_1))
+    }
+
     fn arg_names(&self) -> crate::Names {
         self.0.arg_names().union(self.1.arg_names())
     }

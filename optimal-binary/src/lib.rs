@@ -10,7 +10,7 @@ use computation_types::{
     sum::Sum,
     val,
     zip::{Zip3, Zip4},
-    Arg, Computation, ComputationFn, Function, Val,
+    AnyArg, Arg, Computation, ComputationFn, Function, Val,
 };
 use num_traits::{pow, AsPrimitive};
 use std::ops;
@@ -56,10 +56,11 @@ pub fn chunks_to_real_le<ToMin, ToMax, Bits, T>(
 ) -> ChunksToRealLe<ToMin, ToMax, Bits, T>
 where
     ToMin: Computation<Item = T>,
-    ToMax: ComputationFn<Item = T>,
-    Bits: ComputationFn<Dim = One, Item = bool>,
+    ToMax: Computation<Item = T>,
+    Bits: Computation<Dim = One, Item = bool>,
     T: 'static
         + Copy
+        + AnyArg
         + ops::Add<Output = T>
         + ops::Sub<Output = T>
         + ops::Mul<Output = T>
@@ -74,6 +75,10 @@ where
     <<ToMax::Dim as SameOrZero<ToMin::Dim>>::Max as SameOrZero<Zero>>::Max:
         SameOrZero<One, Max = One>,
     One: SameOrZero<ToMin::Dim, Max = One>,
+    Arg<ToMin::Dim, T>: ComputationFn<Dim = ToMin::Dim, Item = T>,
+    <Arg<ToMin::Dim, T> as ComputationFn>::Filled: Computation<Dim = ToMin::Dim, Item = T>,
+    Arg<ToMax::Dim, T>: ComputationFn<Dim = ToMax::Dim, Item = T>,
+    <Arg<ToMax::Dim, T> as ComputationFn>::Filled: Computation<Dim = ToMax::Dim, Item = T>,
 {
     scale(
         val!(to_int_max(chunk_size)),
@@ -128,10 +133,11 @@ pub fn to_real_le<ToMin, ToMax, Bits, T>(
 ) -> ToRealLe<ToMin, ToMax, Bits, T>
 where
     ToMin: Computation<Dim = Zero, Item = T>,
-    ToMax: ComputationFn<Dim = Zero, Item = T>,
-    Bits: ComputationFn<Dim = One, Item = bool>,
+    ToMax: Computation<Dim = Zero, Item = T>,
+    Bits: Computation<Dim = One, Item = bool>,
     T: 'static
         + Copy
+        + AnyArg
         + ops::Add<Output = T>
         + ops::Sub<Output = T>
         + ops::Mul<Output = T>
@@ -169,7 +175,7 @@ pub type Scale<FromMax, ToMin, ToMax, Num> = Then<
             >,
             Arg<<Num as Computation>::Dim, <Num as Computation>::Item>,
         >,
-        Arg<<ToMin as Computation>::Dim, <Num as Computation>::Item>,
+        Arg<<ToMin as Computation>::Dim, <ToMin as Computation>::Item>,
     >,
 >;
 
@@ -189,11 +195,12 @@ pub fn scale<FromMax, ToMin, ToMax, Num>(
     num: Num,
 ) -> Scale<FromMax, ToMin, ToMax, Num>
 where
-    FromMax: ComputationFn<Item = Num::Item>,
+    FromMax: Computation<Item = Num::Item>,
     ToMin: Computation<Item = Num::Item>,
-    ToMax: ComputationFn<Item = Num::Item>,
-    Num: ComputationFn,
-    Num::Item: ops::Add<Output = Num::Item>
+    ToMax: Computation<Item = Num::Item>,
+    Num: Computation,
+    Num::Item: AnyArg
+        + ops::Add<Output = Num::Item>
         + ops::Sub<Output = Num::Item>
         + ops::Mul<Output = Num::Item>
         + ops::Div<Output = Num::Item>,
@@ -202,6 +209,18 @@ where
     <<ToMax::Dim as SameOrZero<ToMin::Dim>>::Max as SameOrZero<FromMax::Dim>>::Max:
         SameOrZero<Num::Dim, Max = Num::Dim>,
     Num::Dim: SameOrZero<ToMin::Dim, Max = Num::Dim>,
+    Arg<Num::Dim, Num::Item>: ComputationFn<Dim = Num::Dim, Item = Num::Item>,
+    <Arg<Num::Dim, Num::Item> as ComputationFn>::Filled:
+        Computation<Dim = Num::Dim, Item = Num::Item>,
+    Arg<ToMin::Dim, Num::Item>: ComputationFn<Dim = ToMin::Dim, Item = Num::Item>,
+    <Arg<ToMin::Dim, Num::Item> as ComputationFn>::Filled:
+        Computation<Dim = ToMin::Dim, Item = Num::Item>,
+    Arg<FromMax::Dim, Num::Item>: ComputationFn<Dim = FromMax::Dim, Item = Num::Item>,
+    <Arg<FromMax::Dim, Num::Item> as ComputationFn>::Filled:
+        Computation<Dim = FromMax::Dim, Item = Num::Item>,
+    Arg<ToMax::Dim, Num::Item>: ComputationFn<Dim = ToMax::Dim, Item = Num::Item>,
+    <Arg<ToMax::Dim, Num::Item> as ComputationFn>::Filled:
+        Computation<Dim = ToMax::Dim, Item = Num::Item>,
 {
     Zip4(from_max, to_min, to_max, num).then(Function::anonymous(
         ("from_max", "to_min", "to_max", "num"),
@@ -277,7 +296,9 @@ mod chunks_to_int_le {
     use core::fmt;
     use std::marker::PhantomData;
 
-    use computation_types::{impl_core_ops, peano::One, Computation, ComputationFn, Names};
+    use computation_types::{
+        impl_core_ops, peano::One, Computation, ComputationFn, NamedArgs, Names,
+    };
 
     #[derive(Clone, Copy, Debug)]
     pub struct ChunksToIntLe<A, T>
@@ -314,7 +335,18 @@ mod chunks_to_int_le {
     where
         Self: Computation,
         A: ComputationFn,
+        ChunksToIntLe<A::Filled, T>: Computation,
     {
+        type Filled = ChunksToIntLe<A::Filled, T>;
+
+        fn fill(self, named_args: NamedArgs) -> Self::Filled {
+            ChunksToIntLe {
+                chunk_size: self.chunk_size,
+                child: self.child.fill(named_args),
+                ty: self.ty,
+            }
+        }
+
         fn arg_names(&self) -> Names {
             self.child.arg_names()
         }
@@ -335,11 +367,7 @@ mod chunks_to_int_le {
     mod run {
         use std::ops;
 
-        use computation_types::{
-            named_args,
-            run::{NamedArgs, RunCore, Unwrap, Value},
-            val1, Run,
-        };
+        use computation_types::{named_args, run::RunCore, val1, NamedArgs, Run, Unwrap, Value};
         use itertools::Itertools;
         use num_traits::AsPrimitive;
 
@@ -384,7 +412,7 @@ mod from_bit {
     use core::fmt;
     use std::marker::PhantomData;
 
-    use computation_types::{impl_core_ops, Computation, ComputationFn, Names};
+    use computation_types::{impl_core_ops, Computation, ComputationFn, NamedArgs, Names};
     use num_traits::AsPrimitive;
 
     #[derive(Clone, Copy, Debug)]
@@ -422,7 +450,17 @@ mod from_bit {
     where
         Self: Computation,
         A: ComputationFn,
+        FromBit<A::Filled, T>: Computation,
     {
+        type Filled = FromBit<A::Filled, T>;
+
+        fn fill(self, named_args: NamedArgs) -> Self::Filled {
+            FromBit {
+                child: self.child.fill(named_args),
+                ty: self.ty,
+            }
+        }
+
         fn arg_names(&self) -> Names {
             self.child.arg_names()
         }
@@ -443,7 +481,8 @@ mod from_bit {
     mod run {
         use computation_types::{
             peano::{One, Two, Zero},
-            run::{Matrix, NamedArgs, RunCore, Unwrap, Value},
+            run::{Matrix, RunCore},
+            NamedArgs, Unwrap, Value,
         };
 
         use super::*;
