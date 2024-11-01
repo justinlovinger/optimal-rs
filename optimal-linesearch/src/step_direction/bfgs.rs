@@ -21,7 +21,7 @@
 //!     let initial_point = vec![10.0, 10.0];
 //!     let len = initial_point.len();
 //!     let obj_func_d =
-//!         arg1!("point", f64).black_box::<_, One, f64>(|point: Vec<f64>| Value(obj_func_d(&point)));
+//!         arg1!("point", f64).black_box::<_, One, f64>(|point: Vec<f64>| obj_func_d(&point));
 //!
 //!     let bfgs = val!(1)
 //!         .zip(

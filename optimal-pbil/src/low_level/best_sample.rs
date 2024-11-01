@@ -8,7 +8,7 @@ use computation_types::{
     rand::SeededRand,
     val,
     zip::{Zip, Zip3, Zip4},
-    AnyArg, Arg, Computation, ComputationFn, Function, Val, Value,
+    AnyArg, Arg, Computation, ComputationFn, Function, Val,
 };
 use rand::{distributions::Bernoulli, Rng};
 
@@ -20,7 +20,7 @@ pub type BestSample<N, F, P, R> = Then<
         Zip<
             Zip<Val<Zero, usize>, N>,
             Then<
-                Zip<BlackBox<P, fn(Vec<Probability>) -> Value<Vec<Bernoulli>>, One, Bernoulli>, R>,
+                Zip<BlackBox<P, fn(Vec<Probability>) -> Vec<Bernoulli>, One, Bernoulli>, R>,
                 (&'static str, &'static str),
                 Zip<
                     Arg<One, Bernoulli>,
@@ -108,7 +108,7 @@ where
         Zip(val!(1_usize), num_samples),
         Zip(
             probabilities.black_box::<_, One, Bernoulli>(
-                bernoullis_from_probabilities as fn(Vec<Probability>) -> Value<Vec<Bernoulli>>,
+                bernoullis_from_probabilities as fn(Vec<Probability>) -> Vec<Bernoulli>,
             ),
             rng,
         )
@@ -190,11 +190,9 @@ where
     ))
 }
 
-fn bernoullis_from_probabilities(probabilities: Vec<Probability>) -> Value<Vec<Bernoulli>> {
-    Value(
-        probabilities
-            .into_iter()
-            .map(|p| Bernoulli::new(f64::from(p)).expect("Probability should be valid"))
-            .collect::<Vec<_>>(),
-    )
+fn bernoullis_from_probabilities(probabilities: Vec<Probability>) -> Vec<Bernoulli> {
+    probabilities
+        .into_iter()
+        .map(|p| Bernoulli::new(f64::from(p)).expect("Probability should be valid"))
+        .collect::<Vec<_>>()
 }

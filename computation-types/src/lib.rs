@@ -1,3 +1,4 @@
+#![feature(min_specialization)]
 #![warn(missing_debug_implementations)]
 
 //! Types for abstract mathematical computation.

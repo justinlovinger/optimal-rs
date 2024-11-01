@@ -83,26 +83,23 @@ where
 }
 
 mod run {
-    use computation_types::{run::RunCore, Computation, Unwrap, Value};
+    use computation_types::{run::RunCore, Computation};
 
     use crate::low_level::{Probability, ProbabilityThreshold};
 
     use super::Converged;
 
-    impl<T, P, POut> RunCore for Converged<T, P>
+    impl<T, P> RunCore for Converged<T, P>
     where
         Self: Computation,
-        T: RunCore<Output = Value<ProbabilityThreshold>>,
-        P: RunCore<Output = Value<POut>>,
-        POut: IntoIterator<Item = Probability>,
+        T: RunCore<Output = ProbabilityThreshold>,
+        P: RunCore,
+        P::Output: IntoIterator<Item = Probability>,
     {
-        type Output = Value<bool>;
+        type Output = bool;
 
         fn run_core(self) -> Self::Output {
-            Value(converged(
-                self.threshold.run_core().unwrap(),
-                self.probabilities.run_core().unwrap(),
-            ))
+            converged(self.threshold.run_core(), self.probabilities.run_core())
         }
     }
 

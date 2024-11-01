@@ -4,7 +4,7 @@ use crate::{
     peano::{One, Two},
     run::{Collect, Matrix},
     sum::Sum,
-    Computation, Unwrap, Value,
+    Computation,
 };
 
 use super::RunCore;
@@ -12,31 +12,31 @@ use super::RunCore;
 impl<Len, T> RunCore for IdentityMatrix<Len, T>
 where
     Self: Computation,
-    Len: RunCore<Output = Value<usize>>,
+    Len: RunCore<Output = usize>,
     T: Clone + num_traits::Zero + num_traits::One,
 {
-    type Output = Value<Matrix<Vec<T>>>;
+    type Output = Matrix<Vec<T>>;
 
     fn run_core(self) -> Self::Output {
-        let len = self.len.run_core().unwrap();
+        let len = self.len.run_core();
         let matrix = ndarray::Array2::from_diag_elem(len, T::one());
-        Value(Matrix::from_vec((len, len), matrix.into_raw_vec()).unwrap())
+        Matrix::from_vec((len, len), matrix.into_raw_vec()).unwrap()
     }
 }
 
 impl<Len, Elem, T> RunCore for FromDiagElem<Len, Elem>
 where
     Self: Computation,
-    Len: RunCore<Output = Value<usize>>,
-    Elem: RunCore<Output = Value<T>>,
+    Len: RunCore<Output = usize>,
+    Elem: RunCore<Output = T>,
     T: Clone + num_traits::Zero,
 {
-    type Output = Value<Matrix<Vec<T>>>;
+    type Output = Matrix<Vec<T>>;
 
     fn run_core(self) -> Self::Output {
-        let len = self.len.run_core().unwrap();
-        let matrix = ndarray::Array2::from_diag_elem(len, self.elem.run_core().unwrap());
-        Value(Matrix::from_vec((len, len), matrix.into_raw_vec()).unwrap())
+        let len = self.len.run_core();
+        let matrix = ndarray::Array2::from_diag_elem(len, self.elem.run_core());
+        Matrix::from_vec((len, len), matrix.into_raw_vec()).unwrap()
     }
 }
 
@@ -53,64 +53,61 @@ where
     }
 }
 
-impl<A, B, OutA, OutB, Elem> RunCore for MatMul<A, B>
+impl<A, B, Elem> RunCore for MatMul<A, B>
 where
     Self: Computation,
-    A: RunCore<Output = OutA>,
-    B: RunCore<Output = OutB>,
-    OutA: Collect<Two, Collected = Value<Matrix<Vec<Elem>>>>,
-    OutB: Collect<Two, Collected = Value<Matrix<Vec<Elem>>>>,
+    A: RunCore,
+    B: RunCore,
+    A::Output: Collect<Two, Collected = Matrix<Vec<Elem>>>,
+    B::Output: Collect<Two, Collected = Matrix<Vec<Elem>>>,
     Elem: ndarray::LinalgScalar,
 {
-    type Output = Value<Matrix<Vec<Elem>>>;
+    type Output = Matrix<Vec<Elem>>;
 
     fn run_core(self) -> Self::Output {
-        Value(mat_mul(
-            self.0.run_core().collect().unwrap(),
-            self.1.run_core().collect().unwrap(),
-        ))
+        mat_mul(self.0.run_core().collect(), self.1.run_core().collect())
     }
 }
 
-impl<A, B, OutA, OutB, Elem> RunCore for MulOut<A, B>
+impl<A, B, Elem> RunCore for MulOut<A, B>
 where
     Self: Computation,
-    A: RunCore<Output = OutA>,
-    B: RunCore<Output = OutB>,
-    OutA: Collect<One, Collected = Value<Vec<Elem>>>,
-    OutB: Collect<One, Collected = Value<Vec<Elem>>>,
+    A: RunCore,
+    B: RunCore,
+    A::Output: Collect<One, Collected = Vec<Elem>>,
+    B::Output: Collect<One, Collected = Vec<Elem>>,
     Elem: ndarray::LinalgScalar,
 {
-    type Output = Value<Matrix<Vec<Elem>>>;
+    type Output = Matrix<Vec<Elem>>;
 
     fn run_core(self) -> Self::Output {
-        let xs = self.0.run_core().collect().unwrap();
-        let ys = self.1.run_core().collect().unwrap();
+        let xs = self.0.run_core().collect();
+        let ys = self.1.run_core().collect();
         // `xs` and `ys` are 1d, so shapes will match its lengths if at least one dimension is `1`.
-        Value(mat_mul(
+        mat_mul(
             unsafe { Matrix::new_unchecked((xs.len(), 1), xs) },
             unsafe { Matrix::new_unchecked((1, ys.len()), ys) },
-        ))
+        )
     }
 }
 
-impl<A, B, OutA, OutB, Elem> RunCore for MulCol<A, B>
+impl<A, B, Elem> RunCore for MulCol<A, B>
 where
     Self: Computation,
-    A: RunCore<Output = OutA>,
-    B: RunCore<Output = OutB>,
-    OutA: Collect<Two, Collected = Value<Matrix<Vec<Elem>>>>,
-    OutB: Collect<One, Collected = Value<Vec<Elem>>>,
+    A: RunCore,
+    B: RunCore,
+    A::Output: Collect<Two, Collected = Matrix<Vec<Elem>>>,
+    B::Output: Collect<One, Collected = Vec<Elem>>,
     Elem: ndarray::LinalgScalar,
 {
-    type Output = Value<Vec<Elem>>;
+    type Output = Vec<Elem>;
 
     fn run_core(self) -> Self::Output {
-        let xs = self.0.run_core().collect().unwrap();
-        let ys = self.1.run_core().collect().unwrap();
+        let xs = self.0.run_core().collect();
+        let ys = self.1.run_core().collect();
         // `ys` is 1d, so the shape will match its length if at least one dimension is `1`.
         let ys = unsafe { Matrix::new_unchecked((ys.len(), 1), ys) };
-        Value(mat_mul(xs, ys).into_inner())
+        mat_mul(xs, ys).into_inner()
     }
 }
 

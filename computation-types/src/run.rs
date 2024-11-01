@@ -2,7 +2,7 @@ mod into_vec;
 mod matrix;
 mod run_core;
 
-use crate::{ComputationFn, NamedArgs, Unwrap};
+use crate::{ComputationFn, NamedArgs};
 
 pub use self::{collect::*, into_vec::*, matrix::*, run_core::*};
 
@@ -21,12 +21,11 @@ impl<T, Collected> Run for T
 where
     T: ComputationFn + RunCore,
     T::Output: Collect<T::Dim, Collected = Collected>,
-    Collected: Unwrap,
 {
-    type Output = Collected::Unwrapped;
+    type Output = Collected;
 
     fn run(self) -> Self::Output {
-        self.run_core().collect().unwrap()
+        self.run_core().collect()
     }
 }
 
@@ -59,10 +58,7 @@ mod function {
 mod collect {
     use paste::paste;
 
-    use crate::{
-        peano::{One, Two, Zero},
-        Value,
-    };
+    use crate::peano::{One, Two, Zero};
 
     use super::{IntoVec, Matrix};
 
@@ -72,35 +68,35 @@ mod collect {
         fn collect(self) -> Self::Collected;
     }
 
-    impl<T> Collect<Zero> for Value<T> {
-        type Collected = Value<T>;
+    impl<T> Collect<Zero> for T {
+        type Collected = T;
 
         fn collect(self) -> Self::Collected {
             self
         }
     }
 
-    impl<T> Collect<One> for Value<T>
+    impl<T> Collect<One> for T
     where
         T: IntoVec,
     {
-        type Collected = Value<Vec<T::Item>>;
+        type Collected = Vec<T::Item>;
 
         fn collect(self) -> Self::Collected {
-            Value(self.0.into_vec())
+            self.into_vec()
         }
     }
 
-    impl<V> Collect<Two> for Value<Matrix<V>>
+    impl<V> Collect<Two> for Matrix<V>
     where
         V: IntoVec,
     {
-        type Collected = Value<Matrix<Vec<V::Item>>>;
+        type Collected = Matrix<Vec<V::Item>>;
 
         fn collect(self) -> Self::Collected {
             // Neither shape nor the length of `inner` will change,
             // so they should still be fine.
-            Value(unsafe { Matrix::new_unchecked(self.0.shape(), self.0.into_inner().into_vec()) })
+            unsafe { Matrix::new_unchecked(self.shape(), self.into_inner().into_vec()) }
         }
     }
 

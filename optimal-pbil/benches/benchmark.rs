@@ -1,6 +1,6 @@
 use std::hint::black_box;
 
-use computation_types::{arg1, peano::Zero, AnyArg, Computation, ComputationFn, Run, Value};
+use computation_types::{arg1, peano::Zero, AnyArg, Computation, ComputationFn, Run};
 use optimal_pbil::{PbilBuilder, PbilComputation};
 use rand::prelude::*;
 use tango_bench::{benchmark_fn, tango_benchmarks, tango_main, IntoBenchmarks};
@@ -32,8 +32,8 @@ where
         .argmin()
 }
 
-fn count(point: Vec<bool>) -> Value<usize> {
-    Value(point.iter().filter(|x| **x).count())
+fn count(point: Vec<bool>) -> usize {
+    point.iter().filter(|x| **x).count()
 }
 
 tango_benchmarks!(pbil_benchmarks());

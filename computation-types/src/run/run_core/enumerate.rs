@@ -1,6 +1,6 @@
 use num_traits::AsPrimitive;
 
-use crate::{enumerate::Enumerate, run::RunCore, Computation, ComputationFn, Run, Value};
+use crate::{enumerate::Enumerate, run::RunCore, Computation, ComputationFn, Run};
 
 impl<A, F, Item> RunCore for Enumerate<A, F>
 where
@@ -17,12 +17,10 @@ where
         let xs = self.child.run();
         let enumerated = 0..xs.len();
         self.f.call_core((
-            Value(xs),
-            Value(
-                enumerated
-                    .map(|i| i.as_())
-                    .collect::<Vec<<A::Output as IntoIterator>::Item>>(),
-            ),
+            xs,
+            enumerated
+                .map(|i| i.as_())
+                .collect::<Vec<<A::Output as IntoIterator>::Item>>(),
         ))
     }
 }

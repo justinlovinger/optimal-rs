@@ -8,7 +8,7 @@ mod rand;
 mod sum;
 mod zip;
 
-use crate::{Computation, Len, Unwrap, Val, Value};
+use crate::{Computation, Len, Val};
 
 /// See [`super::Run`].
 ///
@@ -93,24 +93,24 @@ impl<Dim, A> RunCore for Val<Dim, A>
 where
     Self: Computation,
 {
-    type Output = Value<A>;
+    type Output = A;
 
     fn run_core(self) -> Self::Output {
-        Value(self.inner)
+        self.inner
     }
 }
 
-impl<A, Out, It> RunCore for Len<A>
+impl<A> RunCore for Len<A>
 where
     Self: Computation,
-    A: RunCore<Output = Value<Out>>,
-    Out: IntoIterator<IntoIter = It>,
-    It: ExactSizeIterator,
+    A: RunCore,
+    A::Output: IntoIterator,
+    <A::Output as IntoIterator>::IntoIter: ExactSizeIterator,
 {
-    type Output = Value<usize>;
+    type Output = usize;
 
     fn run_core(self) -> Self::Output {
-        Value(self.0.run_core().unwrap().into_iter().len())
+        self.0.run_core().into_iter().len()
     }
 }
 

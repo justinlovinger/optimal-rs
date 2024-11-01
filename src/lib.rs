@@ -66,7 +66,7 @@ use std::ops::{Add, Mul, RangeInclusive, Sub};
 use computation_types::{
     arg1,
     peano::{One, Zero},
-    Computation, Value,
+    Computation,
 };
 use optimal_linesearch::backtracking_line_search::BacktrackingLineSearchBuilder;
 use optimal_pbil::{types::*, Pbil, PbilStoppingCriteria};
@@ -174,12 +174,10 @@ impl<I, F, FD, R> RealDerivativeWith<I, F, FD, R> {
         BacktrackingLineSearchBuilder::default()
             .for_(
                 initial_point.len(),
-                arg1!("point").black_box::<_, Zero, f64>(|point: Vec<f64>| {
-                    Value((self.problem.obj_func)(&point))
-                }),
-                arg1!("point").black_box::<_, One, f64>(|point: Vec<f64>| {
-                    Value((self.problem.obj_func_d)(&point))
-                }),
+                arg1!("point")
+                    .black_box::<_, Zero, f64>(|point: Vec<f64>| (self.problem.obj_func)(&point)),
+                arg1!("point")
+                    .black_box::<_, One, f64>(|point: Vec<f64>| (self.problem.obj_func_d)(&point)),
             )
             .with_point(initial_point)
             .argmin()
@@ -265,7 +263,7 @@ impl<F> BinaryWith<F> {
             .for_(
                 self.problem.len,
                 arg1!("sample")
-                    .black_box(|sample: Vec<bool>| Value((self.problem.obj_func)(&sample))),
+                    .black_box::<_, _, f64>(|sample: Vec<bool>| (self.problem.obj_func)(&sample)),
             )
             .with(self.rng)
             .argmin()

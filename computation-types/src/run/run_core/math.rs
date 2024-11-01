@@ -6,7 +6,7 @@ use crate::{
     math::*,
     peano::{One, Two, Zero},
     run::{Matrix, RunCore},
-    Computation, Unwrap, Value,
+    Computation,
 };
 
 macro_rules! impl_run_core_for_binary_op {
@@ -18,17 +18,17 @@ macro_rules! impl_run_core_for_binary_op {
     };
     ( $op:ident, $package:ident, $bound:ident ) => {
         paste! {
-            impl<A, B, OutA, OutB> RunCore for $op<A, B>
+            impl<A, B, OutA> RunCore for $op<A, B>
             where
                 Self: Computation,
-                A: Computation + RunCore<Output = Value<OutA>>,
-                B: Computation + RunCore<Output = Value<OutB>>,
-                OutA: [<Broadcast $op>]<OutB, A::Dim, B::Dim>
+                A: Computation + RunCore<Output = OutA>,
+                B: Computation + RunCore,
+                OutA: [<Broadcast $op>]<B::Output, A::Dim, B::Dim>
             {
-                type Output = Value<OutA::Output>;
+                type Output = OutA::Output;
 
                 fn run_core(self) -> Self::Output {
-                    Value(self.0.run_core().unwrap().[<broadcast_ $op:lower>](self.1.run_core().unwrap()))
+                    self.0.run_core().[<broadcast_ $op:lower>](self.1.run_core())
                 }
             }
 
@@ -174,13 +174,13 @@ macro_rules! impl_run_core_for_unary_op {
             impl<A, Out> RunCore for $op<A>
             where
                 Self: Computation,
-                A: Computation + RunCore<Output = Value<Out>>,
+                A: Computation + RunCore<Output = Out>,
                 Out: [<Broadcast $op>]<A::Dim>
             {
-                type Output = Value<<Out as [<Broadcast $op>]<A::Dim>>::Output>;
+                type Output = Out::Output;
 
                 fn run_core(self) -> Self::Output {
-                    Value(self.0.run_core().unwrap().[<broadcast_ $op:lower>]())
+                    self.0.run_core().[<broadcast_ $op:lower>]()
                 }
             }
 
@@ -252,13 +252,13 @@ mod abs {
     impl<A, Out> RunCore for Abs<A>
     where
         Self: Computation,
-        A: Computation + RunCore<Output = Value<Out>>,
+        A: Computation + RunCore<Output = Out>,
         Out: BroadcastAbs<A::Dim>,
     {
-        type Output = Value<<Out as BroadcastAbs<A::Dim>>::Output>;
+        type Output = Out::Output;
 
         fn run_core(self) -> Self::Output {
-            Value(self.0.run_core().unwrap().broadcast_abs())
+            self.0.run_core().broadcast_abs()
         }
     }
 

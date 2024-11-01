@@ -5,22 +5,22 @@ mod rands {
         peano::{One, Two, Zero},
         rand::Rand,
         run::{Matrix, RunCore},
-        Computation, Unwrap, Value,
+        Computation,
     };
 
-    impl<DistComp, T, Dist, Out> RunCore for Rand<DistComp, T>
+    impl<Dist, T, Out> RunCore for Rand<Dist, T>
     where
-        DistComp: Computation + RunCore<Output = Value<Dist>>,
-        Dist: BroadcastRands<DistComp::Dim, T, Output = Out>,
+        Dist: Computation + RunCore<Output = Out>,
+        Out: BroadcastRands<Dist::Dim, T>,
     {
-        type Output = Value<Out>;
+        type Output = Out::Output;
 
         fn run_core(self) -> Self::Output {
-            Value(self.distribution.run_core().unwrap().broadcast())
+            self.distribution.run_core().broadcast()
         }
     }
 
-    trait BroadcastRands<Dim, T> {
+    pub trait BroadcastRands<Dim, T> {
         type Output;
 
         fn broadcast(self) -> Self::Output;
@@ -81,28 +81,28 @@ mod seeded_rands {
         peano::{One, Two, Zero},
         rand::SeededRand,
         run::{Matrix, RunCore},
-        Computation, Value,
+        Computation,
     };
 
-    impl<RComp, DistComp, T, R, Dist, Out> RunCore for SeededRand<RComp, DistComp, T>
+    impl<R, Dist, T, DistOut> RunCore for SeededRand<R, Dist, T>
     where
         Self: Computation,
-        RComp: RunCore<Output = Value<R>>,
-        DistComp: Computation + RunCore<Output = Value<Dist>>,
-        R: Rng,
-        Dist: BroadcastSeededRands<DistComp::Dim, T, Output = Out>,
+        R: RunCore,
+        R::Output: Rng,
+        Dist: Computation + RunCore<Output = DistOut>,
+        DistOut: BroadcastSeededRands<Dist::Dim, T>,
     {
-        type Output = (Value<R>, Value<Out>);
+        type Output = (R::Output, DistOut::Output);
 
         fn run_core(self) -> Self::Output {
             let mut rng = self.rng.run_core();
             let dist = self.distribution.run_core();
-            let out = Value(dist.0.broadcast(&mut rng.0));
+            let out = dist.broadcast(&mut rng);
             (rng, out)
         }
     }
 
-    trait BroadcastSeededRands<Dim, T> {
+    pub trait BroadcastSeededRands<Dim, T> {
         type Output;
 
         fn broadcast<R>(self, rng: &mut R) -> Self::Output

@@ -144,7 +144,7 @@ mod tests {
     use computation_types::{
         arg1,
         peano::{One, Zero},
-        Computation, Value,
+        Computation,
     };
     use rand::{rngs::SmallRng, SeedableRng};
 
@@ -270,9 +270,8 @@ mod tests {
             .stopping_criteria(stopping_criteria)
             .for_(
                 len,
-                arg1!("point").black_box::<_, Zero, f64>(|point: Vec<f64>| Value(obj_func(&point))),
-                arg1!("point")
-                    .black_box::<_, One, f64>(|point: Vec<f64>| Value(obj_func_d(&point))),
+                arg1!("point").black_box::<_, Zero, f64>(|point: Vec<f64>| obj_func(&point)),
+                arg1!("point").black_box::<_, One, f64>(|point: Vec<f64>| obj_func_d(&point)),
             )
             .with_random_point_using(initial_bounds(len), SmallRng::seed_from_u64(seed))
             .argmin();

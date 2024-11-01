@@ -98,28 +98,27 @@ mod run {
     use computation_types::{
         peano::{One, Two, Zero},
         run::{Matrix, RunCore},
-        Computation, Unwrap, Value,
+        Computation,
     };
 
     use crate::low_level::{adjust, AdjustRate, Probability};
 
     use super::Adjust;
 
-    impl<R, P, B, OutP, OutB> RunCore for Adjust<R, P, B>
+    impl<R, P, B, OutP> RunCore for Adjust<R, P, B>
     where
         Self: Computation,
-        R: Computation + RunCore<Output = Value<AdjustRate>>,
-        P: Computation + RunCore<Output = Value<OutP>>,
-        B: Computation + RunCore<Output = Value<OutB>>,
-        OutP: BroadcastAdjust<OutB, P::Dim, B::Dim>,
+        R: Computation + RunCore<Output = AdjustRate>,
+        P: Computation + RunCore<Output = OutP>,
+        B: Computation + RunCore,
+        OutP: BroadcastAdjust<B::Output, P::Dim, B::Dim>,
     {
-        type Output = Value<OutP::Output>;
+        type Output = OutP::Output;
 
         fn run_core(self) -> Self::Output {
-            Value(self.probability.run_core().unwrap().broadcast_adjust(
-                self.rate.run_core().unwrap(),
-                self.sample.run_core().unwrap(),
-            ))
+            self.probability
+                .run_core()
+                .broadcast_adjust(self.rate.run_core(), self.sample.run_core())
         }
     }
 

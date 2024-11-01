@@ -6,14 +6,14 @@
 //! # Examples
 //!
 //! ```
-//! use computation_types::{arg1, named_args, peano::Zero, Computation, Run, Value};
+//! use computation_types::{arg1, named_args, peano::Zero, Computation, Run};
 //! use optimal_pbil::PbilBuilder;
 //!
 //! let pbil = PbilBuilder::default()
 //!     .for_(
 //!         2,
-//!         arg1!("sample").black_box(|sample: Vec<bool>| {
-//!             Value(sample.iter().filter(|x| **x).count())
+//!         arg1!("sample").black_box::<_, _, usize>(|sample: Vec<bool>| {
+//!             sample.iter().filter(|x| **x).count()
 //!         }),
 //!     )
 //!     .computation();

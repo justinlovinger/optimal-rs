@@ -65,28 +65,26 @@ where
 }
 
 mod run {
-    use computation_types::{run::RunCore, Computation, Unwrap, Value};
+    use computation_types::{run::RunCore, Computation};
 
     use crate::low_level::Probability;
 
     use super::PointFrom;
 
-    impl<P, POut> RunCore for PointFrom<P>
+    impl<P> RunCore for PointFrom<P>
     where
         Self: Computation,
-        P: RunCore<Output = Value<POut>>,
-        POut: IntoIterator<Item = Probability>,
+        P: RunCore,
+        P::Output: IntoIterator<Item = Probability>,
     {
-        type Output = Value<std::iter::Map<POut::IntoIter, fn(Probability) -> bool>>;
+        type Output =
+            std::iter::Map<<P::Output as IntoIterator>::IntoIter, fn(Probability) -> bool>;
 
         fn run_core(self) -> Self::Output {
-            Value(
-                self.probabilities
-                    .run_core()
-                    .unwrap()
-                    .into_iter()
-                    .map(|p| f64::from(p) >= 0.5),
-            )
+            self.probabilities
+                .run_core()
+                .into_iter()
+                .map(|p| f64::from(p) >= 0.5)
         }
     }
 }

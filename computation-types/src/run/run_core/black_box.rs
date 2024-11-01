@@ -17,14 +17,14 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{peano::Zero, val, Computation, Run, Value};
+    use crate::{peano::Zero, val, Computation, Run};
 
     #[proptest]
     fn black_box_should_run_its_function_and_pass_the_result_to_next(
         #[strategy(-100000..10000)] x: i32,
     ) {
         prop_assert_eq!(
-            (val!(x).black_box::<_, Zero, i32>(|x: i32| Value(x + 1)) + val!(1)).run(),
+            (val!(x).black_box::<_, Zero, i32>(|x: i32| x + 1) + val!(1)).run(),
             x + 2
         );
     }
@@ -33,7 +33,7 @@ mod tests {
     fn black_box_should_support_returning_tuples(#[strategy(-100000..10000)] x: i32) {
         prop_assert_eq!(
             val!(x)
-                .black_box::<_, (Zero, Zero), (i32, i32)>(|x: i32| (Value(x + 1), Value(x + 2)))
+                .black_box::<_, (Zero, Zero), (i32, i32)>(|x: i32| (x + 1, x + 2))
                 .run(),
             (x + 1, x + 2)
         );

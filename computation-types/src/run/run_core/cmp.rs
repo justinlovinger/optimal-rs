@@ -1,25 +1,21 @@
 use paste::paste;
 
-use crate::{
-    cmp::*,
-    run::{RunCore, Unwrap},
-    Computation, Value,
-};
+use crate::{cmp::*, run::RunCore, Computation};
 
 macro_rules! impl_run_core_for_comparison {
     ( $op:ident, $where:ident ) => {
         paste! {
-            impl<A, B, AOut, BOut> RunCore for $op<A, B>
+            impl<A, B> RunCore for $op<A, B>
             where
                 Self: Computation,
-                A: RunCore<Output = Value<AOut>>,
-                B: RunCore<Output = Value<BOut>>,
-                AOut: $where<BOut>
+                A: RunCore,
+                B: RunCore,
+                A::Output: $where<B::Output>
             {
-                type Output = Value<bool>;
+                type Output = bool;
 
                 fn run_core(self) -> Self::Output {
-                    Value(self.0.run_core().unwrap().[<$op:lower>](&self.1.run_core().unwrap()))
+                    self.0.run_core().[<$op:lower>](&self.1.run_core())
                 }
             }
         }
@@ -36,33 +32,30 @@ impl_run_core_for_comparison!(Ge, PartialOrd);
 impl<A, Out> RunCore for Max<A>
 where
     Self: Computation,
-    A: RunCore<Output = Value<Out>>,
+    A: RunCore<Output = Out>,
     Out: IntoIterator,
     Out::Item: PartialOrd,
 {
-    type Output = Value<Out::Item>;
+    type Output = Out::Item;
 
     fn run_core(self) -> Self::Output {
-        Value(
-            self.0
-                .run_core()
-                .unwrap()
-                .into_iter()
-                .reduce(|x, y| if x > y { x } else { y })
-                .unwrap(),
-        )
+        self.0
+            .run_core()
+            .into_iter()
+            .reduce(|x, y| if x > y { x } else { y })
+            .unwrap()
     }
 }
 
 impl<A> RunCore for Not<A>
 where
     Self: Computation,
-    A: RunCore<Output = Value<bool>>,
+    A: RunCore<Output = bool>,
 {
-    type Output = Value<bool>;
+    type Output = bool;
 
     fn run_core(self) -> Self::Output {
-        Value(!self.0.run_core().unwrap())
+        !self.0.run_core()
     }
 }
 

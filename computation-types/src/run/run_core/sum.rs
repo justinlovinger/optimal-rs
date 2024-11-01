@@ -1,19 +1,19 @@
 use core::ops;
 
-use crate::{run::RunCore, sum::Sum, Computation, Unwrap, Value};
+use crate::{run::RunCore, sum::Sum, Computation};
 
-impl<A, Out> RunCore for Sum<A>
+impl<A, Item> RunCore for Sum<A>
 where
     Self: Computation,
-    A: RunCore<Output = Value<Out>>,
-    Out: IntoIterator,
-    Out::Item: ops::Add,
-    <Out::Item as ops::Add>::Output: std::iter::Sum<Out::Item>,
+    A: RunCore,
+    A::Output: IntoIterator<Item = Item>,
+    Item: ops::Add,
+    Item::Output: std::iter::Sum<Item>,
 {
-    type Output = Value<<Out::Item as ops::Add>::Output>;
+    type Output = Item::Output;
 
     fn run_core(self) -> Self::Output {
-        Value(self.0.run_core().unwrap().into_iter().sum())
+        self.0.run_core().into_iter().sum()
     }
 }
 
