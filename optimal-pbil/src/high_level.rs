@@ -5,11 +5,10 @@ use computation_types::{
     cmp::{Lt, Not},
     control_flow::{LoopWhile, Then},
     math::Add,
-    named_args,
     peano::{One, Zero},
     val, val1,
     zip::Zip,
-    AnyArg, Arg, Computation, ComputationFn, Function, NamedArgs, Run, Val,
+    AnyArg, Arg, Computation, ComputationFn, Function, Run, Val,
 };
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
@@ -157,7 +156,7 @@ where
     where
         PbilComputation<F, R>: Run<Output = Vec<bool>>,
     {
-        self.computation().run(named_args![])
+        self.computation().run()
     }
 
     /// Return a computation representing this algorithm.
@@ -312,10 +311,10 @@ where
 {
     type Output = Vec<bool>;
 
-    fn run(self, args: NamedArgs) -> Self::Output {
+    fn run(self) -> Self::Output {
         match self {
-            PbilComputation::Iteration(x) => x.run(args),
-            PbilComputation::Threshold(x) => x.run(args),
+            PbilComputation::Iteration(x) => x.run(),
+            PbilComputation::Threshold(x) => x.run(),
         }
     }
 }

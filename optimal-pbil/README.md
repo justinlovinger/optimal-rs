@@ -24,7 +24,7 @@ let pbil = PbilBuilder::default()
     )
     .computation();
 println!("{}", pbil);
-println!("{:?}", pbil.run(named_args![]));
+println!("{:?}", pbil.run());
 ```
 
 License: MIT

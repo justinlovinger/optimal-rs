@@ -111,10 +111,7 @@ where
 }
 
 mod run {
-    use computation_types::{
-        run::{DistributeArgs, RunCore},
-        Computation, NamedArgs, Unwrap, Value,
-    };
+    use computation_types::{run::RunCore, Computation, Unwrap, Value};
     use rand::{distributions::Standard, Rng};
 
     use crate::low_level::{adjust, MutationAdjustRate, MutationChance, Probability};
@@ -124,25 +121,24 @@ mod run {
     impl<C, A, P, R, POut, ROut> RunCore for Mutate<C, A, P, R>
     where
         Self: Computation,
-        (C, A, P, R): DistributeArgs<
-            Output = (
-                Value<MutationChance>,
-                Value<MutationAdjustRate>,
-                Value<POut>,
-                Value<ROut>,
-            ),
-        >,
+        C: RunCore<Output = Value<MutationChance>>,
+        A: RunCore<Output = Value<MutationAdjustRate>>,
+        P: RunCore<Output = Value<POut>>,
+        R: RunCore<Output = Value<ROut>>,
         POut: IntoIterator<Item = Probability>,
         ROut: Rng,
     {
         type Output = (Value<ROut>, Value<Vec<Probability>>);
 
-        fn run_core(self, args: NamedArgs) -> Self::Output {
-            let (chance, adjust_rate, probabilities, mut rng) =
-                (self.chance, self.adjust_rate, self.probabilities, self.rng)
-                    .distribute(args)
-                    .unwrap();
-            let out = mutate_probabilities(chance, adjust_rate, probabilities, &mut rng).collect();
+        fn run_core(self) -> Self::Output {
+            let mut rng = self.rng.run_core().unwrap();
+            let out = mutate_probabilities(
+                self.chance.run_core().unwrap(),
+                self.adjust_rate.run_core().unwrap(),
+                self.probabilities.run_core().unwrap(),
+                &mut rng,
+            )
+            .collect();
             (Value(rng), Value(out))
         }
     }

@@ -18,7 +18,7 @@
 //!
 //! let one_plus_one = val!(1) + val!(1);
 //! assert_eq!(one_plus_one.to_string(), "(1 + 1)");
-//! assert_eq!(one_plus_one.run(named_args![]), 2);
+//! assert_eq!(one_plus_one.run(), 2);
 //! ```
 
 mod function;
@@ -783,4 +783,36 @@ mod tests {
         let inp = val1!(vec![0, 1]);
         assert_eq!(inp.clone().len().to_string(), format!("{}.len()", inp));
     }
+
+    // The following test requires `Eq` for computation-types:
+    // ```
+    // #[proptest]
+    // fn args_should_propagate_correctly(
+    //     #[strategy(-1000..1000)] x: i32,
+    //     #[strategy(-1000..1000)] y: i32,
+    //     #[strategy(-1000..1000)] z: i32,
+    //     #[strategy(-1000..1000)] in_x: i32,
+    //     #[strategy(-1000..1000)] in_y: i32,
+    //     #[strategy(-1000..1000)] in_z: i32,
+    // ) {
+    //     prop_assume!((x - in_y) != 0);
+    //     prop_assume!(z != 0);
+    //     prop_assert_eq!(
+    //         (arg!("foo", i32) / (val!(x) - arg!("bar", i32))
+    //             + -(val!(z) * val!(y) + arg!("baz", i32)))
+    //         .fill(named_args![("foo", in_x), ("bar", in_y), ("baz", in_z)]),
+    //         val!(in_x) / (val!(x) - val!(in_y)) + -(val!(z) * val!(y) + val!(in_z))
+    //     );
+    //     prop_assert_eq!(
+    //         (arg!("foo", i32)
+    //             + (((val!(x) + val!(y) - arg!("bar", i32)) / -val!(z)) * arg!("baz", i32)))
+    //         .fill(named_args![("foo", in_x), ("bar", in_y), ("baz", in_z)]),
+    //         val!(in_x) + (((val!(x) + val!(y) - val!(in_y)) / -val!(z)) * val!(in_z))
+    //     );
+    //     prop_assert_eq!(
+    //         -(-arg!("foo", i32)).fill(named_args![("foo", x)]),
+    //         -(-val!(x))
+    //     );
+    // }
+    // ```
 }

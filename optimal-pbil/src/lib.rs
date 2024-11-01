@@ -18,7 +18,7 @@
 //!     )
 //!     .computation();
 //! println!("{}", pbil);
-//! println!("{:?}", pbil.run(named_args![]));
+//! println!("{:?}", pbil.run());
 //! ```
 
 mod high_level;

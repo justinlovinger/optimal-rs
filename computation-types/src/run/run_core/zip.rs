@@ -1,20 +1,17 @@
 use paste::paste;
 
-use crate::{
-    run::{DistributeArgs, NamedArgs, RunCore},
-    zip::*,
-    Computation,
-};
+use crate::{run::RunCore, zip::*, Computation};
 
-impl<A, B, Out> RunCore for Zip<A, B>
+impl<A, B> RunCore for Zip<A, B>
 where
     Self: Computation,
-    (A, B): DistributeArgs<Output = Out>,
+    A: RunCore,
+    B: RunCore,
 {
-    type Output = Out;
+    type Output = (A::Output, B::Output);
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        (self.0, self.1).distribute(args)
+    fn run_core(self) -> Self::Output {
+        (self.0.run_core(), self.1.run_core())
     }
 }
 
@@ -25,8 +22,8 @@ where
 {
     type Output = OutA;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        self.0.run_core(args).0
+    fn run_core(self) -> Self::Output {
+        self.0.run_core().0
     }
 }
 
@@ -37,23 +34,23 @@ where
 {
     type Output = OutB;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        self.0.run_core(args).1
+    fn run_core(self) -> Self::Output {
+        self.0.run_core().1
     }
 }
 
 macro_rules! impl_intocpu_for_zip_n {
     ( $n:expr, $( $i:expr ),* ) => {
         paste! {
-            impl< $( [<T $i>] ),* , Out > RunCore for [<Zip $n>]< $( [<T $i>] ),* >
+            impl< $( [<T $i>] ),* > RunCore for [<Zip $n>]< $( [<T $i>] ),* >
             where
                 Self: Computation,
-                ( $( [<T $i>] ),* ): DistributeArgs<Output = Out>,
+                $( [<T $i>]: RunCore ),*,
             {
-                type Output = Out;
+                type Output = ( $( [<T $i>]::Output ),* );
 
-                fn run_core(self, args: NamedArgs) -> Self::Output {
-                    ( $( self.$i ),* ).distribute(args)
+                fn run_core(self) -> Self::Output {
+                    ( $( self.$i.run_core() ),* )
                 }
             }
         }
@@ -80,30 +77,27 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{named_args, val, Computation, Run};
+    use crate::{val, Computation, Run};
 
     use super::*;
 
     #[proptest]
     fn zip_should_return_a_tuple_when_run(x: usize, y: usize) {
-        prop_assert_eq!(val!(x).zip(val!(y)).run(named_args![]), (x, y));
+        prop_assert_eq!(val!(x).zip(val!(y)).run(), (x, y));
     }
 
     #[proptest]
     fn fst_should_return_the_first_item_in_a_tuple_when_run(x: usize, y: usize) {
-        prop_assert_eq!(val!(x).zip(val!(y)).fst().run(named_args![]), x);
+        prop_assert_eq!(val!(x).zip(val!(y)).fst().run(), x);
     }
 
     #[proptest]
     fn snd_should_return_the_second_item_in_a_tuple_when_run(x: usize, y: usize) {
-        prop_assert_eq!(val!(x).zip(val!(y)).snd().run(named_args![]), y);
+        prop_assert_eq!(val!(x).zip(val!(y)).snd().run(), y);
     }
 
     #[proptest]
     fn zip3_should_return_a_three_tuple_when_run(x: usize, y: usize, z: usize) {
-        prop_assert_eq!(
-            Zip3(val!(x), val!(y), val!(z)).run(named_args![]),
-            (x, y, z)
-        );
+        prop_assert_eq!(Zip3(val!(x), val!(y), val!(z)).run(), (x, y, z));
     }
 }

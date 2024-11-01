@@ -1,6 +1,6 @@
 use num_traits::AsPrimitive;
 
-use crate::{enumerate::Enumerate, run::RunCore, Computation, NamedArgs, Run, Value};
+use crate::{enumerate::Enumerate, run::RunCore, Computation, ComputationFn, Run, Value};
 
 impl<A, F, Item> RunCore for Enumerate<A, F>
 where
@@ -8,12 +8,13 @@ where
     A: Run<Output = Vec<Item>>,
     Item: 'static + Copy + std::fmt::Debug,
     usize: AsPrimitive<Item>,
-    F: RunCore,
+    F: ComputationFn,
+    F::Filled: RunCore,
 {
-    type Output = F::Output;
+    type Output = <F::Filled as RunCore>::Output;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        let xs = self.child.run(args);
+    fn run_core(self) -> Self::Output {
+        let xs = self.child.run();
         let enumerated = 0..xs.len();
         self.f.call_core((
             Value(xs),
@@ -31,13 +32,13 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{arg1, named_args, val1, Computation, Function, Run};
+    use crate::{arg1, val1, Computation, Function, Run};
 
     #[proptest]
     fn enumerate_should_provide_indices(xs: Vec<usize>) {
         let (xs_, is) = val1!(xs.clone())
             .enumerate(Function::anonymous(("x", "i"), arg1!("x").zip(arg1!("i"))))
-            .run(named_args![]);
+            .run();
         prop_assert_eq!(
             (xs_, is),
             xs.into_iter().enumerate().map(|(i, x)| (x, i)).unzip()
@@ -52,7 +53,7 @@ mod tests {
                     ("x", "i"),
                     arg1!("x", usize) + arg1!("i", usize)
                 ))
-                .run(named_args![]),
+                .run(),
             xs.into_iter()
                 .enumerate()
                 .map(|(i, x)| i + x)

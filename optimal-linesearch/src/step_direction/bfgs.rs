@@ -132,7 +132,7 @@
 //!             arg1!("point", f64),
 //!         ));
 //!
-//!     println!("{:?}", bfgs.run(named_args![]));
+//!     println!("{:?}", bfgs.run());
 //! }
 //!
 //! fn obj_func_d(point: &[f64]) -> Vec<f64> {
@@ -412,7 +412,7 @@ where
 #[cfg(test)]
 mod tests {
     use approx::assert_ulps_eq;
-    use computation_types::{named_args, val, val1, val2, Run};
+    use computation_types::{val, val1, val2, Run};
 
     use crate::{descend, step_direction::steepest_descent, StepSize};
 
@@ -459,7 +459,7 @@ mod tests {
                 steepest_descent(val1!(obj_func_d(&point))),
                 val1!(point),
             )
-            .run(named_args![]);
+            .run();
 
             points.push(point.clone());
         }
@@ -483,14 +483,14 @@ mod tests {
         let (mut prev_approx_inv_snd_derivatives, mut prev_derivatives, mut prev_step) = {
             let derivatives = obj_func_d(&point);
             let approx_inv_snd_derivatives =
-                initial_approx_inv_snd_derivatives_identity(val!(point.len())).run(named_args![]);
+                initial_approx_inv_snd_derivatives_identity(val!(point.len())).run();
             let step = (val!(step_size)
                 * bfgs_direction(
                     val2!(approx_inv_snd_derivatives.clone()),
                     val1!(derivatives.iter().cloned()),
                 ))
-            .run(named_args![]);
-            point = (val1!(point) + val1!(step.iter().cloned())).run(named_args![]);
+            .run();
+            point = (val1!(point) + val1!(step.iter().cloned())).run();
 
             points.push(point.clone());
 
@@ -504,14 +504,14 @@ mod tests {
                 val1!(prev_step),
                 val1!(derivatives.iter().cloned()),
             )
-            .run(named_args![]);
+            .run();
             let step = (val!(step_size)
                 * bfgs_direction(
                     val2!(approx_inv_snd_derivatives.clone()),
                     val1!(derivatives.iter().cloned()),
                 ))
-            .run(named_args![]);
-            point = (val1!(point) + val1!(step.iter().cloned())).run(named_args![]);
+            .run();
+            point = (val1!(point) + val1!(step.iter().cloned())).run();
 
             points.push(point.clone());
 

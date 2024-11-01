@@ -3,7 +3,7 @@
 //! # Examples
 //!
 //! ```
-//! use computation_types::{arg1, named_args, val, Computation, Run};
+//! use computation_types::{arg1, val, Computation, Run};
 //! use optimal_linesearch::backtracking_line_search::BacktrackingLineSearchBuilder;
 //!
 //! let line_search = BacktrackingLineSearchBuilder::default()
@@ -15,7 +15,7 @@
 //!     .with_point(vec![10.0, 10.0])
 //!     .computation();
 //! println!("{}", line_search);
-//! println!("{:?}", line_search.run(named_args![]));
+//! println!("{:?}", line_search.run());
 //! ```
 
 mod high_level;

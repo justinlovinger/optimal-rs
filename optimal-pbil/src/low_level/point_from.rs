@@ -65,7 +65,7 @@ where
 }
 
 mod run {
-    use computation_types::{run::RunCore, Computation, NamedArgs, Unwrap, Value};
+    use computation_types::{run::RunCore, Computation, Unwrap, Value};
 
     use crate::low_level::Probability;
 
@@ -79,10 +79,10 @@ mod run {
     {
         type Output = Value<std::iter::Map<POut::IntoIter, fn(Probability) -> bool>>;
 
-        fn run_core(self, args: NamedArgs) -> Self::Output {
+        fn run_core(self) -> Self::Output {
             Value(
                 self.probabilities
-                    .run_core(args)
+                    .run_core()
                     .unwrap()
                     .into_iter()
                     .map(|p| f64::from(p) >= 0.5),

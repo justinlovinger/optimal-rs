@@ -4,8 +4,8 @@ mod rands {
     use crate::{
         peano::{One, Two, Zero},
         rand::Rand,
-        run::{Matrix, NamedArgs, RunCore},
-        Computation, Value,
+        run::{Matrix, RunCore},
+        Computation, Unwrap, Value,
     };
 
     impl<DistComp, T, Dist, Out> RunCore for Rand<DistComp, T>
@@ -15,8 +15,8 @@ mod rands {
     {
         type Output = Value<Out>;
 
-        fn run_core(self, args: NamedArgs) -> Self::Output {
-            Value(self.distribution.run_core(args).0.broadcast())
+        fn run_core(self) -> Self::Output {
+            Value(self.distribution.run_core().unwrap().broadcast())
         }
     }
 
@@ -80,22 +80,23 @@ mod seeded_rands {
     use crate::{
         peano::{One, Two, Zero},
         rand::SeededRand,
-        run::{DistributeArgs, Matrix, NamedArgs, RunCore},
+        run::{Matrix, RunCore},
         Computation, Value,
     };
 
     impl<RComp, DistComp, T, R, Dist, Out> RunCore for SeededRand<RComp, DistComp, T>
     where
         Self: Computation,
-        DistComp: Computation,
-        (RComp, DistComp): DistributeArgs<Output = (Value<R>, Value<Dist>)>,
+        RComp: RunCore<Output = Value<R>>,
+        DistComp: Computation + RunCore<Output = Value<Dist>>,
         R: Rng,
         Dist: BroadcastSeededRands<DistComp::Dim, T, Output = Out>,
     {
         type Output = (Value<R>, Value<Out>);
 
-        fn run_core(self, args: NamedArgs) -> Self::Output {
-            let (mut rng, dist) = (self.rng, self.distribution).distribute(args);
+        fn run_core(self) -> Self::Output {
+            let mut rng = self.rng.run_core();
+            let dist = self.distribution.run_core();
             let out = Value(dist.0.broadcast(&mut rng.0));
             (rng, out)
         }
@@ -171,7 +172,7 @@ mod tests {
     use test_strategy::proptest;
 
     use crate::{
-        arg, named_args,
+        arg,
         rand::{Rand, SeededRand},
         run::Matrix,
         val, val1, val2, Computation, Run,
@@ -179,7 +180,7 @@ mod tests {
 
     #[test]
     fn rands_should_generate_scalars() {
-        let x = Rand::<_, f64>::new(val!(Standard)).run(named_args![]);
+        let x = Rand::<_, f64>::new(val!(Standard)).run();
 
         assert!((0.0..1.0).contains(&x));
     }
@@ -189,7 +190,7 @@ mod tests {
         let xs = Rand::<_, f64>::new(val1!(std::iter::repeat(Standard)
             .take(len)
             .collect::<Vec<_>>()))
-        .run(named_args![]);
+        .run();
 
         prop_assert_eq!(xs.len(), len);
         for x in xs {
@@ -210,7 +211,7 @@ mod tests {
                 .collect::<Vec<_>>()
         )
         .unwrap()))
-        .run(named_args![]);
+        .run();
 
         prop_assert_eq!(xs.shape(), shape);
         let xs = xs.into_inner();
@@ -223,8 +224,7 @@ mod tests {
     #[proptest]
     fn seededrands_should_generate_scalars(seed: u64) {
         let (_rng, x) =
-            SeededRand::<_, _, f64>::new(val!(StdRng::seed_from_u64(seed)), val!(Standard))
-                .run(named_args![]);
+            SeededRand::<_, _, f64>::new(val!(StdRng::seed_from_u64(seed)), val!(Standard)).run();
 
         prop_assert!((0.0..1.0).contains(&x));
     }
@@ -235,7 +235,7 @@ mod tests {
             val!(StdRng::seed_from_u64(seed)),
             val1!(std::iter::repeat(Standard).take(len).collect::<Vec<_>>()),
         )
-        .run(named_args![]);
+        .run();
 
         prop_assert_eq!(xs.len(), len);
         for x in xs {
@@ -260,7 +260,7 @@ mod tests {
             )
             .unwrap()),
         )
-        .run(named_args![]);
+        .run();
 
         prop_assert_eq!(xs.shape(), shape);
         let xs = xs.into_inner();
@@ -279,7 +279,7 @@ mod tests {
                 SeededRand::<_, _, f64>::new(arg!("rng", StdRng), val!(Standard)),
                 arg!("x", f64).gt(val!(0.5)).not(),
             )
-            .run(named_args![]);
+            .run();
         prop_assert!(x > 0.5);
     }
 }

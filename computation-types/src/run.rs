@@ -1,11 +1,10 @@
-mod distribute_args;
 mod into_vec;
 mod matrix;
 mod run_core;
 
 use crate::{ComputationFn, NamedArgs, Unwrap};
 
-pub use self::{collect::*, distribute_args::*, into_vec::*, matrix::*, run_core::*};
+pub use self::{collect::*, into_vec::*, matrix::*, run_core::*};
 
 /// A computation that can be run
 /// without additional compilation.
@@ -15,7 +14,7 @@ pub use self::{collect::*, distribute_args::*, into_vec::*, matrix::*, run_core:
 pub trait Run {
     type Output;
 
-    fn run(self, args: NamedArgs) -> Self::Output;
+    fn run(self) -> Self::Output;
 }
 
 impl<T, Collected> Run for T
@@ -26,33 +25,33 @@ where
 {
     type Output = Collected::Unwrapped;
 
-    fn run(self, args: NamedArgs) -> Self::Output {
-        self.run_core(args).collect().unwrap()
+    fn run(self) -> Self::Output {
+        self.run_core().collect().unwrap()
     }
 }
 
 mod function {
-    use crate::{function::Function, FromNamesArgs};
+    use crate::{function::Function, ComputationFn, FromNamesArgs};
 
     use super::{NamedArgs, Run, RunCore};
 
     impl<ArgNames, Body> Function<ArgNames, Body> {
-        pub fn call<Args>(self, args: Args) -> Body::Output
+        pub fn call<Args>(self, args: Args) -> <Body::Filled as Run>::Output
         where
             NamedArgs: FromNamesArgs<ArgNames, Args>,
-            Body: Run,
+            Body: ComputationFn,
+            Body::Filled: Run,
         {
-            self.body
-                .run(NamedArgs::from_names_args(self.arg_names, args))
+            self.fill(args).run()
         }
 
-        pub fn call_core<Args>(self, args: Args) -> Body::Output
+        pub fn call_core<Args>(self, args: Args) -> <Body::Filled as RunCore>::Output
         where
             NamedArgs: FromNamesArgs<ArgNames, Args>,
-            Body: RunCore,
+            Body: ComputationFn,
+            Body::Filled: RunCore,
         {
-            self.body
-                .run_core(NamedArgs::from_names_args(self.arg_names, args))
+            self.fill(args).run_core()
         }
     }
 }
@@ -144,7 +143,7 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{arg, named_args, val, val1};
+    use crate::{val, val1};
 
     use super::*;
 
@@ -157,43 +156,17 @@ mod tests {
         prop_assume!((y - z) != 0);
         prop_assume!(z != 0);
         prop_assert_eq!(
-            (val!(x) / (val!(y) - val!(z)) + -(val!(z) * val!(y))).run(named_args![]),
+            (val!(x) / (val!(y) - val!(z)) + -(val!(z) * val!(y))).run(),
             x / (y - z) + -(z * y)
         );
         prop_assert_eq!(
-            (-(((val!(x) + val!(y) - val!(z)) / val!(z)) * val!(y))).run(named_args![]),
+            (-(((val!(x) + val!(y) - val!(z)) / val!(z)) * val!(y))).run(),
             -(((x + y - z) / z) * y)
         );
-        prop_assert_eq!(-(-val!(x)).run(named_args![]), -(-x));
+        prop_assert_eq!(-(-val!(x)).run(), -(-x));
         prop_assert_eq!(
-            (val1!([x, y]) / (val!(y) - val!(z)) + -(val!(z) * val!(y))).run(named_args![]),
+            (val1!([x, y]) / (val!(y) - val!(z)) + -(val!(z) * val!(y))).run(),
             [x / (y - z) + -(z * y), y / (y - z) + -(z * y)]
         );
-    }
-
-    #[proptest]
-    fn args_should_propagate_correctly(
-        #[strategy(-1000..1000)] x: i32,
-        #[strategy(-1000..1000)] y: i32,
-        #[strategy(-1000..1000)] z: i32,
-        #[strategy(-1000..1000)] in_x: i32,
-        #[strategy(-1000..1000)] in_y: i32,
-        #[strategy(-1000..1000)] in_z: i32,
-    ) {
-        prop_assume!((x - in_y) != 0);
-        prop_assume!(z != 0);
-        prop_assert_eq!(
-            (arg!("foo", i32) / (val!(x) - arg!("bar", i32))
-                + -(val!(z) * val!(y) + arg!("baz", i32)))
-            .run(named_args![("foo", in_x), ("bar", in_y), ("baz", in_z)]),
-            in_x / (x - in_y) + -(z * y + in_z)
-        );
-        prop_assert_eq!(
-            (arg!("foo", i32)
-                + (((val!(x) + val!(y) - arg!("bar", i32)) / -val!(z)) * arg!("baz", i32)))
-            .run(named_args![("foo", in_x), ("bar", in_y), ("baz", in_z)]),
-            in_x + (((x + y - in_y) / -z) * in_z)
-        );
-        prop_assert_eq!(-(-arg!("foo", i32)).run(named_args![("foo", x)]), -(-x));
     }
 }

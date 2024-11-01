@@ -2,9 +2,9 @@ use crate::{
     linalg::{FromDiagElem, IdentityMatrix, MatMul, MulCol, MulOut, ScalarProduct},
     math::Mul,
     peano::{One, Two},
-    run::{Collect, DistributeArgs, Matrix},
+    run::{Collect, Matrix},
     sum::Sum,
-    Computation, NamedArgs, Unwrap, Value,
+    Computation, Unwrap, Value,
 };
 
 use super::RunCore;
@@ -17,8 +17,8 @@ where
 {
     type Output = Value<Matrix<Vec<T>>>;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        let len = self.len.run_core(args).unwrap();
+    fn run_core(self) -> Self::Output {
+        let len = self.len.run_core().unwrap();
         let matrix = ndarray::Array2::from_diag_elem(len, T::one());
         Value(Matrix::from_vec((len, len), matrix.into_raw_vec()).unwrap())
     }
@@ -27,14 +27,15 @@ where
 impl<Len, Elem, T> RunCore for FromDiagElem<Len, Elem>
 where
     Self: Computation,
-    (Len, Elem): DistributeArgs<Output = (Value<usize>, Value<T>)>,
+    Len: RunCore<Output = Value<usize>>,
+    Elem: RunCore<Output = Value<T>>,
     T: Clone + num_traits::Zero,
 {
     type Output = Value<Matrix<Vec<T>>>;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        let (len, elem) = (self.len, self.elem).distribute(args).unwrap();
-        let matrix = ndarray::Array2::from_diag_elem(len, elem);
+    fn run_core(self) -> Self::Output {
+        let len = self.len.run_core().unwrap();
+        let matrix = ndarray::Array2::from_diag_elem(len, self.elem.run_core().unwrap());
         Value(Matrix::from_vec((len, len), matrix.into_raw_vec()).unwrap())
     }
 }
@@ -47,39 +48,44 @@ where
 {
     type Output = <Sum<Mul<A, B>> as RunCore>::Output;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        Sum(Mul(self.0, self.1)).run_core(args)
+    fn run_core(self) -> Self::Output {
+        Sum(Mul(self.0, self.1)).run_core()
     }
 }
 
 impl<A, B, OutA, OutB, Elem> RunCore for MatMul<A, B>
 where
     Self: Computation,
-    (A, B): DistributeArgs<Output = (OutA, OutB)>,
+    A: RunCore<Output = OutA>,
+    B: RunCore<Output = OutB>,
     OutA: Collect<Two, Collected = Value<Matrix<Vec<Elem>>>>,
     OutB: Collect<Two, Collected = Value<Matrix<Vec<Elem>>>>,
     Elem: ndarray::LinalgScalar,
 {
     type Output = Value<Matrix<Vec<Elem>>>;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        let (xs, ys) = (self.0, self.1).distribute(args).collect().unwrap();
-        Value(mat_mul(xs, ys))
+    fn run_core(self) -> Self::Output {
+        Value(mat_mul(
+            self.0.run_core().collect().unwrap(),
+            self.1.run_core().collect().unwrap(),
+        ))
     }
 }
 
 impl<A, B, OutA, OutB, Elem> RunCore for MulOut<A, B>
 where
     Self: Computation,
-    (A, B): DistributeArgs<Output = (OutA, OutB)>,
+    A: RunCore<Output = OutA>,
+    B: RunCore<Output = OutB>,
     OutA: Collect<One, Collected = Value<Vec<Elem>>>,
     OutB: Collect<One, Collected = Value<Vec<Elem>>>,
     Elem: ndarray::LinalgScalar,
 {
     type Output = Value<Matrix<Vec<Elem>>>;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        let (xs, ys) = (self.0, self.1).distribute(args).collect().unwrap();
+    fn run_core(self) -> Self::Output {
+        let xs = self.0.run_core().collect().unwrap();
+        let ys = self.1.run_core().collect().unwrap();
         // `xs` and `ys` are 1d, so shapes will match its lengths if at least one dimension is `1`.
         Value(mat_mul(
             unsafe { Matrix::new_unchecked((xs.len(), 1), xs) },
@@ -91,15 +97,17 @@ where
 impl<A, B, OutA, OutB, Elem> RunCore for MulCol<A, B>
 where
     Self: Computation,
-    (A, B): DistributeArgs<Output = (OutA, OutB)>,
+    A: RunCore<Output = OutA>,
+    B: RunCore<Output = OutB>,
     OutA: Collect<Two, Collected = Value<Matrix<Vec<Elem>>>>,
     OutB: Collect<One, Collected = Value<Vec<Elem>>>,
     Elem: ndarray::LinalgScalar,
 {
     type Output = Value<Vec<Elem>>;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        let (xs, ys) = (self.0, self.1).distribute(args).collect().unwrap();
+    fn run_core(self) -> Self::Output {
+        let xs = self.0.run_core().collect().unwrap();
+        let ys = self.1.run_core().collect().unwrap();
         // `ys` is 1d, so the shape will match its length if at least one dimension is `1`.
         let ys = unsafe { Matrix::new_unchecked((ys.len(), 1), ys) };
         Value(mat_mul(xs, ys).into_inner())
@@ -129,11 +137,11 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{linalg::FromDiagElem, named_args, run::Matrix, val, val1, val2, Computation, Run};
+    use crate::{linalg::FromDiagElem, run::Matrix, val, val1, val2, Computation, Run};
 
     #[proptest]
     fn identity_matrix_should_return_identity_matrix(#[strategy(1_usize..=10)] len: usize) {
-        let actual = val!(len).identity_matrix::<i32>().run(named_args![]);
+        let actual = val!(len).identity_matrix::<i32>().run();
         let expected = ndarray::Array2::from_diag_elem(len, i32::one());
         prop_assert_eq!(actual.shape(), (expected.shape()[0], expected.shape()[1]));
         prop_assert_eq!(actual.into_inner(), expected.into_raw_vec());
@@ -144,7 +152,7 @@ mod tests {
         #[strategy(1_usize..=10)] len: usize,
         elem: i32,
     ) {
-        let actual = FromDiagElem::new(val!(len), val!(elem)).run(named_args![]);
+        let actual = FromDiagElem::new(val!(len), val!(elem)).run();
         let expected = ndarray::Array2::from_diag_elem(len, elem);
         prop_assert_eq!(actual.shape(), (expected.shape()[0], expected.shape()[1]));
         prop_assert_eq!(actual.into_inner(), expected.into_raw_vec());
@@ -159,10 +167,7 @@ mod tests {
     ) {
         let lhs = val1!([x1, x2]);
         let rhs = val1!([y1, y2]);
-        prop_assert_eq!(
-            lhs.scalar_product(rhs).run(named_args![]),
-            lhs.mul(rhs).sum().run(named_args![])
-        );
+        prop_assert_eq!(lhs.scalar_product(rhs).run(), lhs.mul(rhs).sum().run());
     }
 
     #[proptest]
@@ -183,7 +188,7 @@ mod tests {
         prop_assert_eq!(
             val2!(lhs_m.clone())
                 .mat_mul(val2!(rhs_m.clone()))
-                .run(named_args![])
+                .run()
                 .into_inner(),
             ndarray::Array::from_shape_vec(lhs_m.shape(), lhs_m.into_inner())
                 .unwrap()
@@ -200,15 +205,13 @@ mod tests {
         #[strategy(-1000..1000)] y2: i32,
         #[strategy(-1000..1000)] y3: i32,
     ) {
-        let out = val1!([x1, x2])
-            .mul_out(val1!([y1, y2, y3]))
-            .run(named_args![]);
+        let out = val1!([x1, x2]).mul_out(val1!([y1, y2, y3])).run();
         prop_assert_eq!(out.shape(), (2, 3));
         prop_assert_eq!(
             out,
             val2!(Matrix::from_vec((2, 1), vec![x1, x2]).unwrap())
                 .mat_mul(val2!(Matrix::from_vec((1, 3), vec![y1, y2, y3]).unwrap()))
-                .run(named_args![])
+                .run()
         );
     }
 
@@ -224,12 +227,12 @@ mod tests {
         #[strategy(-1000..1000)] y2: i32,
     ) {
         let lhs = val2!(Matrix::from_vec((3, 2), vec![x11, x21, x31, x12, x22, x32]).unwrap());
-        let out = lhs.clone().mul_col(val1!([y1, y2])).run(named_args![]);
+        let out = lhs.clone().mul_col(val1!([y1, y2])).run();
         prop_assert_eq!(out.len(), 3);
         prop_assert_eq!(
             out,
             lhs.mat_mul(val2!(Matrix::from_vec((2, 1), vec![y1, y2]).unwrap()))
-                .run(named_args![])
+                .run()
                 .into_inner()
         );
     }

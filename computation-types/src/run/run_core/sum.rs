@@ -1,10 +1,6 @@
 use core::ops;
 
-use crate::{
-    run::{NamedArgs, RunCore},
-    sum::Sum,
-    Computation, Unwrap, Value,
-};
+use crate::{run::RunCore, sum::Sum, Computation, Unwrap, Value};
 
 impl<A, Out> RunCore for Sum<A>
 where
@@ -16,8 +12,8 @@ where
 {
     type Output = Value<<Out::Item as ops::Add>::Output>;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        Value(self.0.run_core(args).unwrap().into_iter().sum())
+    fn run_core(self) -> Self::Output {
+        Value(self.0.run_core().unwrap().into_iter().sum())
     }
 }
 
@@ -26,7 +22,7 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{named_args, run::Matrix, val, val1, val2, Computation, Run};
+    use crate::{run::Matrix, val, val1, val2, Computation, Run};
 
     #[proptest]
     fn sum_should_sum_vectors(
@@ -34,7 +30,7 @@ mod tests {
         #[strategy(-100000..100000)] y: i32,
         #[strategy(-100000..100000)] z: i32,
     ) {
-        prop_assert_eq!(val1!([x, y, z]).sum().run(named_args![]), x + y + z);
+        prop_assert_eq!(val1!([x, y, z]).sum().run(), x + y + z);
     }
 
     #[proptest]
@@ -47,7 +43,7 @@ mod tests {
         prop_assert_eq!(
             val2!(Matrix::from_vec((2, 2), vec![x, y, z, q]).unwrap())
                 .sum()
-                .run(named_args![]),
+                .run(),
             x + y + z + q
         );
     }
@@ -58,9 +54,6 @@ mod tests {
         #[strategy(-100000..100000)] y: i32,
         #[strategy(-100000..100000)] z: i32,
     ) {
-        prop_assert_eq!(
-            (val1!([x, y, z]).sum() + val!(1)).run(named_args![]),
-            x + y + z + 1
-        );
+        prop_assert_eq!((val1!([x, y, z]).sum() + val!(1)).run(), x + y + z + 1);
     }
 }

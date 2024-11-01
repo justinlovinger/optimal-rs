@@ -7,11 +7,10 @@ use computation_types::{
     control_flow::{If, LoopWhile, Then},
     linalg::{FromDiagElem, IdentityMatrix, MatMul, MulCol, MulOut, ScalarProduct},
     math::{Abs, Add, Div, Mul, Neg, Sub},
-    named_args,
     peano::{One, Two, Zero},
     val, val1,
     zip::{Zip, Zip3, Zip4, Zip5, Zip6, Zip7, Zip8},
-    AnyArg, Arg, Computation, ComputationFn, Function, Len, NamedArgs, Run, Val,
+    AnyArg, Arg, Computation, ComputationFn, Function, Len, Run, Val,
 };
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
@@ -402,7 +401,7 @@ where
     where
         BacktrackingLineSearchComputation<A, F, FFD>: Run<Output = Vec<A>>,
     {
-        self.computation().run(named_args![])
+        self.computation().run()
     }
 
     /// Return a computation representing this algorithm.
@@ -1247,14 +1246,14 @@ where
 {
     type Output = Vec<A>;
 
-    fn run(self, args: NamedArgs) -> Self::Output {
+    fn run(self) -> Self::Output {
         match self {
-            BacktrackingLineSearchComputation::SteepestIncrPrevIteration(x) => x.run(args),
-            BacktrackingLineSearchComputation::SteepestIncrPrevNearMinima(x) => x.run(args),
-            BacktrackingLineSearchComputation::BfgsIdIncrPrevIteration(x) => x.run(args),
-            BacktrackingLineSearchComputation::BfgsGammaIncrPrevIteration(x) => x.run(args),
-            BacktrackingLineSearchComputation::BfgsIdIncrPrevNearMinima(x) => x.run(args),
-            BacktrackingLineSearchComputation::BfgsGammaIncrPrevNearMinima(x) => x.run(args),
+            BacktrackingLineSearchComputation::SteepestIncrPrevIteration(x) => x.run(),
+            BacktrackingLineSearchComputation::SteepestIncrPrevNearMinima(x) => x.run(),
+            BacktrackingLineSearchComputation::BfgsIdIncrPrevIteration(x) => x.run(),
+            BacktrackingLineSearchComputation::BfgsGammaIncrPrevIteration(x) => x.run(),
+            BacktrackingLineSearchComputation::BfgsIdIncrPrevNearMinima(x) => x.run(),
+            BacktrackingLineSearchComputation::BfgsGammaIncrPrevNearMinima(x) => x.run(),
         }
     }
 }

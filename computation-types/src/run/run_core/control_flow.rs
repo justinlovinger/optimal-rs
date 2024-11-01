@@ -1,7 +1,7 @@
 use crate::{
     control_flow::{If, LoopWhile, Then},
     run::{Collect, RunCore},
-    Computation, FromNamesArgs, NamedArgs, Run,
+    Computation, ComputationFn, FromNamesArgs, Function, NamedArgs, Run,
 };
 
 impl<A, ArgNames, P, FTrue, FFalse, Collected, Out> RunCore for If<A, ArgNames, P, FTrue, FFalse>
@@ -12,26 +12,26 @@ where
     Collected: Clone,
     ArgNames: Clone,
     NamedArgs: FromNamesArgs<ArgNames, Collected>,
-    P: Run<Output = bool>,
-    FTrue: Computation + RunCore,
-    FTrue::Output: Collect<FTrue::Dim, Collected = Out>,
-    FFalse: Computation + RunCore,
-    FFalse::Output: Collect<FFalse::Dim, Collected = Out>,
+    P: ComputationFn,
+    P::Filled: Run<Output = bool>,
+    FTrue: ComputationFn,
+    FTrue::Filled: RunCore,
+    <FTrue::Filled as RunCore>::Output: Collect<FTrue::Dim, Collected = Out>,
+    FFalse: ComputationFn,
+    FFalse::Filled: RunCore,
+    <FFalse::Filled as RunCore>::Output: Collect<FFalse::Dim, Collected = Out>,
 {
     type Output = Out;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        let vals = self.child.run_core(args).collect();
-        if self.predicate.run(NamedArgs::from_names_args(
-            self.arg_names.clone(),
-            vals.clone(),
-        )) {
-            self.f_true
-                .run_core(NamedArgs::from_names_args(self.arg_names, vals))
+    fn run_core(self) -> Self::Output {
+        let vals = self.child.run_core().collect();
+        if Function::anonymous(self.arg_names.clone(), self.predicate).call(vals.clone()) {
+            Function::anonymous(self.arg_names.clone(), self.f_true)
+                .call_core(vals)
                 .collect()
         } else {
-            self.f_false
-                .run_core(NamedArgs::from_names_args(self.arg_names, vals))
+            Function::anonymous(self.arg_names.clone(), self.f_false)
+                .call_core(vals)
                 .collect()
         }
     }
@@ -45,25 +45,24 @@ where
     Collected: Clone,
     ArgNames: Clone,
     NamedArgs: FromNamesArgs<ArgNames, Collected>,
-    F: Clone + Computation + RunCore,
-    F::Output: Collect<F::Dim, Collected = Collected>,
-    P: Clone + Run<Output = bool>,
+    F: Clone + ComputationFn,
+    F::Filled: RunCore,
+    <F::Filled as RunCore>::Output: Collect<F::Dim, Collected = Collected>,
+    P: Clone + ComputationFn,
+    P::Filled: Run<Output = bool>,
 {
     type Output = Collected;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        let mut out = self.child.run_core(args).collect();
+    fn run_core(self) -> Self::Output {
+        let mut out = self.child.run_core().collect();
         loop {
-            if !self.predicate.clone().run(NamedArgs::from_names_args(
-                self.arg_names.clone(),
-                out.clone(),
-            )) {
+            if !Function::anonymous(self.arg_names.clone(), self.predicate.clone())
+                .call(out.clone())
+            {
                 return out;
             }
-            out = self
-                .f
-                .clone()
-                .run_core(NamedArgs::from_names_args(self.arg_names.clone(), out))
+            out = Function::anonymous(self.arg_names.clone(), self.f.clone())
+                .call_core(out)
                 .collect();
         }
     }
@@ -75,12 +74,13 @@ where
     A: Computation + RunCore,
     A::Output: Collect<A::Dim, Collected = Collected>,
     NamedArgs: FromNamesArgs<ArgNames, Collected>,
-    F: RunCore,
+    F: ComputationFn,
+    F::Filled: RunCore,
 {
-    type Output = F::Output;
+    type Output = <F::Filled as RunCore>::Output;
 
-    fn run_core(self, args: NamedArgs) -> Self::Output {
-        self.f.call_core(self.child.run_core(args).collect())
+    fn run_core(self) -> Self::Output {
+        self.f.call_core(self.child.run_core().collect())
     }
 }
 
@@ -90,8 +90,7 @@ mod tests {
     use test_strategy::proptest;
 
     use crate::{
-        arg, arg1, arg2, function::Function, named_args, run::Matrix, val, val1, val2, Computation,
-        Run,
+        arg, arg1, arg2, function::Function, run::Matrix, val, val1, val2, Computation, Run,
     };
 
     #[test]
@@ -112,7 +111,7 @@ mod tests {
                 arg!("x", i32) + val!(1),
                 arg!("x", i32) - val!(1),
             )
-            .run(named_args![])
+            .run()
     }
 
     #[test]
@@ -133,7 +132,7 @@ mod tests {
                 arg1!("x", i32) + val!(1),
                 arg1!("x", i32) - val!(1),
             )
-            .run(named_args![])
+            .run()
     }
 
     #[proptest]
@@ -141,7 +140,7 @@ mod tests {
         prop_assert_eq!(
             val!(x)
                 .loop_while("x", arg!("x", i32) + val!(1), arg!("x", i32).lt(val!(10)))
-                .run(named_args![]),
+                .run(),
             10
         );
     }
@@ -155,7 +154,7 @@ mod tests {
                     arg1!("x", i32) + val!(1),
                     arg1!("x", i32).sum().lt(val!(19))
                 )
-                .run(named_args![]),
+                .run(),
             [10, 10]
         );
     }
@@ -169,7 +168,7 @@ mod tests {
                     arg2!("x", i32) + val!(1),
                     arg2!("x", i32).sum().lt(val!(37))
                 )
-                .run(named_args![]),
+                .run(),
             Matrix::from_vec((2, 2), vec![10, 10, 10, 10]).unwrap()
         );
     }
@@ -184,7 +183,7 @@ mod tests {
                     (arg!("x", i32) + val!(1)).zip(arg!("y", i32) + val!(1)),
                     arg!("x", i32).lt(val!(10))
                 )
-                .run(named_args![]),
+                .run(),
             (10, 10 - x)
         );
     }
@@ -194,7 +193,7 @@ mod tests {
         prop_assert_eq!(
             (val!(x) + val!(1))
                 .then(Function::anonymous("x", arg!("x", i32) + val!(1)))
-                .run(named_args![]),
+                .run(),
             x + 2
         );
     }
@@ -208,14 +207,14 @@ mod tests {
             val!(x)
                 .zip(val!(y))
                 .then(Function::anonymous(("x", "y"), arg!("x", i32)))
-                .run(named_args![]),
+                .run(),
             x
         );
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y))
                 .then(Function::anonymous(("x", "y"), arg!("y", i32)))
-                .run(named_args![]),
+                .run(),
             y
         );
     }
@@ -232,7 +231,7 @@ mod tests {
                     ("x", "y"),
                     arg!("y", i32).zip(arg!("x", i32))
                 ))
-                .run(named_args![]),
+                .run(),
             (y, x)
         );
     }
@@ -247,21 +246,21 @@ mod tests {
             val!(x)
                 .zip(val!(y).zip(val!(z)))
                 .then(Function::anonymous(("x", ("y", "z")), arg!("x", i32)))
-                .run(named_args![]),
+                .run(),
             x
         );
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y).zip(val!(z)))
                 .then(Function::anonymous(("x", ("y", "z")), arg!("y", i32)))
-                .run(named_args![]),
+                .run(),
             y
         );
         prop_assert_eq!(
             val!(x)
                 .zip(val!(y).zip(val!(z)))
                 .then(Function::anonymous(("x", ("y", "z")), arg!("z", i32)))
-                .run(named_args![]),
+                .run(),
             z
         );
     }

@@ -83,10 +83,7 @@ where
 }
 
 mod run {
-    use computation_types::{
-        run::{DistributeArgs, RunCore},
-        Computation, NamedArgs, Unwrap, Value,
-    };
+    use computation_types::{run::RunCore, Computation, Unwrap, Value};
 
     use crate::low_level::{Probability, ProbabilityThreshold};
 
@@ -95,16 +92,17 @@ mod run {
     impl<T, P, POut> RunCore for Converged<T, P>
     where
         Self: Computation,
-        (T, P): DistributeArgs<Output = (Value<ProbabilityThreshold>, Value<POut>)>,
+        T: RunCore<Output = Value<ProbabilityThreshold>>,
+        P: RunCore<Output = Value<POut>>,
         POut: IntoIterator<Item = Probability>,
     {
         type Output = Value<bool>;
 
-        fn run_core(self, args: NamedArgs) -> Self::Output {
-            let (threshold, probabilities) = (self.threshold, self.probabilities)
-                .distribute(args)
-                .unwrap();
-            Value(converged(threshold, probabilities))
+        fn run_core(self) -> Self::Output {
+            Value(converged(
+                self.threshold.run_core().unwrap(),
+                self.probabilities.run_core().unwrap(),
+            ))
         }
     }
 

@@ -5,8 +5,8 @@ use paste::paste;
 use crate::{
     math::*,
     peano::{One, Two, Zero},
-    run::{DistributeArgs, Matrix, RunCore},
-    Computation, NamedArgs, Unwrap, Value,
+    run::{Matrix, RunCore},
+    Computation, Unwrap, Value,
 };
 
 macro_rules! impl_run_core_for_binary_op {
@@ -21,16 +21,14 @@ macro_rules! impl_run_core_for_binary_op {
             impl<A, B, OutA, OutB> RunCore for $op<A, B>
             where
                 Self: Computation,
-                A: Computation,
-                B: Computation,
-                (A, B): DistributeArgs<Output = (Value<OutA>, Value<OutB>)>,
+                A: Computation + RunCore<Output = Value<OutA>>,
+                B: Computation + RunCore<Output = Value<OutB>>,
                 OutA: [<Broadcast $op>]<OutB, A::Dim, B::Dim>
             {
                 type Output = Value<OutA::Output>;
 
-                fn run_core(self, args: NamedArgs) -> Self::Output {
-                    let (x, y) = (self.0, self.1).distribute(args).unwrap();
-                    Value(x.[<broadcast_ $op:lower>](y))
+                fn run_core(self) -> Self::Output {
+                    Value(self.0.run_core().unwrap().[<broadcast_ $op:lower>](self.1.run_core().unwrap()))
                 }
             }
 
@@ -181,8 +179,8 @@ macro_rules! impl_run_core_for_unary_op {
             {
                 type Output = Value<<Out as [<Broadcast $op>]<A::Dim>>::Output>;
 
-                fn run_core(self, args: NamedArgs) -> Self::Output {
-                    Value(self.0.run_core(args).unwrap().[<broadcast_ $op:lower>]())
+                fn run_core(self) -> Self::Output {
+                    Value(self.0.run_core().unwrap().[<broadcast_ $op:lower>]())
                 }
             }
 
@@ -259,8 +257,8 @@ mod abs {
     {
         type Output = Value<<Out as BroadcastAbs<A::Dim>>::Output>;
 
-        fn run_core(self, args: NamedArgs) -> Self::Output {
-            Value(self.0.run_core(args).unwrap().broadcast_abs())
+        fn run_core(self) -> Self::Output {
+            Value(self.0.run_core().unwrap().broadcast_abs())
         }
     }
 
@@ -331,7 +329,7 @@ mod tests {
     use proptest::prelude::*;
     use test_strategy::proptest;
 
-    use crate::{named_args, run::Matrix, val, val1, val2, Computation, Run};
+    use crate::{run::Matrix, val, val1, val2, Computation, Run};
 
     macro_rules! test_binary_op {
         ( $op:ident ) => {
@@ -344,7 +342,7 @@ mod tests {
                     #[strategy($range)] x: $ty,
                     #[strategy($range)] y: $ty,
                 ) {
-                    prop_assert_eq!(Computation::$op(val!(x), (val!(y))).run(named_args![]), x.$op(y));
+                    prop_assert_eq!(Computation::$op(val!(x), (val!(y))).run(), x.$op(y));
                 }
 
                 #[proptest]
@@ -355,7 +353,7 @@ mod tests {
                     #[strategy($range)] y2: $ty,
                 ) {
                     prop_assert_eq!(
-                        Computation::$op(val1!([x1, x2]), val1!([y1, y2])).run(named_args![]),
+                        Computation::$op(val1!([x1, x2]), val1!([y1, y2])).run(),
                         [x1.$op(y1), x2.$op(y2)]
                     );
                 }
@@ -375,7 +373,7 @@ mod tests {
                         Computation::$op(
                             val2!(Matrix::from_vec((2, 2), vec![x1, x2, x3, x4]).unwrap()),
                             val2!(Matrix::from_vec((2, 2), vec![y1, y2, y3, y4]).unwrap()),
-                        ).run(named_args![]),
+                        ).run(),
                         Matrix::from_vec((2, 2), vec![x1.$op(y1), x2.$op(y2), x3.$op(y3), x4.$op(y4)]).unwrap()
                     );
                 }
@@ -387,11 +385,11 @@ mod tests {
                     #[strategy($range)] z: $ty,
                 ) {
                     prop_assert_eq!(
-                        Computation::$op(val1!([x, y]), val!(z)).run(named_args![]),
+                        Computation::$op(val1!([x, y]), val!(z)).run(),
                         [x.$op(z), y.$op(z)]
                     );
                     prop_assert_eq!(
-                        Computation::$op(val!(x), val1!([y, z])).run(named_args![]),
+                        Computation::$op(val!(x), val1!([y, z])).run(),
                         [x.$op(y), x.$op(z)]
                     );
                 }
@@ -408,14 +406,14 @@ mod tests {
                         Computation::$op(
                             val2!(Matrix::from_vec((2, 2), vec![x, y, z, q]).unwrap()),
                             val!(r),
-                        ).run(named_args![]),
+                        ).run(),
                         Matrix::from_vec((2, 2), vec![x.$op(r), y.$op(r), z.$op(r), q.$op(r)]).unwrap()
                     );
                     prop_assert_eq!(
                         Computation::$op(
                             val!(x),
                             val2!(Matrix::from_vec((2, 2), vec![y, z, q, r]).unwrap()),
-                        ).run(named_args![]),
+                        ).run(),
                         Matrix::from_vec((2, 2), vec![x.$op(y), x.$op(z), x.$op(q), x.$op(r)]).unwrap()
                     );
                 }
@@ -431,7 +429,7 @@ mod tests {
             paste! {
                 #[proptest]
                 fn [<$op _should_ $op _scalars>](#[strategy($range)] x: $ty) {
-                    prop_assert_eq!(Computation::$op(val!(x)).run(named_args![]), x.$op());
+                    prop_assert_eq!(Computation::$op(val!(x)).run(), x.$op());
                 }
 
                 #[proptest]
@@ -440,7 +438,7 @@ mod tests {
                     #[strategy($range)] x2: $ty,
                 ) {
                     prop_assert_eq!(
-                        Computation::$op(val1!([x1, x2])).run(named_args![]),
+                        Computation::$op(val1!([x1, x2])).run(),
                         [x1.$op(), x2.$op()]
                     );
                 }
@@ -453,7 +451,7 @@ mod tests {
                     #[strategy($range)] x4: $ty,
                 ) {
                     prop_assert_eq!(
-                        Computation::$op(val2!(Matrix::from_vec((2, 2), vec![x1, x2, x3, x4]).unwrap())).run(named_args![]),
+                        Computation::$op(val2!(Matrix::from_vec((2, 2), vec![x1, x2, x3, x4]).unwrap())).run(),
                         Matrix::from_vec((2, 2), vec![x1.$op(), x2.$op(), x3.$op(), x4.$op()]).unwrap()
                     );
                 }

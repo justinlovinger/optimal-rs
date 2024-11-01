@@ -97,8 +97,8 @@ where
 mod run {
     use computation_types::{
         peano::{One, Two, Zero},
-        run::{DistributeArgs, Matrix, RunCore},
-        Computation, NamedArgs, Unwrap, Value,
+        run::{Matrix, RunCore},
+        Computation, Unwrap, Value,
     };
 
     use crate::low_level::{adjust, AdjustRate, Probability};
@@ -108,19 +108,18 @@ mod run {
     impl<R, P, B, OutP, OutB> RunCore for Adjust<R, P, B>
     where
         Self: Computation,
-        R: Computation,
-        P: Computation,
-        B: Computation,
-        (R, P, B): DistributeArgs<Output = (Value<AdjustRate>, Value<OutP>, Value<OutB>)>,
+        R: Computation + RunCore<Output = Value<AdjustRate>>,
+        P: Computation + RunCore<Output = Value<OutP>>,
+        B: Computation + RunCore<Output = Value<OutB>>,
         OutP: BroadcastAdjust<OutB, P::Dim, B::Dim>,
     {
         type Output = Value<OutP::Output>;
 
-        fn run_core(self, args: NamedArgs) -> Self::Output {
-            let (rate, p, b) = (self.rate, self.probability, self.sample)
-                .distribute(args)
-                .unwrap();
-            Value(p.broadcast_adjust(rate, b))
+        fn run_core(self) -> Self::Output {
+            Value(self.probability.run_core().unwrap().broadcast_adjust(
+                self.rate.run_core().unwrap(),
+                self.sample.run_core().unwrap(),
+            ))
         }
     }
 

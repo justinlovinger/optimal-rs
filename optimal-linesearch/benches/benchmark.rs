@@ -4,7 +4,6 @@ use computation_types::{
     arg1,
     enumerate::Enumerate,
     math::{Add, Div, Mul, Pow},
-    named_args,
     peano::{One, Zero},
     sum::Sum,
     val,
@@ -78,7 +77,7 @@ where
     FD::Filled: Computation<Dim = One, Item = f64>,
     FixedStepSize<FD>: Run<Output = Vec<f64>>,
 {
-    fixed_step_size::fixed_step_size(obj_func_d, initial_point).run(named_args![])
+    fixed_step_size::fixed_step_size(obj_func_d, initial_point).run()
 }
 
 pub fn run_backtracking_line_search<F, FD>(

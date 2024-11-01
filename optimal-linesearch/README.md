@@ -30,7 +30,7 @@ println!(
             arg!("i", usize).lt(val!(10)),
         )
         .snd()
-        .run(named_args![])
+        .run()
 )
 ```
 
