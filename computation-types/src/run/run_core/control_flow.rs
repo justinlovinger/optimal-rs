@@ -1,7 +1,7 @@
 use crate::{
     control_flow::{If, LoopWhile, Then},
     run::{Collect, RunCore},
-    Computation, ComputationFn, FromNamesArgs, Function, NamedArgs, Run,
+    Computation, ComputationFn, Function, NamedArgs, Run,
 };
 
 impl<A, ArgNames, P, FTrue, FFalse, Collected, Out> RunCore for If<A, ArgNames, P, FTrue, FFalse>
@@ -11,7 +11,7 @@ where
     A::Output: Collect<A::Dim, Collected = Collected>,
     Collected: Clone,
     ArgNames: Clone,
-    NamedArgs: FromNamesArgs<ArgNames, Collected>,
+    (ArgNames, Collected): Into<NamedArgs>,
     P: ComputationFn,
     P::Filled: Run<Output = bool>,
     FTrue: ComputationFn,
@@ -44,7 +44,7 @@ where
     A::Output: Collect<A::Dim, Collected = Collected>,
     Collected: Clone,
     ArgNames: Clone,
-    NamedArgs: FromNamesArgs<ArgNames, Collected>,
+    (ArgNames, Collected): Into<NamedArgs>,
     F: Clone + ComputationFn,
     F::Filled: RunCore,
     <F::Filled as RunCore>::Output: Collect<F::Dim, Collected = Collected>,
@@ -73,7 +73,7 @@ where
     Self: Computation,
     A: Computation + RunCore,
     A::Output: Collect<A::Dim, Collected = Collected>,
-    NamedArgs: FromNamesArgs<ArgNames, Collected>,
+    (ArgNames, Collected): Into<NamedArgs>,
     F: ComputationFn,
     F::Filled: RunCore,
 {

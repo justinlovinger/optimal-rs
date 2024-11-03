@@ -249,7 +249,16 @@ pub enum PopErr {
     },
 }
 
-pub trait FromNamesArgs<Names, Args> {
+impl<Names, Args> From<(Names, Args)> for NamedArgs
+where
+    NamedArgs: FromNamesArgs<Names, Args>,
+{
+    fn from(value: (Names, Args)) -> Self {
+        Self::from_names_args(value.0, value.1)
+    }
+}
+
+trait FromNamesArgs<Names, Args> {
     fn from_names_args(names: Names, args: Args) -> Self;
 }
 

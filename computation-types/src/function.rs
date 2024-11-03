@@ -1,4 +1,4 @@
-use crate::{ComputationFn, FromNamesArgs, NamedArgs};
+use crate::{ComputationFn, NamedArgs};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Function<ArgNames, Body> {
@@ -26,10 +26,9 @@ impl<ArgNames, Body> Function<ArgNames, Body> {
 
     pub fn fill<Args>(self, args: Args) -> Body::Filled
     where
-        NamedArgs: FromNamesArgs<ArgNames, Args>,
+        (ArgNames, Args): Into<NamedArgs>,
         Body: ComputationFn,
     {
-        self.body
-            .fill(NamedArgs::from_names_args(self.arg_names, args))
+        self.body.fill((self.arg_names, args).into())
     }
 }

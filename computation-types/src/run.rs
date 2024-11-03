@@ -30,14 +30,14 @@ where
 }
 
 mod function {
-    use crate::{function::Function, ComputationFn, FromNamesArgs};
+    use crate::{function::Function, ComputationFn};
 
     use super::{NamedArgs, Run, RunCore};
 
     impl<ArgNames, Body> Function<ArgNames, Body> {
         pub fn call<Args>(self, args: Args) -> <Body::Filled as Run>::Output
         where
-            NamedArgs: FromNamesArgs<ArgNames, Args>,
+            (ArgNames, Args): Into<NamedArgs>,
             Body: ComputationFn,
             Body::Filled: Run,
         {
@@ -46,7 +46,7 @@ mod function {
 
         pub fn call_core<Args>(self, args: Args) -> <Body::Filled as RunCore>::Output
         where
-            NamedArgs: FromNamesArgs<ArgNames, Args>,
+            (ArgNames, Args): Into<NamedArgs>,
             Body: ComputationFn,
             Body::Filled: RunCore,
         {
