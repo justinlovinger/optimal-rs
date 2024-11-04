@@ -10,7 +10,7 @@ use computation_types::{
     peano::{One, Two, Zero},
     val, val1,
     zip::{Zip, Zip3, Zip4, Zip5, Zip6, Zip7, Zip8},
-    AnyArg, Arg, Computation, ComputationFn, Function, Len, Run, Val,
+    AnyArg, Arg, Computation, ComputationFn, Function, Len, NamedArgs, Names, Run, Val,
 };
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
@@ -1198,6 +1198,65 @@ where
 {
     type Dim = One;
     type Item = bool;
+}
+
+impl<A, F, FFD> ComputationFn for BacktrackingLineSearchComputation<A, F, FFD>
+where
+    Self: Computation,
+    A: Sum + Signed + Float + ScalarOperand + LinalgScalar + AnyArg,
+    f64: AsPrimitive<A>,
+    F: ComputationFn<Dim = Zero, Item = A>,
+    F::Filled: Computation<Dim = Zero, Item = A>,
+    FFD: ComputationFn<Dim = (Zero, One), Item = (A, A)>,
+    FFD::Filled: Computation<Dim = (Zero, One), Item = (A, A)>,
+    BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>:
+        ComputationFn<Filled = BacktrackingLineSearchSteepestIncrPrevIteration<A, F, FFD>>,
+    BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD>:
+        ComputationFn<Filled = BacktrackingLineSearchSteepestIncrPrevNearMinima<A, F, FFD>>,
+    BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD>:
+        ComputationFn<Filled = BacktrackingLineSearchBfgsIdIncrPrevIteration<A, F, FFD>>,
+    BacktrackingLineSearchBfgsGammaIncrPrevIteration<A, F, FFD>:
+        ComputationFn<Filled = BacktrackingLineSearchBfgsGammaIncrPrevIteration<A, F, FFD>>,
+    BacktrackingLineSearchBfgsIdIncrPrevNearMinima<A, F, FFD>:
+        ComputationFn<Filled = BacktrackingLineSearchBfgsIdIncrPrevNearMinima<A, F, FFD>>,
+    BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD>:
+        ComputationFn<Filled = BacktrackingLineSearchBfgsGammaIncrPrevNearMinima<A, F, FFD>>,
+{
+    type Filled = Self;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        match self {
+            BacktrackingLineSearchComputation::SteepestIncrPrevIteration(x) => {
+                BacktrackingLineSearchComputation::SteepestIncrPrevIteration(x.fill(named_args))
+            }
+            BacktrackingLineSearchComputation::SteepestIncrPrevNearMinima(x) => {
+                BacktrackingLineSearchComputation::SteepestIncrPrevNearMinima(x.fill(named_args))
+            }
+            BacktrackingLineSearchComputation::BfgsIdIncrPrevIteration(x) => {
+                BacktrackingLineSearchComputation::BfgsIdIncrPrevIteration(x.fill(named_args))
+            }
+            BacktrackingLineSearchComputation::BfgsGammaIncrPrevIteration(x) => {
+                BacktrackingLineSearchComputation::BfgsGammaIncrPrevIteration(x.fill(named_args))
+            }
+            BacktrackingLineSearchComputation::BfgsIdIncrPrevNearMinima(x) => {
+                BacktrackingLineSearchComputation::BfgsIdIncrPrevNearMinima(x.fill(named_args))
+            }
+            BacktrackingLineSearchComputation::BfgsGammaIncrPrevNearMinima(x) => {
+                BacktrackingLineSearchComputation::BfgsGammaIncrPrevNearMinima(x.fill(named_args))
+            }
+        }
+    }
+
+    fn arg_names(&self) -> Names {
+        match self {
+            BacktrackingLineSearchComputation::SteepestIncrPrevIteration(x) => x.arg_names(),
+            BacktrackingLineSearchComputation::SteepestIncrPrevNearMinima(x) => x.arg_names(),
+            BacktrackingLineSearchComputation::BfgsIdIncrPrevIteration(x) => x.arg_names(),
+            BacktrackingLineSearchComputation::BfgsGammaIncrPrevIteration(x) => x.arg_names(),
+            BacktrackingLineSearchComputation::BfgsIdIncrPrevNearMinima(x) => x.arg_names(),
+            BacktrackingLineSearchComputation::BfgsGammaIncrPrevNearMinima(x) => x.arg_names(),
+        }
+    }
 }
 
 impl<A, F, FFD> fmt::Display for BacktrackingLineSearchComputation<A, F, FFD>

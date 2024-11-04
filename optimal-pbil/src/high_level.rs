@@ -8,7 +8,7 @@ use computation_types::{
     peano::{One, Zero},
     val, val1,
     zip::Zip,
-    AnyArg, Arg, Computation, ComputationFn, Function, Run, Val,
+    AnyArg, Arg, Computation, ComputationFn, Function, NamedArgs, Names, Run, Val,
 };
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};
@@ -279,6 +279,33 @@ where
 {
     type Dim = One;
     type Item = bool;
+}
+
+impl<F, R> ComputationFn for PbilComputation<F, R>
+where
+    Self: Computation,
+    F: ComputationFn<Dim = Zero>,
+    F::Item: Clone + fmt::Debug + PartialOrd + AnyArg,
+    F::Filled: Computation<Dim = Zero, Item = F::Item>,
+    R: Rng + AnyArg,
+    PbilIteration<F, R>: ComputationFn<Filled = PbilIteration<F, R>>,
+    PbilThreshold<F, R>: ComputationFn<Filled = PbilThreshold<F, R>>,
+{
+    type Filled = Self;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        match self {
+            PbilComputation::Iteration(x) => PbilComputation::Iteration(x.fill(named_args)),
+            PbilComputation::Threshold(x) => PbilComputation::Threshold(x.fill(named_args)),
+        }
+    }
+
+    fn arg_names(&self) -> Names {
+        match self {
+            PbilComputation::Iteration(x) => x.arg_names(),
+            PbilComputation::Threshold(x) => x.arg_names(),
+        }
+    }
 }
 
 impl<F, R> fmt::Display for PbilComputation<F, R>
