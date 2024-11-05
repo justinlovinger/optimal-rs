@@ -25,23 +25,25 @@ pub trait RunCore {
 
 impl<T> RunCore for &T
 where
-    T: RunCore + ?Sized,
+    T: ToOwned + ?Sized,
+    T::Owned: RunCore,
 {
-    type Output = T::Output;
+    type Output = <T::Owned as RunCore>::Output;
 
     fn run_core(self) -> Self::Output {
-        unimplemented!("Unsized types cannot run")
+        self.to_owned().run_core()
     }
 }
 
 impl<T> RunCore for &mut T
 where
-    T: RunCore + ?Sized,
+    T: ToOwned + ?Sized,
+    T::Owned: RunCore,
 {
-    type Output = T::Output;
+    type Output = <T::Owned as RunCore>::Output;
 
     fn run_core(self) -> Self::Output {
-        unimplemented!("Unsized types cannot run")
+        self.to_owned().run_core()
     }
 }
 
@@ -52,40 +54,43 @@ where
     type Output = T::Output;
 
     fn run_core(self) -> Self::Output {
-        unimplemented!("Unsized types cannot run")
+        (*self).run_core()
     }
 }
 
 impl<T> RunCore for std::rc::Rc<T>
 where
-    T: RunCore + ?Sized,
+    T: ToOwned + ?Sized,
+    T::Owned: RunCore,
 {
-    type Output = T::Output;
+    type Output = <T::Owned as RunCore>::Output;
 
     fn run_core(self) -> Self::Output {
-        unimplemented!("Unsized types cannot run")
+        self.as_ref().to_owned().run_core()
     }
 }
 
 impl<T> RunCore for std::sync::Arc<T>
 where
-    T: RunCore + ?Sized,
+    T: ToOwned + ?Sized,
+    T::Owned: RunCore,
 {
-    type Output = T::Output;
+    type Output = <T::Owned as RunCore>::Output;
 
     fn run_core(self) -> Self::Output {
-        unimplemented!("Unsized types cannot run")
+        self.as_ref().to_owned().run_core()
     }
 }
 
 impl<T> RunCore for std::borrow::Cow<'_, T>
 where
-    T: RunCore + ToOwned + ?Sized,
+    T: ToOwned + ?Sized,
+    T::Owned: RunCore,
 {
-    type Output = T::Output;
+    type Output = <T::Owned as RunCore>::Output;
 
     fn run_core(self) -> Self::Output {
-        unimplemented!("Unsized types cannot run, only associated types are available.")
+        self.into_owned().run_core()
     }
 }
 

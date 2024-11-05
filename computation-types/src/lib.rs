@@ -1,4 +1,6 @@
 #![feature(min_specialization)]
+#![feature(unsized_fn_params)]
+#![allow(internal_features)]
 #![warn(missing_debug_implementations)]
 
 //! Types for abstract mathematical computation.
@@ -41,8 +43,6 @@ pub mod zip;
 
 use core::fmt;
 use std::marker::PhantomData;
-
-use blanket::blanket;
 
 use crate::peano::{One, Suc, Two, Zero};
 
@@ -477,7 +477,6 @@ where
 ///
 /// Most computations should implement this,
 /// even if they represent a function with zero arguments.
-#[blanket(derive(Box))]
 pub trait ComputationFn: Computation {
     type Filled;
 
@@ -486,6 +485,101 @@ pub trait ComputationFn: Computation {
     fn fill(self, named_args: NamedArgs) -> Self::Filled;
 
     fn arg_names(&self) -> Names;
+}
+
+impl<T> ComputationFn for &T
+where
+    T: ComputationFn + ToOwned + ?Sized,
+    T::Owned: ComputationFn,
+{
+    type Filled = <T::Owned as ComputationFn>::Filled;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        self.to_owned().fill(named_args)
+    }
+
+    fn arg_names(&self) -> Names {
+        (*(*self)).arg_names()
+    }
+}
+
+impl<T> ComputationFn for &mut T
+where
+    T: ComputationFn + ToOwned + ?Sized,
+    T::Owned: ComputationFn,
+{
+    type Filled = <T::Owned as ComputationFn>::Filled;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        self.to_owned().fill(named_args)
+    }
+
+    fn arg_names(&self) -> Names {
+        (*(*self)).arg_names()
+    }
+}
+
+impl<T> ComputationFn for Box<T>
+where
+    T: ComputationFn + ?Sized,
+{
+    type Filled = T::Filled;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        (*self).fill(named_args)
+    }
+
+    fn arg_names(&self) -> Names {
+        (*(*self)).arg_names()
+    }
+}
+
+impl<T> ComputationFn for std::rc::Rc<T>
+where
+    T: ComputationFn + ToOwned + ?Sized,
+    T::Owned: ComputationFn,
+{
+    type Filled = <T::Owned as ComputationFn>::Filled;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        self.as_ref().to_owned().fill(named_args)
+    }
+
+    fn arg_names(&self) -> Names {
+        (*(*self)).arg_names()
+    }
+}
+
+impl<T> ComputationFn for std::sync::Arc<T>
+where
+    T: ComputationFn + ToOwned + ?Sized,
+    T::Owned: ComputationFn,
+{
+    type Filled = <T::Owned as ComputationFn>::Filled;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        self.as_ref().to_owned().fill(named_args)
+    }
+
+    fn arg_names(&self) -> Names {
+        (*(*self)).arg_names()
+    }
+}
+
+impl<T> ComputationFn for std::borrow::Cow<'_, T>
+where
+    T: ComputationFn + ToOwned + ?Sized,
+    T::Owned: ComputationFn,
+{
+    type Filled = <T::Owned as ComputationFn>::Filled;
+
+    fn fill(self, named_args: NamedArgs) -> Self::Filled {
+        self.into_owned().fill(named_args)
+    }
+
+    fn arg_names(&self) -> Names {
+        (*(*self)).arg_names()
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -816,4 +910,140 @@ mod tests {
     //     );
     // }
     // ```
+
+    mod dynamic {
+        use ::rand::distributions::Uniform;
+        use run::RunCore;
+        use zip::{Zip, Zip3, Zip4};
+
+        use self::rand::Rand;
+
+        use super::*;
+
+        #[test]
+        fn the_framework_should_support_dynamic_objective_functions() {
+            trait ObjFunc:
+                ComputationFn<Dim = Zero, Item = f64, Filled = Box<dyn FilledObjFunc>>
+            {
+                fn boxed_clone(&self) -> Box<dyn ObjFunc>;
+            }
+            impl<T> ObjFunc for T
+            where
+                T: 'static
+                    + Clone
+                    + ComputationFn<Dim = Zero, Item = f64, Filled = Box<dyn FilledObjFunc>>,
+            {
+                fn boxed_clone(&self) -> Box<dyn ObjFunc> {
+                    Box::new(self.clone())
+                }
+            }
+            impl Clone for Box<dyn ObjFunc> {
+                fn clone(&self) -> Self {
+                    self.as_ref().boxed_clone()
+                }
+            }
+
+            trait FilledObjFunc: Computation<Dim = Zero, Item = f64> + RunCore<Output = f64> {
+                fn boxed_clone(&self) -> Box<dyn FilledObjFunc>;
+            }
+            impl<T> FilledObjFunc for T
+            where
+                T: 'static + Clone + Computation<Dim = Zero, Item = f64> + RunCore<Output = f64>,
+            {
+                fn boxed_clone(&self) -> Box<dyn FilledObjFunc> {
+                    Box::new(self.clone())
+                }
+            }
+            impl Clone for Box<dyn FilledObjFunc> {
+                fn clone(&self) -> Self {
+                    self.as_ref().boxed_clone()
+                }
+            }
+
+            fn random_optimizer(
+                len: usize,
+                samples: usize,
+                obj_func: Box<dyn ObjFunc>,
+            ) -> impl Run<Output = Vec<f64>> {
+                let distr = std::iter::repeat(Uniform::new(0.0, 1.0))
+                    .take(len)
+                    .collect::<Vec<_>>();
+                Zip(
+                    val!(1_usize),
+                    Rand::<Val1<Vec<Uniform<f64>>>, f64>::new(val1!(distr.clone())).then(
+                        Function::anonymous("point", Zip(arg1!("point", f64), obj_func.clone())),
+                    ),
+                )
+                .loop_while(
+                    ("i", ("best_point", "best_value")),
+                    Zip(
+                        arg!("i", usize) + val!(1_usize),
+                        Zip3(
+                            arg1!("best_point", f64),
+                            arg!("best_value", f64),
+                            Rand::<Val1<Vec<Uniform<f64>>>, f64>::new(val1!(distr)),
+                        )
+                        .then(Function::anonymous(
+                            ("best_point", "best_value", "point"),
+                            Zip4(
+                                arg1!("best_point", f64),
+                                arg!("best_value", f64),
+                                arg1!("point", f64),
+                                obj_func,
+                            )
+                            .then(Function::anonymous(
+                                ("best_point", "best_value", "point", "value"),
+                                Zip4(
+                                    arg1!("best_point", f64),
+                                    arg!("best_value", f64),
+                                    arg1!("point", f64),
+                                    arg!("value", f64),
+                                )
+                                .if_(
+                                    ("best_point", "best_value", "point", "value"),
+                                    arg!("value", f64).lt(arg!("best_value", f64)),
+                                    Zip(arg1!("point", f64), arg!("value", f64)),
+                                    Zip(arg1!("best_point", f64), arg!("best_value", f64)),
+                                ),
+                            )),
+                        )),
+                    ),
+                    arg!("i", usize).lt(val!(samples)),
+                )
+                .then(Function::anonymous(
+                    ("i", ("best_point", "best_value")),
+                    arg1!("best_point", f64),
+                ))
+            }
+
+            #[derive(Clone, Copy, Debug)]
+            struct BoxFillObjFunc<A>(A);
+
+            impl<A> Computation for BoxFillObjFunc<A>
+            where
+                A: Computation,
+            {
+                type Dim = A::Dim;
+                type Item = A::Item;
+            }
+
+            impl<A> ComputationFn for BoxFillObjFunc<A>
+            where
+                A: ComputationFn,
+                A::Filled: 'static + FilledObjFunc,
+            {
+                type Filled = Box<dyn FilledObjFunc>;
+
+                fn fill(self, named_args: NamedArgs) -> Self::Filled {
+                    Box::new(self.0.fill(named_args))
+                }
+
+                fn arg_names(&self) -> Names {
+                    self.0.arg_names()
+                }
+            }
+
+            random_optimizer(2, 10, Box::new(BoxFillObjFunc(arg1!("point", f64).sum()))).run();
+        }
+    }
 }
