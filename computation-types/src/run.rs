@@ -2,7 +2,7 @@ mod into_vec;
 mod matrix;
 mod run_core;
 
-use crate::{ComputationFn, NamedArgs};
+use crate::{Computation, NamedArgs};
 
 pub use self::{collect::*, into_vec::*, matrix::*, run_core::*};
 
@@ -19,7 +19,7 @@ pub trait Run {
 
 impl<T, Collected> Run for T
 where
-    T: ComputationFn + RunCore,
+    T: Computation + RunCore,
     T::Output: Collect<T::Dim, Collected = Collected>,
 {
     type Output = Collected;
