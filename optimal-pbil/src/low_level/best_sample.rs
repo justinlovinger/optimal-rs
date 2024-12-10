@@ -25,16 +25,16 @@ pub type BestSample<N, F, P, R> = Then<
                 Zip<
                     Arg<One, Bernoulli>,
                     Then<
-                        SeededRand<Arg<Zero, <R as Computation>::Item>, Arg<One, Bernoulli>, bool>,
+                        SeededRand<Arg<One, Bernoulli>, bool, Arg<Zero, <R as Computation>::Item>>,
                         (&'static str, &'static str),
-                        Zip<Arg<Zero, <R as Computation>::Item>, Zip<Arg<One, bool>, F>>,
+                        Zip<Zip<Arg<One, bool>, F>, Arg<Zero, <R as Computation>::Item>>,
                     >,
                 >,
             >,
         >,
         (
             (&'static str, &'static str),
-            (&'static str, (&'static str, (&'static str, &'static str))),
+            (&'static str, ((&'static str, &'static str), &'static str)),
         ),
         Zip<
             Zip<Add<Arg<Zero, usize>, Val<Zero, usize>>, Arg<Zero, NumSamples>>,
@@ -44,11 +44,10 @@ pub type BestSample<N, F, P, R> = Then<
                     Zip3<
                         Arg<One, bool>,
                         Arg<Zero, <F as Computation>::Item>,
-                        SeededRand<Arg<Zero, <R as Computation>::Item>, Arg<One, Bernoulli>, bool>,
+                        SeededRand<Arg<One, Bernoulli>, bool, Arg<Zero, <R as Computation>::Item>>,
                     >,
                     (&'static str, &'static str, (&'static str, &'static str)),
                     Zip<
-                        Arg<Zero, <R as Computation>::Item>,
                         Then<
                             Zip4<
                                 Arg<One, bool>,
@@ -73,6 +72,7 @@ pub type BestSample<N, F, P, R> = Then<
                                 Zip<Arg<One, bool>, Arg<Zero, <F as Computation>::Item>>,
                             >,
                         >,
+                        Arg<Zero, <R as Computation>::Item>,
                     >,
                 >,
             >,
@@ -81,9 +81,9 @@ pub type BestSample<N, F, P, R> = Then<
     >,
     (
         (&'static str, &'static str),
-        (&'static str, (&'static str, (&'static str, &'static str))),
+        (&'static str, ((&'static str, &'static str), &'static str)),
     ),
-    Zip<Arg<Zero, <R as Computation>::Item>, Arg<One, bool>>,
+    Zip<Arg<One, bool>, Arg<Zero, <R as Computation>::Item>>,
 >;
 
 /// Return the sample that minimizes the objective function
@@ -116,15 +116,15 @@ where
             ("distributions", "rng"),
             Zip(
                 arg1!("distributions", Bernoulli),
-                SeededRand::<_, _, bool>::new(
-                    arg!("rng", R::Item),
+                SeededRand::<_, bool, _>::new(
                     arg1!("distributions", Bernoulli),
+                    arg!("rng", R::Item),
                 )
                 .then(Function::anonymous(
-                    ("rng", "sample"),
+                    ("sample", "rng"),
                     Zip(
-                        arg!("rng", R::Item),
                         Zip(arg1!("sample", bool), obj_func.clone()),
+                        arg!("rng", R::Item),
                     ),
                 )),
             ),
@@ -133,7 +133,7 @@ where
     .loop_while(
         (
             ("i", "num_samples"),
-            ("distributions", ("rng", ("best_sample", "best_value"))),
+            ("distributions", (("best_sample", "best_value"), "rng")),
         ),
         Zip(
             Zip(
@@ -145,15 +145,14 @@ where
                 Zip3(
                     arg1!("best_sample", bool),
                     arg!("best_value", F::Item),
-                    SeededRand::<_, _, bool>::new(
-                        arg!("rng", R::Item),
+                    SeededRand::<_, bool, _>::new(
                         arg1!("distributions", Bernoulli),
+                        arg!("rng", R::Item),
                     ),
                 )
                 .then(Function::anonymous(
-                    ("best_sample", "best_value", ("rng", "sample")),
+                    ("best_sample", "best_value", ("sample", "rng")),
                     Zip(
-                        arg!("rng", R::Item),
                         Zip4(
                             arg1!("best_sample", bool),
                             arg!("best_value", F::Item),
@@ -175,6 +174,7 @@ where
                                 Zip(arg1!("best_sample", bool), arg!("best_value", F::Item)),
                             ),
                         )),
+                        arg!("rng", R::Item),
                     ),
                 )),
             ),
@@ -184,9 +184,9 @@ where
     .then(Function::anonymous(
         (
             ("i", "num_samples"),
-            ("distributions", ("rng", ("best_sample", "best_value"))),
+            ("distributions", (("best_sample", "best_value"), "rng")),
         ),
-        Zip(arg!("rng", R::Item), arg1!("best_sample", bool)),
+        Zip(arg1!("best_sample", bool), arg!("rng", R::Item)),
     ))
 }
 

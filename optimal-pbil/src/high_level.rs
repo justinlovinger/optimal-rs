@@ -174,11 +174,11 @@ where
     fn computation_iteration(self, i: usize) -> PbilIteration<F, R> {
         let probabilities = self.initial_probabilities();
         PointFrom::new(
-            val!(0)
-                .zip(val!(self.rng).zip(val1!(probabilities)))
+            Zip(val!(0), Zip(val1!(probabilities), val!(self.rng)))
                 .loop_while(
-                    ("i", ("rng", "probabilities")),
-                    (arg!("i", usize) + val!(1)).zip(
+                    ("i", ("probabilities", "rng")),
+                    Zip(
+                        arg!("i", usize) + val!(1),
                         arg1!("probabilities", Probability)
                             .zip(best_sample(
                                 val!(self.problem.agnostic.num_samples),
@@ -187,7 +187,7 @@ where
                                 arg!("rng", R),
                             ))
                             .then(Function::anonymous(
-                                ("probabilities", ("rng", "sample")),
+                                ("probabilities", ("sample", "rng")),
                                 Mutate::new(
                                     val!(self.problem.agnostic.mutation_chance),
                                     val!(self.problem.agnostic.mutation_adjust_rate),
@@ -203,7 +203,7 @@ where
                     arg!("i", usize).lt(val!(i)),
                 )
                 .then(Function::anonymous(
-                    ("i", ("rng", "probabilities")),
+                    ("i", ("probabilities", "rng")),
                     arg1!("probabilities", Probability),
                 )),
         )
@@ -212,10 +212,9 @@ where
     fn computation_threshold(self, threshold: ProbabilityThreshold) -> PbilThreshold<F, R> {
         let probabilities = self.initial_probabilities();
         PointFrom::new(
-            val!(self.rng)
-                .zip(val1!(probabilities))
+            Zip(val1!(probabilities), val!(self.rng))
                 .loop_while(
-                    ("rng", "probabilities"),
+                    ("probabilities", "rng"),
                     arg1!("probabilities", Probability)
                         .zip(best_sample(
                             val!(self.problem.agnostic.num_samples),
@@ -224,7 +223,7 @@ where
                             arg!("rng", R),
                         ))
                         .then(Function::anonymous(
-                            ("probabilities", ("rng", "sample")),
+                            ("probabilities", ("sample", "rng")),
                             Mutate::new(
                                 val!(self.problem.agnostic.mutation_chance),
                                 val!(self.problem.agnostic.mutation_adjust_rate),
@@ -239,7 +238,7 @@ where
                     Converged::new(val!(threshold), arg1!("probabilities", Probability)).not(),
                 )
                 .then(Function::anonymous(
-                    ("rng", "probabilities"),
+                    ("probabilities", "rng"),
                     arg1!("probabilities", Probability),
                 )),
         )
@@ -350,7 +349,7 @@ where
 pub type PbilIteration<F, R> = PointFrom<
     Then<
         LoopWhile<
-            Zip<Val<Zero, usize>, Zip<Val<Zero, R>, Val<One, Vec<Probability>>>>,
+            Zip<Val<Zero, usize>, Zip<Val<One, Vec<Probability>>, Val<Zero, R>>>,
             (&'static str, (&'static str, &'static str)),
             Zip<
                 Add<Arg<Zero, usize>, Val<Zero, usize>>,
@@ -379,7 +378,7 @@ pub type PbilIteration<F, R> = PointFrom<
 pub type PbilThreshold<F, R> = PointFrom<
     Then<
         LoopWhile<
-            Zip<Val<Zero, R>, Val<One, Vec<Probability>>>,
+            Zip<Val<One, Vec<Probability>>, Val<Zero, R>>,
             (&'static str, &'static str),
             Then<
                 Zip<

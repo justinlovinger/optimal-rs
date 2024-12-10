@@ -50,8 +50,8 @@ where
     R: Computation<Dim = Zero>,
     R::Item: Rng,
 {
-    type Dim = (Zero, One);
-    type Item = (R::Item, Probability);
+    type Dim = (One, Zero);
+    type Item = (Probability, R::Item);
 }
 
 impl<C, A, P, R> ComputationFn for Mutate<C, A, P, R>
@@ -128,7 +128,7 @@ mod run {
         P::Output: IntoIterator<Item = Probability>,
         R::Output: Rng,
     {
-        type Output = (R::Output, Vec<Probability>);
+        type Output = (Vec<Probability>, R::Output);
 
         fn run_core(self) -> Self::Output {
             let mut rng = self.rng.run_core();
@@ -139,7 +139,7 @@ mod run {
                 &mut rng,
             )
             .collect();
-            (rng, out)
+            (out, rng)
         }
     }
 

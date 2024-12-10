@@ -84,21 +84,20 @@ mod seeded_rands {
         Computation,
     };
 
-    impl<R, Dist, T, DistOut> RunCore for SeededRand<R, Dist, T>
+    impl<Dist, DistOut, T, R> RunCore for SeededRand<Dist, T, R>
     where
         Self: Computation,
-        R: RunCore,
-        R::Output: Rng,
         Dist: Computation + RunCore<Output = DistOut>,
         DistOut: BroadcastSeededRands<Dist::Dim, T>,
+        R: RunCore,
+        R::Output: Rng,
     {
-        type Output = (R::Output, DistOut::Output);
+        type Output = (DistOut::Output, R::Output);
 
         fn run_core(self) -> Self::Output {
             let mut rng = self.rng.run_core();
-            let dist = self.distribution.run_core();
-            let out = dist.broadcast(&mut rng);
-            (rng, out)
+            let out = self.distribution.run_core().broadcast(&mut rng);
+            (out, rng)
         }
     }
 
@@ -175,7 +174,9 @@ mod tests {
         arg,
         rand::{Rand, SeededRand},
         run::Matrix,
-        val, val1, val2, Computation, Run,
+        val, val1, val2,
+        zip::Zip,
+        Computation, Run,
     };
 
     #[test]
@@ -223,17 +224,17 @@ mod tests {
 
     #[proptest]
     fn seededrands_should_generate_scalars(seed: u64) {
-        let (_rng, x) =
-            SeededRand::<_, _, f64>::new(val!(StdRng::seed_from_u64(seed)), val!(Standard)).run();
+        let (x, _rng) =
+            SeededRand::<_, f64, _>::new(val!(Standard), val!(StdRng::seed_from_u64(seed))).run();
 
         prop_assert!((0.0..1.0).contains(&x));
     }
 
     #[proptest]
     fn seededrands_should_generate_vectors(seed: u64, #[strategy(1_usize..10)] len: usize) {
-        let (_rng, xs) = SeededRand::<_, _, f64>::new(
-            val!(StdRng::seed_from_u64(seed)),
+        let (xs, _rng) = SeededRand::<_, f64, _>::new(
             val1!(std::iter::repeat(Standard).take(len).collect::<Vec<_>>()),
+            val!(StdRng::seed_from_u64(seed)),
         )
         .run();
 
@@ -250,8 +251,7 @@ mod tests {
         #[strategy(1_usize..10)] y_len: usize,
     ) {
         let shape = (x_len, y_len);
-        let (_rng, xs) = SeededRand::<_, _, f64>::new(
-            val!(StdRng::seed_from_u64(seed)),
+        let (xs, _rng) = SeededRand::<_, f64, _>::new(
             val2!(Matrix::from_vec(
                 (x_len, y_len),
                 std::iter::repeat(Standard)
@@ -259,6 +259,7 @@ mod tests {
                     .collect::<Vec<_>>()
             )
             .unwrap()),
+            val!(StdRng::seed_from_u64(seed)),
         )
         .run();
 
@@ -272,11 +273,10 @@ mod tests {
 
     #[proptest]
     fn seededrands_should_loop(seed: u64) {
-        let (_rng, x) = val!(StdRng::seed_from_u64(seed))
-            .zip(val!(0.0))
+        let (x, _rng) = Zip(val!(0.0), val!(StdRng::seed_from_u64(seed)))
             .loop_while(
-                ("rng", "x"),
-                SeededRand::<_, _, f64>::new(arg!("rng", StdRng), val!(Standard)),
+                ("x", "rng"),
+                SeededRand::<_, f64, _>::new(val!(Standard), arg!("rng", StdRng)),
                 arg!("x", f64).gt(val!(0.5)).not(),
             )
             .run();

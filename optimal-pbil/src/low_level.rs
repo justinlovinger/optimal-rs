@@ -136,7 +136,7 @@ mod tests {
                 val1!(probabilities),
                 val!(SmallRng::seed_from_u64(seed)),
             )
-            .snd()
+            .fst()
             .run()
         ));
     }

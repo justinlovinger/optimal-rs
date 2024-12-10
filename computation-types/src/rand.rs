@@ -76,54 +76,54 @@ mod seeded_rand {
     use crate::{impl_core_ops, peano::Zero, Computation, ComputationFn, NamedArgs, Names};
 
     #[derive(Clone, Copy, Debug)]
-    pub struct SeededRand<R, Dist, T>
+    pub struct SeededRand<Dist, T, R>
     where
         Self: Computation,
     {
-        pub rng: R,
         pub distribution: Dist,
         ty: PhantomData<T>,
+        pub rng: R,
     }
 
-    impl<R, Dist, T> SeededRand<R, Dist, T>
+    impl<Dist, T, R> SeededRand<Dist, T, R>
     where
         Self: Computation,
     {
-        pub fn new(rng: R, distribution: Dist) -> Self {
+        pub fn new(distribution: Dist, rng: R) -> Self {
             Self {
-                rng,
                 distribution,
                 ty: PhantomData,
+                rng,
             }
         }
     }
 
-    impl<R, Dist, T> Computation for SeededRand<R, Dist, T>
+    impl<Dist, T, R> Computation for SeededRand<Dist, T, R>
     where
-        R: Computation,
         Dist: Computation,
+        R: Computation,
     {
-        type Dim = (Zero, Dist::Dim);
-        type Item = (R::Item, T);
+        type Dim = (Dist::Dim, Zero);
+        type Item = (T, R::Item);
     }
 
-    impl<R, Dist, T> ComputationFn for SeededRand<R, Dist, T>
+    impl<Dist, T, R> ComputationFn for SeededRand<Dist, T, R>
     where
         Self: Computation,
-        R: ComputationFn,
         Dist: ComputationFn,
-        SeededRand<R::Filled, Dist::Filled, T>: Computation,
+        R: ComputationFn,
+        SeededRand<Dist::Filled, T, R::Filled>: Computation,
     {
-        type Filled = SeededRand<R::Filled, Dist::Filled, T>;
+        type Filled = SeededRand<Dist::Filled, T, R::Filled>;
 
         fn fill(self, named_args: NamedArgs) -> Self::Filled {
             let (args_0, args_1) = named_args
                 .partition(&self.rng.arg_names(), &self.distribution.arg_names())
                 .unwrap_or_else(|e| panic!("{}", e,));
             SeededRand {
-                rng: self.rng.fill(args_0),
                 distribution: self.distribution.fill(args_1),
                 ty: self.ty,
+                rng: self.rng.fill(args_0),
             }
         }
 
@@ -132,16 +132,16 @@ mod seeded_rand {
         }
     }
 
-    impl_core_ops!(SeededRand<R, Dist, T>);
+    impl_core_ops!(SeededRand<Dist, T, R>);
 
-    impl<R, Dist, T> fmt::Display for SeededRand<R, Dist, T>
+    impl<Dist, T, R> fmt::Display for SeededRand<Dist, T, R>
     where
         Self: Computation,
-        R: fmt::Display,
         Dist: fmt::Display,
+        R: fmt::Display,
     {
         fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-            write!(f, "seeded_rand({}, {})", self.rng, self.distribution)
+            write!(f, "seeded_rand({}, {})", self.distribution, self.rng)
         }
     }
 }
@@ -194,21 +194,21 @@ mod tests {
 
     #[proptest]
     fn seededrands_should_display(seed: u64) {
-        let rng = val!(StdRng::seed_from_u64(seed));
         let dist = val!(Standard);
+        let rng = val!(StdRng::seed_from_u64(seed));
         prop_assert_eq!(
-            SeededRand::<_, _, i32>::new(rng.clone(), dist).to_string(),
-            format!("seeded_rand({}, {})", rng, dist)
+            SeededRand::<_, i32, _>::new(dist, rng.clone()).to_string(),
+            format!("seeded_rand({}, {})", dist, rng)
         );
     }
 
     #[proptest]
     fn seededrands_should_display_1d(seed: u64, #[strategy(1_usize..10)] x: usize) {
-        let rng = val!(StdRng::seed_from_u64(seed));
         let dist = val1!(std::iter::repeat(Standard).take(x).collect::<Vec<_>>());
+        let rng = val!(StdRng::seed_from_u64(seed));
         prop_assert_eq!(
-            SeededRand::<_, _, i32>::new(rng.clone(), dist.clone()).to_string(),
-            format!("seeded_rand({}, {})", rng, dist)
+            SeededRand::<_, i32, _>::new(dist.clone(), rng.clone()).to_string(),
+            format!("seeded_rand({}, {})", dist, rng)
         );
     }
 
@@ -218,15 +218,15 @@ mod tests {
         #[strategy(1_usize..10)] x: usize,
         #[strategy(1_usize..10)] y: usize,
     ) {
-        let rng = val!(StdRng::seed_from_u64(seed));
         let dist = val2!(Matrix::from_vec(
             (x, y),
             std::iter::repeat(Standard).take(x * y).collect::<Vec<_>>()
         )
         .unwrap());
+        let rng = val!(StdRng::seed_from_u64(seed));
         prop_assert_eq!(
-            SeededRand::<_, _, i32>::new(rng.clone(), dist.clone()).to_string(),
-            format!("seeded_rand({}, {})", rng, dist)
+            SeededRand::<_, i32, _>::new(dist.clone(), rng.clone()).to_string(),
+            format!("seeded_rand({}, {})", dist, rng)
         );
     }
 }
