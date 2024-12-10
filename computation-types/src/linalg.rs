@@ -3,7 +3,9 @@ use std::marker::PhantomData;
 
 use crate::{
     impl_core_ops,
+    math::Mul,
     peano::{One, Two, Zero},
+    sum::Sum,
     Computation, ComputationFn, NamedArgs,
 };
 
@@ -137,44 +139,32 @@ where
 }
 
 /// See [`Computation::scalar_product`].
-#[derive(Clone, Copy, Debug)]
-pub struct ScalarProduct<A, B>(pub A, pub B)
-where
-    Self: Computation;
+pub type ScalarProduct<A, B> = Sum<Mul<A, B>>;
 
-impl<A, B> Computation for ScalarProduct<A, B>
+/// See [`Computation::scalar_product`].
+pub fn scalar_product<A, B>(x: A, y: B) -> ScalarProduct<A, B>
 where
-    A: Computation<Dim = One>,
-    B: Computation<Dim = One>,
-    A::Item: ops::Mul<B::Item>,
-    <A::Item as ops::Mul<B::Item>>::Output: ops::Add,
+    Mul<A, B>: Computation,
+    ScalarProduct<A, B>: Computation,
 {
-    type Dim = Zero;
-    type Item = <<A::Item as ops::Mul<B::Item>>::Output as ops::Add>::Output;
+    Sum(Mul(x, y))
 }
 
-impl<A, B> ComputationFn for ScalarProduct<A, B>
-where
-    Self: Computation,
-    A: ComputationFn,
-    B: ComputationFn,
-    ScalarProduct<A::Filled, B::Filled>: Computation,
-{
-    type Filled = ScalarProduct<A::Filled, B::Filled>;
-
-    fn fill(self, named_args: NamedArgs) -> Self::Filled {
-        let (args_0, args_1) = named_args
-            .partition(&self.0.arg_names(), &self.1.arg_names())
-            .unwrap_or_else(|e| panic!("{}", e,));
-        ScalarProduct(self.0.fill(args_0), self.1.fill(args_1))
-    }
-
-    fn arg_names(&self) -> crate::Names {
-        self.0.arg_names().union(self.1.arg_names())
-    }
-}
-
-impl_core_ops!(ScalarProduct<A, B>);
+// With better support for overlapping trait-implementations
+// we could add the following:
+//
+// ```
+// impl<A, B> fmt::Display for ScalarProduct<A, B>
+// where
+//     Self: Computation,
+//     A: fmt::Display,
+//     B: fmt::Display,
+// {
+//     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+//         write!(f, "({} . {})", self.0, self.1)
+//     }
+// }
+// ```
 
 /// See [`Computation::mat_mul`].
 #[derive(Clone, Copy, Debug)]
@@ -216,6 +206,17 @@ where
 
 impl_core_ops!(MatMul<A, B>);
 
+impl<A, B> fmt::Display for MatMul<A, B>
+where
+    Self: Computation,
+    A: fmt::Display,
+    B: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "({} x {})", self.0, self.1)
+    }
+}
+
 /// See [`Computation::mul_out`].
 #[derive(Clone, Copy, Debug)]
 pub struct MulOut<A, B>(pub A, pub B)
@@ -254,6 +255,17 @@ where
 }
 
 impl_core_ops!(MulOut<A, B>);
+
+impl<A, B> fmt::Display for MulOut<A, B>
+where
+    Self: Computation,
+    A: fmt::Display,
+    B: fmt::Display,
+{
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "(col({}) x row({}))", self.0, self.1)
+    }
+}
 
 /// See [`Computation::mul_col`].
 #[derive(Clone, Copy, Debug)]
@@ -295,39 +307,6 @@ where
 
 impl_core_ops!(MulCol<A, B>);
 
-impl<A, B> fmt::Display for ScalarProduct<A, B>
-where
-    Self: Computation,
-    A: fmt::Display,
-    B: fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({} . {})", self.0, self.1)
-    }
-}
-
-impl<A, B> fmt::Display for MatMul<A, B>
-where
-    Self: Computation,
-    A: fmt::Display,
-    B: fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "({} x {})", self.0, self.1)
-    }
-}
-
-impl<A, B> fmt::Display for MulOut<A, B>
-where
-    Self: Computation,
-    A: fmt::Display,
-    B: fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "(col({}) x row({}))", self.0, self.1)
-    }
-}
-
 impl<A, B> fmt::Display for MulCol<A, B>
 where
     Self: Computation,
@@ -365,15 +344,20 @@ mod tests {
         );
     }
 
-    #[proptest]
-    fn scalar_product_should_display(x: i32, y: i32, z: i32, q: i32) {
-        let lhs = val1!([x, y]);
-        let rhs = val1!([z, q]);
-        prop_assert_eq!(
-            lhs.scalar_product(rhs).to_string(),
-            format!("({} . {})", lhs, rhs)
-        );
-    }
+    // With better support for overlapping trait-implementations
+    // we could add the following:
+    //
+    // ```
+    // #[proptest]
+    // fn scalar_product_should_display(x: i32, y: i32, z: i32, q: i32) {
+    //     let lhs = val1!([x, y]);
+    //     let rhs = val1!([z, q]);
+    //     prop_assert_eq!(
+    //         lhs.scalar_product(rhs).to_string(),
+    //         format!("({} . {})", lhs, rhs)
+    //     );
+    // }
+    // ```
 
     #[proptest]
     fn mat_mul_should_display(x: i32, y: i32, z: i32, q: i32) {

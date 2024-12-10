@@ -370,9 +370,10 @@ pub trait Computation {
     fn scalar_product<Rhs>(self, rhs: Rhs) -> linalg::ScalarProduct<Self, Rhs>
     where
         Self: Sized,
+        math::Mul<Self, Rhs>: Computation,
         linalg::ScalarProduct<Self, Rhs>: Computation,
     {
-        linalg::ScalarProduct(self, rhs)
+        linalg::scalar_product(self, rhs)
     }
 
     /// Perform matrix-multiplication.

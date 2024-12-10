@@ -1,9 +1,7 @@
 use crate::{
-    linalg::{FromDiagElem, IdentityMatrix, MatMul, MulCol, MulOut, ScalarProduct},
-    math::Mul,
+    linalg::{FromDiagElem, IdentityMatrix, MatMul, MulCol, MulOut},
     peano::{One, Two},
     run::{Collect, Matrix},
-    sum::Sum,
     Computation,
 };
 
@@ -37,19 +35,6 @@ where
         let len = self.len.run_core();
         let matrix = ndarray::Array2::from_diag_elem(len, self.elem.run_core());
         Matrix::from_vec((len, len), matrix.into_raw_vec()).unwrap()
-    }
-}
-
-impl<A, B> RunCore for ScalarProduct<A, B>
-where
-    Self: Computation,
-    Mul<A, B>: Computation,
-    Sum<Mul<A, B>>: Computation + RunCore,
-{
-    type Output = <Sum<Mul<A, B>> as RunCore>::Output;
-
-    fn run_core(self) -> Self::Output {
-        Sum(Mul(self.0, self.1)).run_core()
     }
 }
 
