@@ -15,6 +15,20 @@ where
     pub(super) f_item: PhantomData<FItem>,
 }
 
+impl<A, F, FDim, FItem> BlackBox<A, F, FDim, FItem>
+where
+    Self: Computation,
+{
+    pub fn new(child: A, f: F) -> Self {
+        Self {
+            child,
+            f,
+            f_dim: PhantomData,
+            f_item: PhantomData,
+        }
+    }
+}
+
 impl<A, F, FDim, FItem> Computation for BlackBox<A, F, FDim, FItem>
 where
     A: Computation,

@@ -291,12 +291,7 @@ pub trait Computation {
         Self: Sized,
         black_box::BlackBox<Self, F, FDim, FItem>: Computation,
     {
-        black_box::BlackBox {
-            child: self,
-            f,
-            f_dim: PhantomData,
-            f_item: PhantomData,
-        }
+        black_box::BlackBox::new(self, f)
     }
 
     // `control_flow`
@@ -365,10 +360,7 @@ pub trait Computation {
         Self: Sized,
         linalg::IdentityMatrix<Self, T>: Computation,
     {
-        linalg::IdentityMatrix {
-            len: self,
-            ty: PhantomData::<T>,
-        }
+        linalg::IdentityMatrix::new(self)
     }
 
     /// Multiply and sum the elements of two vectors.

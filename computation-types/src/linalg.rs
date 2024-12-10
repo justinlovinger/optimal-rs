@@ -17,6 +17,18 @@ where
     pub(super) ty: PhantomData<T>,
 }
 
+impl<Len, T> IdentityMatrix<Len, T>
+where
+    Self: Computation,
+{
+    pub fn new(len: Len) -> Self {
+        Self {
+            len,
+            ty: PhantomData,
+        }
+    }
+}
+
 impl<Len, T> Computation for IdentityMatrix<Len, T>
 where
     Len: Computation<Dim = Zero, Item = usize>,
