@@ -207,7 +207,7 @@ where
     PD: Computation<Dim = One, Item = A>,
     PS: Computation<Dim = One, Item = A>,
     D: Computation<Dim = One, Item = A>,
-    A: AnyArg + LinalgScalar,
+    A: PartialOrd + AnyArg + LinalgScalar,
 {
     prev_step
         .zip(derivatives.sub(prev_derivatives))
@@ -336,7 +336,7 @@ where
     PD: Computation<Dim = One, Item = A>,
     PS: Computation<Dim = One, Item = A>,
     D: Computation<Dim = One, Item = A>,
-    A: AnyArg + ScalarOperand + LinalgScalar,
+    A: PartialOrd + AnyArg + ScalarOperand + LinalgScalar,
 {
     Zip3(
         prev_inv_snd_derivatives,

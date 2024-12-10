@@ -9,7 +9,7 @@ use crate::{
 };
 
 macro_rules! impl_cmp_op {
-    ( $op:ident ) => {
+    ( $op:ident, $where:ident ) => {
         paste! {
             #[derive(Clone, Copy, Debug)]
             pub struct $op<A, B>(pub A, pub B)
@@ -20,6 +20,7 @@ macro_rules! impl_cmp_op {
             where
                 A: Computation<Dim = Zero>,
                 B: Computation<Dim = Zero>,
+                A::Item: $where<B::Item>
             {
                 type Dim = Zero;
                 type Item = bool;
@@ -51,12 +52,12 @@ macro_rules! impl_cmp_op {
     };
 }
 
-impl_cmp_op!(Eq);
-impl_cmp_op!(Ne);
-impl_cmp_op!(Lt);
-impl_cmp_op!(Le);
-impl_cmp_op!(Gt);
-impl_cmp_op!(Ge);
+impl_cmp_op!(Eq, PartialEq);
+impl_cmp_op!(Ne, PartialEq);
+impl_cmp_op!(Lt, PartialOrd);
+impl_cmp_op!(Le, PartialOrd);
+impl_cmp_op!(Gt, PartialOrd);
+impl_cmp_op!(Ge, PartialOrd);
 
 impl_display_for_inline_binary!(Eq, "==");
 impl_display_for_inline_binary!(Ne, "!=");

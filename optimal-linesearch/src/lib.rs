@@ -83,7 +83,7 @@ where
     V::Item: Copy + PartialOrd + Signed + ops::Mul<Output = V::Item> + One + 'static,
     f64: AsPrimitive<V::Item>,
     D: Computation<Dim = peano::One>,
-    D::Item: PartialOrd + Signed,
+    D::Item: PartialOrd + PartialOrd<V::Item> + Signed,
 {
     const COEFF: f64 = 0.00001; // 10^-5
     infinite_norm(derivatives).lt(val!(COEFF.as_()) * (val!(<V::Item as One>::one()) + value.abs()))
