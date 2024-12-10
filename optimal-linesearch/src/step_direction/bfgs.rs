@@ -146,12 +146,13 @@ use computation_types::{
     arg, arg1, arg2,
     cmp::Eq,
     control_flow::{If, Then},
+    len::Len,
     linalg::{FromDiagElem, IdentityMatrix, MatMul, MulCol, MulOut, ScalarProduct},
     math::{Add, Div, Mul, Neg, Sub},
     peano::{One, Two, Zero},
     val,
     zip::{Zip, Zip3, Zip4, Zip5, Zip7},
-    AnyArg, Arg, Computation, Function, Len, Val,
+    AnyArg, Arg, Computation, Function, Val,
 };
 use ndarray::{LinalgScalar, ScalarOperand};
 

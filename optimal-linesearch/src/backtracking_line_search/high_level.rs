@@ -5,12 +5,13 @@ use computation_types::{
     arg, arg1, arg2,
     cmp::{Eq, Ge, Le, Lt, Max, Not},
     control_flow::{If, LoopWhile, Then},
+    len::Len,
     linalg::{FromDiagElem, IdentityMatrix, MatMul, MulCol, MulOut, ScalarProduct},
     math::{Abs, Add, Div, Mul, Neg, Sub},
     peano::{One, Two, Zero},
     val, val1,
     zip::{Zip, Zip3, Zip4, Zip5, Zip6, Zip7, Zip8},
-    AnyArg, Arg, Computation, ComputationFn, Function, Len, NamedArgs, Names, Run, Val,
+    AnyArg, Arg, Computation, ComputationFn, Function, NamedArgs, Names, Run, Val,
 };
 use derive_builder::Builder;
 use derive_getters::{Dissolve, Getters};

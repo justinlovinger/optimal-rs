@@ -31,22 +31,20 @@ mod names;
 pub mod peano;
 pub mod run;
 
+pub mod arg;
 pub mod black_box;
 pub mod cmp;
 pub mod control_flow;
 pub mod enumerate;
+pub mod len;
 pub mod linalg;
 pub mod math;
 pub mod rand;
 pub mod sum;
+pub mod val;
 pub mod zip;
 
-use core::fmt;
-use std::marker::PhantomData;
-
-use crate::peano::{One, Suc, Two, Zero};
-
-pub use crate::{function::*, named_args::*, names::*, run::Run};
+pub use crate::{arg::*, function::*, named_args::*, names::*, run::Run, val::*};
 
 /// A type representing a computation.
 ///
@@ -409,12 +407,12 @@ pub trait Computation {
 
     // Other
 
-    fn len(self) -> Len<Self>
+    fn len(self) -> len::Len<Self>
     where
         Self: Sized,
-        Len<Self>: Computation,
+        len::Len<Self>: Computation,
     {
-        Len(self)
+        len::Len(self)
     }
 }
 
@@ -575,302 +573,9 @@ where
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Val<Dim, T>
-where
-    Self: Computation,
-{
-    dim: PhantomData<Dim>,
-    pub inner: T,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Arg<Dim, T>
-where
-    Self: Computation,
-{
-    pub name: &'static str,
-    dim: PhantomData<Dim>,
-    elem: PhantomData<T>,
-}
-
-pub type Val0<T> = Val<Zero, T>;
-pub type Val1<T> = Val<One, T>;
-pub type Val2<T> = Val<Two, T>;
-pub type Arg0<T> = Arg<Zero, T>;
-pub type Arg1<T> = Arg<One, T>;
-pub type Arg2<T> = Arg<Two, T>;
-
-impl<Dim, T> Val<Dim, T>
-where
-    Self: Computation,
-{
-    pub fn new(value: T) -> Self {
-        Val {
-            dim: PhantomData,
-            inner: value,
-        }
-    }
-}
-
-impl<Dim, T> Arg<Dim, T> {
-    pub fn new(name: &'static str) -> Self {
-        Arg {
-            name,
-            dim: PhantomData,
-            elem: PhantomData,
-        }
-    }
-}
-
-#[macro_export]
-macro_rules! val {
-    ( $value:expr ) => {
-        $crate::Val0::new($value)
-    };
-}
-
-#[macro_export]
-macro_rules! val1 {
-    ( $value:expr ) => {
-        $crate::Val1::new($value)
-    };
-}
-
-#[macro_export]
-macro_rules! val2 {
-    ( $value:expr ) => {
-        $crate::Val2::new($value)
-    };
-}
-
-#[macro_export]
-macro_rules! arg {
-    ( $name:literal ) => {
-        $crate::Arg0::new($name)
-    };
-    ( $name:literal, $elem:ty ) => {
-        $crate::Arg0::<$elem>::new($name)
-    };
-}
-
-#[macro_export]
-macro_rules! arg1 {
-    ( $name:literal ) => {
-        $crate::Arg1::new($name)
-    };
-    ( $name:literal, $elem:ty ) => {
-        $crate::Arg1::<$elem>::new($name)
-    };
-}
-
-#[macro_export]
-macro_rules! arg2 {
-    ( $name:literal ) => {
-        $crate::Arg2::new($name)
-    };
-    ( $name:literal, $elem:ty ) => {
-        $crate::Arg2::<$elem>::new($name)
-    };
-}
-
-impl<T> Computation for Val<Zero, T> {
-    type Dim = Zero;
-    type Item = T;
-}
-
-impl<D, T> Computation for Val<Suc<D>, T>
-where
-    T: IntoIterator,
-{
-    type Dim = Suc<D>;
-    type Item = T::Item;
-}
-
-impl<D, T> ComputationFn for Val<D, T>
-where
-    Val<D, T>: Computation,
-{
-    type Filled = Self;
-
-    fn fill(self, _named_args: NamedArgs) -> Self::Filled {
-        self
-    }
-
-    fn arg_names(&self) -> Names {
-        Names::new()
-    }
-}
-
-impl<D, T> Computation for Arg<D, T> {
-    type Dim = D;
-    type Item = T;
-}
-
-impl<T> ComputationFn for Arg<Zero, T>
-where
-    Self: Computation,
-    T: 'static + AnyArg,
-{
-    type Filled = Val<Zero, T>;
-
-    fn fill(self, mut named_args: NamedArgs) -> Self::Filled {
-        Val {
-            dim: self.dim,
-            inner: named_args
-                .pop(self.name)
-                .unwrap_or_else(|e| panic!("{}", e)),
-        }
-    }
-
-    fn arg_names(&self) -> Names {
-        Names::singleton(self.name)
-    }
-}
-
-impl<T> ComputationFn for Arg<One, T>
-where
-    Self: Computation,
-    T: 'static + Clone + AnyArg,
-{
-    type Filled = Val<One, Vec<T>>;
-
-    fn fill(self, mut named_args: NamedArgs) -> Self::Filled {
-        Val {
-            dim: self.dim,
-            inner: named_args
-                .pop(self.name)
-                .unwrap_or_else(|e| panic!("{}", e)),
-        }
-    }
-
-    fn arg_names(&self) -> Names {
-        Names::singleton(self.name)
-    }
-}
-
-impl<T> ComputationFn for Arg<Two, T>
-where
-    Self: Computation,
-    T: 'static + Clone + AnyArg,
-{
-    type Filled = Val<Two, crate::run::Matrix<Vec<T>>>;
-
-    fn fill(self, mut named_args: NamedArgs) -> Self::Filled {
-        Val {
-            dim: self.dim,
-            inner: named_args
-                .pop(self.name)
-                .unwrap_or_else(|e| panic!("{}", e)),
-        }
-    }
-
-    fn arg_names(&self) -> Names {
-        Names::singleton(self.name)
-    }
-}
-
-impl_core_ops!(Val<Dim, T>);
-impl_core_ops!(Arg<Dim, T>);
-
-impl<T> fmt::Display for Val<Zero, T>
-where
-    T: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.inner.fmt(f)
-    }
-}
-
-impl<D, T> fmt::Display for Val<Suc<D>, T>
-where
-    Self: Computation,
-    T: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{:?}", self.inner)
-    }
-}
-
-impl<Dim, T> fmt::Display for Arg<Dim, T>
-where
-    Self: Computation,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.name)
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Len<A>(pub A)
-where
-    Self: Computation;
-
-impl<A> Computation for Len<A>
-where
-    A: Computation<Dim = One>,
-{
-    type Dim = Zero;
-    type Item = usize;
-}
-
-impl<A> ComputationFn for Len<A>
-where
-    Self: Computation,
-    A: ComputationFn,
-    Len<A::Filled>: Computation,
-{
-    type Filled = Len<A::Filled>;
-
-    fn fill(self, named_args: NamedArgs) -> Self::Filled {
-        Len(self.0.fill(named_args))
-    }
-
-    fn arg_names(&self) -> Names {
-        self.0.arg_names()
-    }
-}
-
-impl_core_ops!(Len<A>);
-
-impl<A> fmt::Display for Len<A>
-where
-    Self: Computation,
-    A: fmt::Display,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}.len()", self.0)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use proptest::prelude::*;
-    use test_strategy::proptest;
-
     use super::*;
-
-    #[proptest]
-    fn val_should_display_inner(x: i32) {
-        prop_assert_eq!(val!(x).to_string(), x.to_string())
-    }
-
-    #[proptest]
-    fn val1_should_display_items(xs: Vec<i32>) {
-        prop_assert_eq!(val1!(xs.clone()).to_string(), format!("{:?}", xs.clone()));
-    }
-
-    #[test]
-    fn arg_should_display_placeholder() {
-        assert_eq!(arg!("foo", i32).to_string(), "foo");
-        assert_eq!(arg1!("bar", i32).to_string(), "bar");
-    }
-
-    #[test]
-    fn len_should_display() {
-        let inp = val1!(vec![0, 1]);
-        assert_eq!(inp.clone().len().to_string(), format!("{}.len()", inp));
-    }
 
     // The following test requires `Eq` for computation-types:
     // ```
@@ -906,6 +611,7 @@ mod tests {
 
     mod dynamic {
         use ::rand::distributions::Uniform;
+        use peano::Zero;
         use run::RunCore;
         use zip::{Zip, Zip3, Zip4};
 

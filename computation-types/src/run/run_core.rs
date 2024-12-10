@@ -2,13 +2,13 @@ mod black_box;
 mod cmp;
 mod control_flow;
 mod enumerate;
+mod len;
 mod linalg;
 mod math;
 mod rand;
 mod sum;
+mod val;
 mod zip;
-
-use crate::{Computation, Len, Val};
 
 /// See [`super::Run`].
 ///
@@ -91,43 +91,5 @@ where
 
     fn run_core(self) -> Self::Output {
         self.into_owned().run_core()
-    }
-}
-
-impl<Dim, T> RunCore for Val<Dim, T>
-where
-    Self: Computation,
-{
-    type Output = T;
-
-    fn run_core(self) -> Self::Output {
-        self.inner
-    }
-}
-
-impl<A> RunCore for Len<A>
-where
-    Self: Computation,
-    A: RunCore,
-    A::Output: IntoIterator,
-    <A::Output as IntoIterator>::IntoIter: ExactSizeIterator,
-{
-    type Output = usize;
-
-    fn run_core(self) -> Self::Output {
-        self.0.run_core().into_iter().len()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use proptest::prelude::*;
-    use test_strategy::proptest;
-
-    use crate::{val1, Computation, Run};
-
-    #[proptest]
-    fn len_should_return_length(xs: Vec<i32>) {
-        prop_assert_eq!(val1!(xs.clone()).len().run(), xs.len());
     }
 }
