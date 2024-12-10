@@ -94,11 +94,11 @@ where
     }
 }
 
-impl<Dim, A> RunCore for Val<Dim, A>
+impl<Dim, T> RunCore for Val<Dim, T>
 where
     Self: Computation,
 {
-    type Output = A;
+    type Output = T;
 
     fn run_core(self) -> Self::Output {
         self.inner

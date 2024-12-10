@@ -576,36 +576,36 @@ where
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Val<Dim, A>
+pub struct Val<Dim, T>
 where
     Self: Computation,
 {
     dim: PhantomData<Dim>,
-    pub inner: A,
+    pub inner: T,
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Arg<Dim, A>
+pub struct Arg<Dim, T>
 where
     Self: Computation,
 {
     pub name: &'static str,
     dim: PhantomData<Dim>,
-    elem: PhantomData<A>,
+    elem: PhantomData<T>,
 }
 
-pub type Val0<A> = Val<Zero, A>;
-pub type Val1<A> = Val<One, A>;
-pub type Val2<A> = Val<Two, A>;
-pub type Arg0<A> = Arg<Zero, A>;
-pub type Arg1<A> = Arg<One, A>;
-pub type Arg2<A> = Arg<Two, A>;
+pub type Val0<T> = Val<Zero, T>;
+pub type Val1<T> = Val<One, T>;
+pub type Val2<T> = Val<Two, T>;
+pub type Arg0<T> = Arg<Zero, T>;
+pub type Arg1<T> = Arg<One, T>;
+pub type Arg2<T> = Arg<Two, T>;
 
-impl<Dim, A> Val<Dim, A>
+impl<Dim, T> Val<Dim, T>
 where
     Self: Computation,
 {
-    pub fn new(value: A) -> Self {
+    pub fn new(value: T) -> Self {
         Val {
             dim: PhantomData,
             inner: value,
@@ -613,7 +613,7 @@ where
     }
 }
 
-impl<Dim, A> Arg<Dim, A> {
+impl<Dim, T> Arg<Dim, T> {
     pub fn new(name: &'static str) -> Self {
         Arg {
             name,
@@ -674,22 +674,22 @@ macro_rules! arg2 {
     };
 }
 
-impl<A> Computation for Val<Zero, A> {
+impl<T> Computation for Val<Zero, T> {
     type Dim = Zero;
-    type Item = A;
+    type Item = T;
 }
 
-impl<D, A> Computation for Val<Suc<D>, A>
+impl<D, T> Computation for Val<Suc<D>, T>
 where
-    A: IntoIterator,
+    T: IntoIterator,
 {
     type Dim = Suc<D>;
-    type Item = A::Item;
+    type Item = T::Item;
 }
 
-impl<D, A> ComputationFn for Val<D, A>
+impl<D, T> ComputationFn for Val<D, T>
 where
-    Val<D, A>: Computation,
+    Val<D, T>: Computation,
 {
     type Filled = Self;
 
@@ -702,17 +702,17 @@ where
     }
 }
 
-impl<D, A> Computation for Arg<D, A> {
+impl<D, T> Computation for Arg<D, T> {
     type Dim = D;
-    type Item = A;
+    type Item = T;
 }
 
-impl<A> ComputationFn for Arg<Zero, A>
+impl<T> ComputationFn for Arg<Zero, T>
 where
     Self: Computation,
-    A: 'static + AnyArg,
+    T: 'static + AnyArg,
 {
-    type Filled = Val<Zero, A>;
+    type Filled = Val<Zero, T>;
 
     fn fill(self, mut named_args: NamedArgs) -> Self::Filled {
         Val {
@@ -728,12 +728,12 @@ where
     }
 }
 
-impl<A> ComputationFn for Arg<One, A>
+impl<T> ComputationFn for Arg<One, T>
 where
     Self: Computation,
-    A: 'static + Clone + AnyArg,
+    T: 'static + Clone + AnyArg,
 {
-    type Filled = Val<One, Vec<A>>;
+    type Filled = Val<One, Vec<T>>;
 
     fn fill(self, mut named_args: NamedArgs) -> Self::Filled {
         Val {
@@ -749,12 +749,12 @@ where
     }
 }
 
-impl<A> ComputationFn for Arg<Two, A>
+impl<T> ComputationFn for Arg<Two, T>
 where
     Self: Computation,
-    A: 'static + Clone + AnyArg,
+    T: 'static + Clone + AnyArg,
 {
-    type Filled = Val<Two, crate::run::Matrix<Vec<A>>>;
+    type Filled = Val<Two, crate::run::Matrix<Vec<T>>>;
 
     fn fill(self, mut named_args: NamedArgs) -> Self::Filled {
         Val {
@@ -770,29 +770,29 @@ where
     }
 }
 
-impl_core_ops!(Val<Dim, A>);
-impl_core_ops!(Arg<Dim, A>);
+impl_core_ops!(Val<Dim, T>);
+impl_core_ops!(Arg<Dim, T>);
 
-impl<A> fmt::Display for Val<Zero, A>
+impl<T> fmt::Display for Val<Zero, T>
 where
-    A: fmt::Debug,
+    T: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.inner.fmt(f)
     }
 }
 
-impl<D, A> fmt::Display for Val<Suc<D>, A>
+impl<D, T> fmt::Display for Val<Suc<D>, T>
 where
     Self: Computation,
-    A: fmt::Debug,
+    T: fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?}", self.inner)
     }
 }
 
-impl<Dim, A> fmt::Display for Arg<Dim, A>
+impl<Dim, T> fmt::Display for Arg<Dim, T>
 where
     Self: Computation,
 {
