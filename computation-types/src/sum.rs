@@ -1,9 +1,9 @@
 use core::{fmt, ops};
 
 use crate::{
-    impl_core_ops,
+    impl_computation_fn_for_unary, impl_core_ops,
     peano::{Suc, Zero},
-    Computation, ComputationFn, NamedArgs, Names,
+    Computation, ComputationFn, NamedArgs,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -20,22 +20,7 @@ where
     type Item = <A::Item as ops::Add>::Output;
 }
 
-impl<A> ComputationFn for Sum<A>
-where
-    Self: Computation,
-    A: ComputationFn,
-    Sum<A::Filled>: Computation,
-{
-    type Filled = Sum<A::Filled>;
-
-    fn fill(self, named_args: NamedArgs) -> Self::Filled {
-        Sum(self.0.fill(named_args))
-    }
-
-    fn arg_names(&self) -> Names {
-        self.0.arg_names()
-    }
-}
+impl_computation_fn_for_unary!(Sum);
 
 impl_core_ops!(Sum<A>);
 

@@ -52,3 +52,51 @@ macro_rules! impl_display_for_inline_binary {
         }
     };
 }
+
+#[macro_export]
+macro_rules! impl_computation_fn_for_unary {
+    ( $op:ident ) => {
+        impl<A> ComputationFn for $op<A>
+        where
+            Self: Computation,
+            A: ComputationFn,
+            $op<A::Filled>: Computation,
+        {
+            type Filled = $op<A::Filled>;
+
+            fn fill(self, named_args: NamedArgs) -> Self::Filled {
+                $op(self.0.fill(named_args))
+            }
+
+            fn arg_names(&self) -> $crate::Names {
+                self.0.arg_names()
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! impl_computation_fn_for_binary {
+    ( $op:ident ) => {
+        impl<A, B> ComputationFn for $op<A, B>
+        where
+            Self: Computation,
+            A: ComputationFn,
+            B: ComputationFn,
+            $op<A::Filled, B::Filled>: Computation,
+        {
+            type Filled = $op<A::Filled, B::Filled>;
+
+            fn fill(self, named_args: NamedArgs) -> Self::Filled {
+                let (args_0, args_1) = named_args
+                    .partition(&self.0.arg_names(), &self.1.arg_names())
+                    .unwrap_or_else(|e| panic!("{}", e));
+                $op(self.0.fill(args_0), self.1.fill(args_1))
+            }
+
+            fn arg_names(&self) -> $crate::Names {
+                self.0.arg_names().union(self.1.arg_names())
+            }
+        }
+    };
+}

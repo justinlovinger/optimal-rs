@@ -1,9 +1,9 @@
 use core::fmt;
 
 use crate::{
-    impl_core_ops,
+    impl_computation_fn_for_unary, impl_core_ops,
     peano::{One, Zero},
-    Computation, ComputationFn, NamedArgs, Names,
+    Computation, ComputationFn, NamedArgs,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -19,22 +19,7 @@ where
     type Item = usize;
 }
 
-impl<A> ComputationFn for Len<A>
-where
-    Self: Computation,
-    A: ComputationFn,
-    Len<A::Filled>: Computation,
-{
-    type Filled = Len<A::Filled>;
-
-    fn fill(self, named_args: NamedArgs) -> Self::Filled {
-        Len(self.0.fill(named_args))
-    }
-
-    fn arg_names(&self) -> Names {
-        self.0.arg_names()
-    }
-}
+impl_computation_fn_for_unary!(Len);
 
 impl_core_ops!(Len<A>);
 

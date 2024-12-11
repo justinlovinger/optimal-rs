@@ -2,7 +2,7 @@ use core::{fmt, ops};
 use std::marker::PhantomData;
 
 use crate::{
-    impl_core_ops,
+    impl_computation_fn_for_binary, impl_core_ops,
     math::Mul,
     peano::{One, Two, Zero},
     sum::Sum,
@@ -183,26 +183,7 @@ where
     type Item = <<A::Item as ops::Mul<B::Item>>::Output as ops::Add>::Output;
 }
 
-impl<A, B> ComputationFn for MatMul<A, B>
-where
-    Self: Computation,
-    A: ComputationFn,
-    B: ComputationFn,
-    MatMul<A::Filled, B::Filled>: Computation,
-{
-    type Filled = MatMul<A::Filled, B::Filled>;
-
-    fn fill(self, named_args: NamedArgs) -> Self::Filled {
-        let (args_0, args_1) = named_args
-            .partition(&self.0.arg_names(), &self.1.arg_names())
-            .unwrap_or_else(|e| panic!("{}", e,));
-        MatMul(self.0.fill(args_0), self.1.fill(args_1))
-    }
-
-    fn arg_names(&self) -> crate::Names {
-        self.0.arg_names().union(self.1.arg_names())
-    }
-}
+impl_computation_fn_for_binary!(MatMul);
 
 impl_core_ops!(MatMul<A, B>);
 
@@ -233,26 +214,7 @@ where
     type Item = <A::Item as ops::Mul<B::Item>>::Output;
 }
 
-impl<A, B> ComputationFn for MulOut<A, B>
-where
-    Self: Computation,
-    A: ComputationFn,
-    B: ComputationFn,
-    MulOut<A::Filled, B::Filled>: Computation,
-{
-    type Filled = MulOut<A::Filled, B::Filled>;
-
-    fn fill(self, named_args: NamedArgs) -> Self::Filled {
-        let (args_0, args_1) = named_args
-            .partition(&self.0.arg_names(), &self.1.arg_names())
-            .unwrap_or_else(|e| panic!("{}", e,));
-        MulOut(self.0.fill(args_0), self.1.fill(args_1))
-    }
-
-    fn arg_names(&self) -> crate::Names {
-        self.0.arg_names().union(self.1.arg_names())
-    }
-}
+impl_computation_fn_for_binary!(MulOut);
 
 impl_core_ops!(MulOut<A, B>);
 
@@ -284,26 +246,7 @@ where
     type Item = <<A::Item as ops::Mul<B::Item>>::Output as ops::Add>::Output;
 }
 
-impl<A, B> ComputationFn for MulCol<A, B>
-where
-    Self: Computation,
-    A: ComputationFn,
-    B: ComputationFn,
-    MulCol<A::Filled, B::Filled>: Computation,
-{
-    type Filled = MulCol<A::Filled, B::Filled>;
-
-    fn fill(self, named_args: NamedArgs) -> Self::Filled {
-        let (args_0, args_1) = named_args
-            .partition(&self.0.arg_names(), &self.1.arg_names())
-            .unwrap_or_else(|e| panic!("{}", e,));
-        MulCol(self.0.fill(args_0), self.1.fill(args_1))
-    }
-
-    fn arg_names(&self) -> crate::Names {
-        self.0.arg_names().union(self.1.arg_names())
-    }
-}
+impl_computation_fn_for_binary!(MulCol);
 
 impl_core_ops!(MulCol<A, B>);
 

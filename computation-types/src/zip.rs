@@ -2,20 +2,13 @@ use core::fmt;
 
 use paste::paste;
 
-use crate::{impl_core_ops, Computation, ComputationFn, NamedArgs, Names};
+use crate::{
+    impl_computation_fn_for_binary, impl_computation_fn_for_unary, impl_core_ops, Computation,
+    ComputationFn, NamedArgs, Names,
+};
 
 #[derive(Clone, Copy, Debug)]
 pub struct Zip<A, B>(pub A, pub B)
-where
-    Self: Computation;
-
-#[derive(Clone, Copy, Debug)]
-pub struct Fst<A>(pub A)
-where
-    Self: Computation;
-
-#[derive(Clone, Copy, Debug)]
-pub struct Snd<A>(pub A)
 where
     Self: Computation;
 
@@ -28,80 +21,9 @@ where
     type Item = (A::Item, B::Item);
 }
 
-impl<A, B> ComputationFn for Zip<A, B>
-where
-    Self: Computation,
-    A: ComputationFn,
-    B: ComputationFn,
-    Zip<A::Filled, B::Filled>: Computation,
-{
-    type Filled = Zip<A::Filled, B::Filled>;
-
-    fn fill(self, named_args: NamedArgs) -> Self::Filled {
-        let (args_0, args_1) = named_args
-            .partition(&self.0.arg_names(), &self.1.arg_names())
-            .unwrap_or_else(|e| panic!("{}", e,));
-        Zip(self.0.fill(args_0), self.1.fill(args_1))
-    }
-
-    fn arg_names(&self) -> crate::Names {
-        self.0.arg_names().union(self.1.arg_names())
-    }
-}
-
-impl<A, DimA, DimB, ItemA, ItemB> Computation for Fst<A>
-where
-    A: Computation<Dim = (DimA, DimB), Item = (ItemA, ItemB)>,
-{
-    type Dim = DimA;
-    type Item = ItemA;
-}
-
-impl<A> ComputationFn for Fst<A>
-where
-    Self: Computation,
-    A: ComputationFn,
-    Fst<A::Filled>: Computation,
-{
-    type Filled = Fst<A::Filled>;
-
-    fn fill(self, named_args: NamedArgs) -> Self::Filled {
-        Fst(self.0.fill(named_args))
-    }
-
-    fn arg_names(&self) -> crate::Names {
-        self.0.arg_names()
-    }
-}
-
-impl<A, DimA, DimB, ItemA, ItemB> Computation for Snd<A>
-where
-    A: Computation<Dim = (DimA, DimB), Item = (ItemA, ItemB)>,
-{
-    type Dim = DimB;
-    type Item = ItemB;
-}
-
-impl<A> ComputationFn for Snd<A>
-where
-    Self: Computation,
-    A: ComputationFn,
-    Snd<A::Filled>: Computation,
-{
-    type Filled = Snd<A::Filled>;
-
-    fn fill(self, named_args: NamedArgs) -> Self::Filled {
-        Snd(self.0.fill(named_args))
-    }
-
-    fn arg_names(&self) -> crate::Names {
-        self.0.arg_names()
-    }
-}
-
 impl_core_ops!(Zip<A, B>);
-impl_core_ops!(Fst<A>);
-impl_core_ops!(Snd<A>);
+
+impl_computation_fn_for_binary!(Zip);
 
 impl<A, B> fmt::Display for Zip<A, B>
 where
@@ -114,6 +36,23 @@ where
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Fst<A>(pub A)
+where
+    Self: Computation;
+
+impl<A, DimA, DimB, ItemA, ItemB> Computation for Fst<A>
+where
+    A: Computation<Dim = (DimA, DimB), Item = (ItemA, ItemB)>,
+{
+    type Dim = DimA;
+    type Item = ItemA;
+}
+
+impl_core_ops!(Fst<A>);
+
+impl_computation_fn_for_unary!(Fst);
+
 impl<A> fmt::Display for Fst<A>
 where
     Self: Computation,
@@ -123,6 +62,23 @@ where
         write!(f, "{}.0", self.0)
     }
 }
+
+#[derive(Clone, Copy, Debug)]
+pub struct Snd<A>(pub A)
+where
+    Self: Computation;
+
+impl<A, DimA, DimB, ItemA, ItemB> Computation for Snd<A>
+where
+    A: Computation<Dim = (DimA, DimB), Item = (ItemA, ItemB)>,
+{
+    type Dim = DimB;
+    type Item = ItemB;
+}
+
+impl_computation_fn_for_unary!(Snd);
+
+impl_core_ops!(Snd<A>);
 
 impl<A> fmt::Display for Snd<A>
 where
