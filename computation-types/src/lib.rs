@@ -6,9 +6,7 @@
 //! Types for abstract mathematical computation.
 //!
 //! Note,
-//! this framework is highly experimental.
-//! Documentation is lacking
-//! and breaking changes are expected.
+//! documentation is currently lacking.
 //! The best way to learn about this framework
 //! is to read the tests
 //! and see how it is used to implement algorithms

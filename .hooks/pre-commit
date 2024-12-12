@@ -1,6 +1,7 @@
 #!/bin/sh
 
 cargo readme -o README.md
+cargo readme -r computation-types -o README.md
 cargo readme -r derive-num-bounded -o README.md
 cargo readme -r optimal-binary -o README.md
 cargo readme -r optimal-linesearch -o README.md
