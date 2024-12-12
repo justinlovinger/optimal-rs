@@ -12,7 +12,7 @@
 //! The best way to learn about this framework
 //! is to read the tests
 //! and see how it is used to implement algorithms
-//! in algorithm-specific packages.
+//! in Optimal.
 //!
 //! # Examples
 //!
